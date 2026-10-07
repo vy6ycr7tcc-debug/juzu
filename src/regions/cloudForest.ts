@@ -3,6 +3,7 @@ import {
   woodWet, fabricWorn, ashlarWeathered, ashlarLight, ironDark, lampEmissive,
   humusEarth, mossPatch, broadleafCard, orchidAccent,
 } from '../materials.js';
+import { createTrapezoidalPortal, createAshlarWall } from '../architecture.js';
 import type {
   RegionModule,
   RegionBuildAPI,
@@ -86,11 +87,11 @@ export const cloudForest: RegionModule = {
     { flag: 'q_act1_quipu_solved', trigger: 'Solving the quipu cipher' }
   ],
   shots: [
-    { id: 'cf_lower_blockade', camera: { x: -80, y: 15, z: -480 }, lookAt: { x: -100, y: 0, z: -500 } },
-    { id: 'cf_excavated_ruin', camera: { x: 180, y: 20, z: -270 }, lookAt: { x: 150, y: 0, z: -300 } },
-    { id: 'cf_quipu_archive', camera: { x: 150, y: -15, z: -340 }, lookAt: { x: 150, y: -20, z: -350 } },
-    { id: 'cf_cliff_staircase', camera: { x: 200, y: 5, z: 60 }, lookAt: { x: 200, y: 10, z: 80 } },
-    { id: 'cf_overview', camera: { x: 0, y: 150, z: -100 }, lookAt: { x: 150, y: 0, z: -300 } }
+    { id: 'cf_lower_blockade', camera: { x: -92, y: 25.5, z: -488 }, lookAt: { x: -100, y: 24.8, z: -500 } },
+    { id: 'cf_excavated_ruin', camera: { x: 180, y: 32, z: -260 }, lookAt: { x: 150, y: 21, z: -300 } },
+    { id: 'cf_quipu_archive', camera: { x: 150, y: 2.2, z: -352.0 }, lookAt: { x: 150, y: 2.2, z: -355.5 } },
+    { id: 'cf_cliff_staircase', camera: { x: 196, y: 14.5, z: 72 }, lookAt: { x: 200, y: 22.0, z: 105 } },
+    { id: 'cf_overview', camera: { x: 0, y: 150, z: -100 }, lookAt: { x: 150, y: 20, z: -300 } }
   ],
   build(api: RegionBuildAPI): void {
     const rng = mulberry32(CF_SEED);
@@ -206,25 +207,90 @@ export const cloudForest: RegionModule = {
     blockadeGroup.position.set(-100, 0, -500);
     blockadeGroup.position.y = api.terrainHeight(-100, -500);
 
-    // Felled trees
-    const trunkGeo = new THREE.CylinderGeometry(1, 1, 10, 8);
-    trunkGeo.rotateZ(Math.PI / 2);
-    const tree1 = new THREE.Mesh(trunkGeo, woodMat);
-    tree1.position.set(0, 1, 0);
-    tree1.rotation.y = 0.2;
-    const tree2 = new THREE.Mesh(trunkGeo, woodMat);
-    tree2.position.set(2, 1, 4);
-    tree2.rotation.y = -0.3;
-    blockadeGroup.add(tree1, tree2);
+    // Defensive log palisade / abatis across the trail
+    const stakeGeo = new THREE.CylinderGeometry(0.12, 0.16, 3.2, 6);
+    for (let i = -6; i <= 6; i += 1.2) {
+      const stake = new THREE.Mesh(stakeGeo, woodMat);
+      stake.position.set(i, 1.2, (i % 2 === 0 ? 0.3 : -0.3));
+      stake.rotation.x = 0.25;
+      stake.rotation.z = (i % 2 === 0 ? 0.12 : -0.12);
+      stake.castShadow = true;
+      stake.receiveShadow = true;
+      blockadeGroup.add(stake);
+    }
+    // Horizontal cross-tie logs lashed across the stakes
+    const crossLogGeo = new THREE.CylinderGeometry(0.14, 0.14, 14, 8);
+    crossLogGeo.rotateZ(Math.PI / 2);
+    const crossLog = new THREE.Mesh(crossLogGeo, woodMat);
+    crossLog.position.set(0, 1.1, 0.1);
+    crossLog.castShadow = true;
+    blockadeGroup.add(crossLog);
 
-    // Tents
-    const tentGeo = new THREE.ConeGeometry(2, 3, 4);
-    const tent1 = new THREE.Mesh(tentGeo, fabricMat);
-    tent1.position.set(-8, 1.5, 5);
-    tent1.rotation.y = Math.PI / 4;
-    const tent2 = new THREE.Mesh(tentGeo, fabricMat);
-    tent2.position.set(-12, 1.5, 0);
-    blockadeGroup.add(tent1, tent2);
+    // Quechua A-frame canvas field shelters
+    const shelterMat = fabricWorn(0x827055);
+    const createShelter = (x: number, z: number, ry: number) => {
+      const sGroup = new THREE.Group();
+      sGroup.position.set(x, 0, z);
+      sGroup.rotation.y = ry;
+
+      // Ridge pole
+      const ridgeGeo = new THREE.CylinderGeometry(0.08, 0.08, 4.2, 6);
+      ridgeGeo.rotateX(Math.PI / 2);
+      const ridge = new THREE.Mesh(ridgeGeo, woodMat);
+      ridge.position.set(0, 2.0, 0);
+      sGroup.add(ridge);
+
+      // Support uprights
+      const upGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.2, 6);
+      const upF = new THREE.Mesh(upGeo, woodMat);
+      upF.position.set(0, 1.0, 1.9);
+      const upB = new THREE.Mesh(upGeo, woodMat);
+      upB.position.set(0, 1.0, -1.9);
+      sGroup.add(upF, upB);
+
+      // Sloped canvas roof panels
+      const roofL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.3, 4.0), shelterMat);
+      roofL.position.set(-0.8, 1.0, 0);
+      roofL.rotation.z = 0.78;
+      const roofR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.3, 4.0), shelterMat);
+      roofR.position.set(0.8, 1.0, 0);
+      roofR.rotation.z = -0.78;
+      sGroup.add(roofL, roofR);
+
+      return sGroup;
+    };
+
+    blockadeGroup.add(createShelter(-7, 4, 0.3));
+    blockadeGroup.add(createShelter(-11, -2, -0.4));
+
+    // Campfire ring with warm glowing embers
+    const firePit = new THREE.Group();
+    firePit.position.set(-3, 0.1, 3);
+    const stoneRingGeo = new THREE.DodecahedronGeometry(0.25, 0);
+    for (let i = 0; i < 8; i++) {
+      const stone = new THREE.Mesh(stoneRingGeo, weatheredMat);
+      const a = (i / 8) * Math.PI * 2;
+      stone.position.set(Math.cos(a) * 0.9, 0.15, Math.sin(a) * 0.9);
+      firePit.add(stone);
+    }
+    const emberMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.15, 8), emissiveMat);
+    emberMesh.position.set(0, 0.1, 0);
+    firePit.add(emberMesh);
+    const fireLight = new THREE.PointLight(0xff6622, 1.8, 10, 1.5);
+    fireLight.position.set(0, 0.6, 0);
+    firePit.add(fireLight);
+    blockadeGroup.add(firePit);
+
+    // Weathered supply crates & packs
+    const crateGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    const crate1 = new THREE.Mesh(crateGeo, woodMat);
+    crate1.position.set(-5, 0.4, 2);
+    const crate2 = new THREE.Mesh(crateGeo, woodMat);
+    crate2.position.set(-5, 0.4, 3);
+    crate2.rotation.y = 0.4;
+    const crate3 = new THREE.Mesh(crateGeo, woodMat);
+    crate3.position.set(-5, 1.2, 2.5);
+    blockadeGroup.add(crate1, crate2, crate3);
 
     // §2.2 rope bridge (fiber, not chain): rope rails + deck slats across
     // the muddy approach, anchored on timber posts
@@ -256,45 +322,76 @@ export const cloudForest: RegionModule = {
 
     group.add(blockadeGroup);
 
-    // 2. The Excavated Ruin (Position: x: 150, z: -300)
+    // 2. The Excavated Ruin (Archaeological Dig Site - x: 150, z: -300)
     const ruinGroup = new THREE.Group();
     const ruinX = 150, ruinZ = -300;
     ruinGroup.position.set(ruinX, 0, ruinZ);
     ruinGroup.position.y = api.terrainHeight(ruinX, ruinZ);
 
-    // Excavation pit (raw earth walls — humusEarth, §2.2)
-    const pitGeo = new THREE.BoxGeometry(30, 4, 30);
-    const pit = new THREE.Mesh(pitGeo, earthMat);
-    pit.position.set(0, -2, 0); // Sunken slightly
-    ruinGroup.add(pit);
+    // Excavation trench (terraced earth floor and retaining shoring)
+    const trenchFloor = new THREE.Mesh(new THREE.BoxGeometry(32, 1.4, 32), earthMat);
+    trenchFloor.position.set(0, -0.7, 0);
+    trenchFloor.receiveShadow = true;
+    ruinGroup.add(trenchFloor);
 
-    // Damaged ashlar masonry (seeded scatter, J7)
-    const blockGeo = new THREE.BoxGeometry(1.99, 1.99, 1.99);
-    for (let i = 0; i < 15; i++) {
-      const block = new THREE.Mesh(blockGeo, stoneMat);
-      block.position.set(
-        (rng() - 0.5) * 20,
-        1,
-        (rng() - 0.5) * 20
-      );
-      block.rotation.set(
-        (rng() - 0.5) * 0.2,
-        rng() * Math.PI,
-        (rng() - 0.5) * 0.2
-      );
-      ruinGroup.add(block);
+    // Partially unearthed Inca building with authentic coursed ashlar walls
+    const rearWall = createAshlarWall({
+      width: 24,
+      height: 7.2,
+      depth: 2.2,
+      courses: 8,
+      material: stoneMat,
+    });
+    rearWall.position.set(0, 0, -10);
+    ruinGroup.add(rearWall);
+
+    const sideWallL = createAshlarWall({
+      width: 16,
+      height: 5.8,
+      depth: 2.0,
+      courses: 6,
+      material: stoneMat,
+    });
+    sideWallL.position.set(-11, 0, -2);
+    sideWallL.rotation.y = Math.PI / 2;
+    ruinGroup.add(sideWallL);
+
+    // Partially buried authentic trapezoidal doorway entering the unexcavated slope
+    const portal = createTrapezoidalPortal({
+      widthBottom: 3.4,
+      height: 5.2,
+      depth: 1.8,
+      material: stoneMat,
+    });
+    portal.position.set(2, 0, -9.8);
+    ruinGroup.add(portal);
+
+    // Archaeological timber shoring beams (supporting the dirt banks)
+    const plankGeo = new THREE.BoxGeometry(0.35, 3.2, 0.25);
+    for (let i = -12; i <= 12; i += 4) {
+      const brace = new THREE.Mesh(plankGeo, woodMat);
+      brace.position.set(i, 1.5, 12);
+      brace.rotation.x = -0.25;
+      brace.castShadow = true;
+      ruinGroup.add(brace);
     }
 
-    // §2.2 stone blocks half-sunk in humus (pit rim, moss-topped)
-    for (let i = 0; i < 6; i++) {
-      const sunk = new THREE.Mesh(blockGeo, weatheredMat);
-      const a = (i / 6) * Math.PI * 2 + rng() * 0.4;
-      sunk.position.set(Math.cos(a) * 17, 0.2, Math.sin(a) * 17);
-      sunk.rotation.set((rng() - 0.5) * 0.5, rng() * Math.PI, (rng() - 0.5) * 0.5);
-      ruinGroup.add(sunk);
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 1.7), mossMat);
-      cap.position.set(sunk.position.x, 1.15, sunk.position.z);
-      cap.rotation.y = sunk.rotation.y;
+    // Weathered dressed ashlar blocks partially emerged from the humus soil
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + rng() * 0.4;
+      const dist = 8 + rng() * 6;
+      const bW = 1.6 + rng() * 0.8;
+      const bH = 1.0 + rng() * 0.6;
+      const block = new THREE.Mesh(new THREE.BoxGeometry(bW, bH, 1.4), weatheredMat);
+      block.position.set(Math.cos(a) * dist, bH * 0.35, Math.sin(a) * dist);
+      block.rotation.set((rng() - 0.5) * 0.2, rng() * Math.PI, (rng() - 0.5) * 0.2);
+      block.castShadow = true;
+      block.receiveShadow = true;
+      ruinGroup.add(block);
+
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(bW * 0.9, 0.12, 1.3), mossMat);
+      cap.position.set(block.position.x, block.position.y + bH / 2 + 0.05, block.position.z);
+      cap.rotation.y = block.rotation.y;
       ruinGroup.add(cap);
     }
 
@@ -335,56 +432,183 @@ export const cloudForest: RegionModule = {
 
     group.add(ruinGroup);
 
-    // 3. The Quipu Archive (Position: x: 150, z: -350, hidden/underground interior near ruin)
+    // 3. The Quipu Archive (Subterranean Sanctuary Chamber - x: 150, z: -350)
     const archiveGroup = new THREE.Group();
     const archiveX = 150, archiveZ = -350;
-    // Intentionally placed below terrain surface
-    archiveGroup.position.set(archiveX, api.terrainHeight(archiveX, archiveZ) - 20, archiveZ);
+    // Positioned underground inside the hillside
+    const archiveY = api.terrainHeight(archiveX, archiveZ) - 20;
+    archiveGroup.position.set(archiveX, archiveY, archiveZ);
 
-    // Chamber walls
-    const chamberGeo = new THREE.BoxGeometry(20, 10, 20);
-    const chamber = new THREE.Mesh(chamberGeo, stoneMat);
-    // Make it an interior by rendering backfaces
-    chamber.material.side = THREE.BackSide;
-    archiveGroup.add(chamber);
+    // Stone chamber floor
+    const floorGeo = new THREE.BoxGeometry(16, 0.4, 16);
+    const floorMesh = new THREE.Mesh(floorGeo, stoneMat);
+    floorMesh.position.set(0, -0.2, 0);
+    floorMesh.receiveShadow = true;
+    archiveGroup.add(floorMesh);
 
-    // The Quipu installation
-    const quipuGroup = new THREE.Group();
-    const mainCordGeo = new THREE.CylinderGeometry(0.1, 0.1, 10, 8);
-    mainCordGeo.rotateZ(Math.PI / 2);
-    const mainCord = new THREE.Mesh(mainCordGeo, fabricMat);
-    mainCord.position.set(0, 3, 0);
-    quipuGroup.add(mainCord);
-
-    const hangingCordGeo = new THREE.CylinderGeometry(0.05, 0.05, 4, 8);
-    for (let i = 0; i < 8; i++) {
-      const hCord = new THREE.Mesh(hangingCordGeo, fabricMat);
-      hCord.position.set(-4 + i, 1, 0);
-      quipuGroup.add(hCord);
+    // Ceiling stone transverse lintels
+    for (let z = -6; z <= 6; z += 3) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 1.2), stoneMat);
+      beam.position.set(0, 5.8, z);
+      archiveGroup.add(beam);
     }
-    archiveGroup.add(quipuGroup);
 
-    // Quipu Cipher puzzle state machine (puzzle_guard encounter logic)
-    // 3 knots (represented abstractly as small boxes on 3 of the hanging cords)
-    const knotGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-    const knotMat = fabricWorn(0xD8CBB0);
+    // Left and Right coursed ashlar walls with authentic seismic batter
+    const leftWall = createAshlarWall({
+      width: 16,
+      height: 6,
+      depth: 1.6,
+      courses: 8,
+      material: stoneMat,
+    });
+    leftWall.position.set(-7.2, 0, 0);
+    leftWall.rotation.y = Math.PI / 2;
+    archiveGroup.add(leftWall);
 
+    const rightWall = createAshlarWall({
+      width: 16,
+      height: 6,
+      depth: 1.6,
+      courses: 8,
+      material: stoneMat,
+    });
+    rightWall.position.set(7.2, 0, 0);
+    rightWall.rotation.y = -Math.PI / 2;
+    archiveGroup.add(rightWall);
+
+    // Back wall flanking ashlar sections
+    const backWallL = createAshlarWall({
+      width: 6,
+      height: 6,
+      depth: 1.6,
+      courses: 8,
+      material: stoneMat,
+    });
+    backWallL.position.set(-4.8, 0, -7.2);
+    archiveGroup.add(backWallL);
+
+    const backWallR = createAshlarWall({
+      width: 6,
+      height: 6,
+      depth: 1.6,
+      courses: 8,
+      material: stoneMat,
+    });
+    backWallR.position.set(4.8, 0, -7.2);
+    archiveGroup.add(backWallR);
+
+    // Central authentic trapezoidal portal on the back wall
+    const archivePortal = createTrapezoidalPortal({
+      widthBottom: 2.8,
+      height: 4.6,
+      depth: 1.6,
+      material: stoneMat,
+    });
+    archivePortal.position.set(0, 0, -7.2);
+    archiveGroup.add(archivePortal);
+
+    // Fitted sliding stone slab door (sealed until cipher is solved)
+    const doorGeo = new THREE.BoxGeometry(2.4, 4.4, 0.5);
+    const doorMesh = new THREE.Mesh(doorGeo, weatheredMat);
+    doorMesh.position.set(0, 2.2, -7.2);
+    archiveGroup.add(doorMesh);
+
+    // Bronze relief reinforcement bands across the door
+    for (let by = 0.8; by <= 3.8; by += 1.4) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.12, 0.54), metalMat);
+      band.position.set(0, by - 2.2, 0);
+      doorMesh.add(band);
+    }
+
+    // Subterranean outer rock enclosure (prevents external daylight leaks)
+    const enclosureMat = ashlarWeathered();
+    const backEnclosure = new THREE.Mesh(new THREE.BoxGeometry(18, 8, 1.5), enclosureMat);
+    backEnclosure.position.set(0, 3, -8.6);
+    archiveGroup.add(backEnclosure);
+
+    const roofEnclosure = new THREE.Mesh(new THREE.BoxGeometry(18, 1.5, 18), enclosureMat);
+    roofEnclosure.position.set(0, 6.6, 0);
+    archiveGroup.add(roofEnclosure);
+
+    // Atmospheric warm lighting (braziers flanking doorway)
+    const brazierGeo = new THREE.CylinderGeometry(0.3, 0.2, 0.8, 8);
+    const brazierL = new THREE.Mesh(brazierGeo, metalMat);
+    brazierL.position.set(-2.8, 1.2, -6.6);
+    const lightL = new THREE.PointLight(0xffaa44, 2.4, 15, 1.2);
+    lightL.position.set(0, 0.5, 0);
+    brazierL.add(lightL);
+    archiveGroup.add(brazierL);
+
+    const brazierR = new THREE.Mesh(brazierGeo, metalMat);
+    brazierR.position.set(2.8, 1.2, -6.6);
+    const lightR = new THREE.PointLight(0xffaa44, 2.4, 15, 1.2);
+    lightR.position.set(0, 0.5, 0);
+    brazierR.add(lightR);
+    archiveGroup.add(brazierR);
+
+    // The Grand Quipu Installation
+    const quipuGroup = new THREE.Group();
+    quipuGroup.position.set(0, 0, -4.5);
+
+    // Carved timber suspension beam
+    const susBeamGeo = new THREE.CylinderGeometry(0.08, 0.08, 10, 8);
+    susBeamGeo.rotateZ(Math.PI / 2);
+    const susBeamMesh = new THREE.Mesh(susBeamGeo, woodMat);
+    susBeamMesh.position.set(0, 3.8, 0);
+    quipuGroup.add(susBeamMesh);
+
+    // Thick primary cord (alpaca fiber)
+    const primaryCordGeo = new THREE.CylinderGeometry(0.04, 0.04, 9.6, 8);
+    primaryCordGeo.rotateZ(Math.PI / 2);
+    const primaryCord = new THREE.Mesh(primaryCordGeo, fabricWorn(0x5a4332));
+    primaryCord.position.set(0, 3.7, 0);
+    quipuGroup.add(primaryCord);
+
+    // Natural dye yarn palette (Peruvian archaeological dyes: cream, crimson, ochre, indigo, tawny, charcoal)
+    const yarnMats = [
+      fabricWorn(0xc9bba4), // Cream alpaca
+      fabricWorn(0x8a2c26), // Cochineal crimson
+      fabricWorn(0xb58038), // Yellow ochre
+      fabricWorn(0x354b5e), // Indigo slate
+      fabricWorn(0x7a5234), // Vicuña tawny
+      fabricWorn(0x2d2f32), // Charcoal black
+    ];
+
+    // Pendant cords with authentic knot clusters
+    const hangingCordGeo = new THREE.CylinderGeometry(0.02, 0.02, 3.2, 6);
+    for (let i = 0; i < 11; i++) {
+      const cx = -4 + i * 0.8;
+      const mat = yarnMats[i % yarnMats.length];
+      const hCord = new THREE.Mesh(hangingCordGeo, mat);
+      hCord.position.set(cx, 2.1, 0);
+      quipuGroup.add(hCord);
+
+      // Knots on cords (figure-eight and long knots)
+      const knotCount = 2 + (i % 3);
+      for (let k = 0; k < knotCount; k++) {
+        const knotMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.045, 0.045, 0.08, 6),
+          mat
+        );
+        knotMesh.position.set(cx, 1.2 + k * 0.6 + (i * 0.1) % 0.3, 0);
+        quipuGroup.add(knotMesh);
+      }
+    }
+
+    // 3 Interactive Cipher Knots (carved bone/stone sliders)
+    const knotMat = fabricWorn(0xf4ede2);
     const knotMeshes: THREE.Mesh[] = [];
     const knotStates = [0, 0, 0];
     const correctCombo = [1, 3, 2]; // The cipher definition
 
     for (let i = 0; i < 3; i++) {
-      const knot = new THREE.Mesh(knotGeo, knotMat);
-      // Place them on the 2nd, 4th, and 6th hanging cords
-      knot.position.set(-4 + (i * 2 + 1), 0.5, 0.1);
-      quipuGroup.add(knot);
-      knotMeshes.push(knot);
+      const knotSlider = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.24), knotMat);
+      const cordX = -4 + (i * 3 + 2) * 0.8;
+      knotSlider.position.set(cordX, 1.5, 0.05);
+      quipuGroup.add(knotSlider);
+      knotMeshes.push(knotSlider);
     }
-
-    const doorGeo = new THREE.BoxGeometry(4, 8, 1);
-    const doorMesh = new THREE.Mesh(doorGeo, stoneMat);
-    doorMesh.position.set(0, -1, -9.5); // Back wall of the chamber
-    archiveGroup.add(doorMesh);
+    archiveGroup.add(quipuGroup);
 
     let puzzleSolved = false;
 
@@ -404,13 +628,6 @@ export const cloudForest: RegionModule = {
           return;
         }
 
-        // The actual player interaction needs to be mocked or we can just
-        // implement the state machine ready for an input system.
-        // We don't have direct access to the character's position here easily
-        // unless we query the scene, or just leave the state machine ready.
-        // For now, we will just leave the state machine in the closure, and
-        // if this was fully wired, proximity checks would happen here.
-
         // Simulation of the puzzle check:
         if (!puzzleSolved &&
             knotStates[0] === correctCombo[0] &&
@@ -420,10 +637,10 @@ export const cloudForest: RegionModule = {
           puzzleSolved = true;
           api.flags.set('q_act1_quipu_solved');
 
-          // Animate door (simple slide down)
+          // Animate door (descend into floor threshold slot)
           const slideDoor = () => {
-            if (doorMesh.position.y > -9) {
-              doorMesh.position.y -= 0.1;
+            if (doorMesh.position.y > -2.4) {
+              doorMesh.position.y -= 0.05;
               requestAnimationFrame(slideDoor);
             }
           };
@@ -447,35 +664,74 @@ export const cloudForest: RegionModule = {
     stairsGroup.position.set(stairX, 0, stairZ);
     stairsGroup.position.y = api.terrainHeight(stairX, stairZ);
 
-    const stepGeo = new THREE.BoxGeometry(4, 0.5, 2);
+    const stepGeo = new THREE.BoxGeometry(4.5, 0.5, 1.8);
     for (let i = 0; i < 30; i++) {
       const step = new THREE.Mesh(stepGeo, stoneMat);
-      // Stairs climbing upwards into the clouds and forward in Z
       step.position.set(0, i * 0.5, i * 1.5);
+      step.castShadow = true;
+      step.receiveShadow = true;
       stairsGroup.add(step);
       // moss on every 3rd step (§2.2 moss patches)
       if (i % 3 === 0) {
-        const mossCap = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.1, 1.5), mossMat);
+        const mossCap = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.1, 1.4), mossMat);
         mossCap.position.set(0.2, i * 0.5 + 0.3, i * 1.5);
         stairsGroup.add(mossCap);
       }
     }
 
-    // §2.2 cliff flanks flanking the staircase (wet stone, moss streaks,
-    // hanging moss strands — "climbing steeply into the dense cloud layer")
-    const cliffGeo = new THREE.BoxGeometry(8, 26, 14);
-    const cliffL = new THREE.Mesh(cliffGeo, weatheredMat);
-    cliffL.position.set(-7, 10, 20);
-    cliffL.rotation.y = -0.12;
-    const cliffR = new THREE.Mesh(cliffGeo, weatheredMat);
-    cliffR.position.set(7.5, 12, 24);
-    cliffR.rotation.y = 0.1;
-    stairsGroup.add(cliffL, cliffR);
+    // Stepped Inca retaining andenes flanking the staircase on both sides
+    const segCount = 4;
+    for (let k = 0; k < segCount; k++) {
+      const segZ = k * 11 + 5.5;
+      const segY = k * 3.75 + 1.2;
+      const segHeight = 4.8;
+
+      // Left retaining terrace wall (running along Z axis)
+      const segWallL = createAshlarWall({
+        width: 11.5,
+        height: segHeight,
+        depth: 1.8,
+        courses: 5,
+        material: weatheredMat,
+      });
+      segWallL.position.set(-3.6, segY, segZ);
+      segWallL.rotation.y = Math.PI / 2;
+      stairsGroup.add(segWallL);
+
+      // Right retaining terrace wall (running along Z axis)
+      const segWallR = createAshlarWall({
+        width: 11.5,
+        height: segHeight,
+        depth: 1.8,
+        courses: 5,
+        material: weatheredMat,
+      });
+      segWallR.position.set(3.6, segY, segZ);
+      segWallR.rotation.y = -Math.PI / 2;
+      stairsGroup.add(segWallR);
+    }
+
+    // Monumental summit portal at the cloud line
+    const summitPortal = createTrapezoidalPortal({
+      widthBottom: 4.4,
+      height: 6.8,
+      depth: 2.2,
+      material: stoneMat
+    });
+    summitPortal.position.set(0, 15, 45);
+    stairsGroup.add(summitPortal);
+
+    // Stone terrace platform behind the summit portal
+    const summitPlatform = new THREE.Mesh(new THREE.BoxGeometry(10, 0.8, 10), stoneMat);
+    summitPlatform.position.set(0, 14.6, 50);
+    summitPlatform.receiveShadow = true;
+    stairsGroup.add(summitPlatform);
+
     for (let i = 0; i < 8; i++) {
-      hangMoss(stairsGroup, (rng() > 0.5 ? -7 : 7.5) + (rng() - 0.5) * 4, 14 + rng() * 8, 14 + rng() * 14, 0.9 + rng() * 1.1);
+      hangMoss(stairsGroup, (rng() > 0.5 ? -4.5 : 4.5) + (rng() - 0.5) * 1.5, 6 + rng() * 8, 10 + rng() * 24, 0.9 + rng() * 1.1);
     }
     for (let i = 0; i < 6; i++) {
-      broadleaf(stairsGroup, (rng() - 0.5) * 12, 2 + rng() * 8, 6 + rng() * 22, 0.9 + rng() * 0.8);
+      broadleaf(stairsGroup, (rng() - 0.5) * 8, 2 + rng() * 8, 6 + rng() * 26, 0.9 + rng() * 0.8);
     }
     fallenLog(stairsGroup, -3.5, 0.5, -6, 0.4 + rng() * 0.3);
 
