@@ -8,6 +8,7 @@ import type {
     RegionShotDef
 } from '../world/contracts.js';
 import { ashlarLight, granite, bronze, woodAged, caveDark, thatchIchu, lichenPatch, terracotta, channelClear } from '../materials.js';
+import { createTrapezoidalPortal, createAshlarWall } from '../architecture.js';
 import type { QuestFlagAPI } from '../save/questFlags.js';
 
 // J7: all placement is seeded (Mulberry32, same pattern as volumetrics.ts).
@@ -104,12 +105,12 @@ export const highSierra: RegionModule = {
         { flag: 'q_act2_outpost_confrontation', trigger: 'entering the outpost inner perimeter' }
     ],
     shots: <RegionShotDef[]>[
-        { id: 'hs_qenko_marker', camera: { x: 100, y: 10, z: 580 }, lookAt: { x: 100, y: 0, z: 600 } },
-        { id: 'hs_chakana_gate', camera: { x: -150, y: 15, z: 720 }, lookAt: { x: -150, y: 5, z: 750 } },
-        { id: 'hs_sayhuite_table', camera: { x: 200, y: 20, z: 870 }, lookAt: { x: 200, y: 5, z: 900 } },
-        { id: 'hs_outpost', camera: { x: 0, y: 20, z: 1000 }, lookAt: { x: 0, y: 5, z: 1050 } },
-        { id: 'hs_paqarina_descent', camera: { x: -50, y: 15, z: 1110 }, lookAt: { x: -50, y: 5, z: 1150 } },
-        { id: 'hs_overview', camera: { x: 0, y: 150, z: 600 }, lookAt: { x: 0, y: 0, z: 800 } }
+        { id: 'hs_qenko_marker', camera: { x: 100, y: 34, z: 575 }, lookAt: { x: 100, y: 31, z: 600 } },
+        { id: 'hs_chakana_gate', camera: { x: -150, y: 64, z: 715 }, lookAt: { x: -150, y: 58, z: 750 } },
+        { id: 'hs_sayhuite_table', camera: { x: 200, y: 104, z: 870 }, lookAt: { x: 200, y: 92, z: 900 } },
+        { id: 'hs_outpost', camera: { x: 12, y: 124, z: 1030 }, lookAt: { x: 0, y: 120, z: 1050 } },
+        { id: 'hs_paqarina_descent', camera: { x: -50, y: 112, z: 1110 }, lookAt: { x: -50, y: 74, z: 1150 } },
+        { id: 'hs_overview', camera: { x: 0, y: 180, z: 600 }, lookAt: { x: 0, y: 80, z: 800 } }
     ],
     build(api: RegionBuildAPI): void {
         const rng = mulberry32(HS_SEED);
@@ -157,13 +158,21 @@ export const highSierra: RegionModule = {
         // 1. Qenko Solstice Marker (Position: x: 100, z: 600)
         const qenkoGroup = new THREE.Group();
         const qX = 100, qZ = 600;
-        qenkoGroup.position.set(qX, api.terrainHeight(qX, qZ), qZ);
+        const qH = api.terrainHeight(qX, qZ);
+        qenkoGroup.position.set(qX, qH, qZ);
         
-        // Base outcropping
-        const outcropGeo = new THREE.CylinderGeometry(15, 18, 5, 8);
-        const outcrop = new THREE.Mesh(outcropGeo, stoneMat);
-        outcrop.position.y = -2.5; // sunk halfway
-        qenkoGroup.add(outcrop);
+        // Carved megalithic limestone outcrop with stepped terraces
+        const outcropBase = new THREE.Mesh(new THREE.CylinderGeometry(16, 19, 4, 16), stoneMat);
+        outcropBase.position.y = -1.2;
+        outcropBase.receiveShadow = true;
+        outcropBase.castShadow = true;
+        qenkoGroup.add(outcropBase);
+
+        const terraceCourse = new THREE.Mesh(new THREE.CylinderGeometry(11, 13, 2.5, 16), stoneMat);
+        terraceCourse.position.y = 1.0;
+        terraceCourse.receiveShadow = true;
+        terraceCourse.castShadow = true;
+        qenkoGroup.add(terraceCourse);
 
         // §2.3 lichen patches on the outcrop rim + a cairn line (vocabulary)
         for (let i = 0; i < 7; i++) {
@@ -173,20 +182,23 @@ export const highSierra: RegionModule = {
         cairn(qenkoGroup, 12, 8, 0.9);
         cairn(qenkoGroup, 14, 10.5, 0.7);
         
-        // Gnomons (shadow-casting stones)
-        const gnomonGeo = new THREE.BoxGeometry(1, 4, 1);
+        // Gnomons (shadow-casting carved megaliths)
+        const gnomonGeo = new THREE.CylinderGeometry(0.6, 0.9, 4.5, 6);
         for (let i = 0; i < 4; i++) {
             const gnomon = new THREE.Mesh(gnomonGeo, carvedStoneMat);
-            const angle = (i / 4) * Math.PI * 2;
-            gnomon.position.set(Math.cos(angle) * 8, 2, Math.sin(angle) * 8);
+            const angle = (i / 4) * Math.PI * 2 + (Math.PI / 8);
+            gnomon.position.set(Math.cos(angle) * 7.5, 3.2, Math.sin(angle) * 7.5);
             gnomon.rotation.y = -angle;
+            gnomon.castShadow = true;
+            gnomon.receiveShadow = true;
             qenkoGroup.add(gnomon);
         }
         
-        // Central altar
-        const altarGeo = new THREE.BoxGeometry(3, 1, 3);
-        const altar = new THREE.Mesh(altarGeo, carvedStoneMat);
-        altar.position.y = 0.5;
+        // Central ritual altar with carved solstice channel
+        const altar = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.4, 3.6), carvedStoneMat);
+        altar.position.y = 2.4;
+        altar.castShadow = true;
+        altar.receiveShadow = true;
         qenkoGroup.add(altar);
 
         group.add(qenkoGroup);
@@ -194,58 +206,84 @@ export const highSierra: RegionModule = {
         // 2. Chakana Gate (Position: x: -150, z: 750)
         const chakanaGroup = new THREE.Group();
         const cX = -150, cZ = 750;
-        chakanaGroup.position.set(cX, api.terrainHeight(cX, cZ), cZ);
+        const cH = api.terrainHeight(cX, cZ);
+        chakanaGroup.position.set(cX, cH, cZ);
 
-        // Canyon Wall (Rock face) — seeded jitter (J7)
-        const wallGroup = new THREE.Group();
-        const cliffGeo = new THREE.BoxGeometry(40, 50, 10);
-        for (let i = 0; i < 3; i++) {
-            const cliff = new THREE.Mesh(cliffGeo, stoneMat);
-            cliff.position.set((i - 1) * 35, 20, -5 + rng() * 5);
-            cliff.rotation.y = (rng() - 0.5) * 0.2;
-            wallGroup.add(cliff);
-        }
-        // §2.3 lichen patches on the cliff faces
+        // Canyon Ashlar Retaining Walls flanking the gateway
+        const wallLeft = createAshlarWall({
+            width: 28,
+            height: 18,
+            depth: 3.5,
+            courses: 8,
+            material: stoneMat
+        });
+        wallLeft.position.set(-18, 0, 0);
+        wallLeft.rotation.y = 0.15;
+        chakanaGroup.add(wallLeft);
+
+        const wallRight = createAshlarWall({
+            width: 28,
+            height: 18,
+            depth: 3.5,
+            courses: 8,
+            material: stoneMat
+        });
+        wallRight.position.set(18, 0, 0);
+        wallRight.rotation.y = -0.15;
+        chakanaGroup.add(wallRight);
+
+        // §2.3 lichen patches on the cliff and wall faces
         for (let i = 0; i < 8; i++) {
             const side = i % 2 === 0 ? -1 : 1;
-            lichen(wallGroup, side * (12 + rng() * 24), 4 + rng() * 26, 0.6 + rng() * 0.8, 0, side * Math.PI / 2, 1.2 + rng() * 2.2);
+            lichen(chakanaGroup, side * (10 + rng() * 18), 3 + rng() * 12, 1.8 + rng() * 0.8, 0, side * 0.3, 1.2 + rng() * 1.8);
         }
-        chakanaGroup.add(wallGroup);
 
-        // The Stone Door
+        // Colossal Trapezoidal Portal framing the stone gate
+        const portal = createTrapezoidalPortal({
+            widthBottom: 8.5,
+            height: 13.5,
+            depth: 3.2,
+            material: stoneMat
+        });
+        portal.position.set(0, 0, 0);
+        chakanaGroup.add(portal);
+
+        // The Sliding Stone Door
         const doorGroup = new THREE.Group();
-        doorGroup.position.set(0, 0, 1);
+        doorGroup.position.set(0, 0, 0.4);
         
-        const doorGeo = new THREE.BoxGeometry(10, 15, 2);
+        const doorGeo = new THREE.BoxGeometry(8.2, 13.0, 1.4);
         const doorMesh = new THREE.Mesh(doorGeo, carvedStoneMat);
-        doorMesh.position.y = 7.5;
+        doorMesh.position.y = 6.8;
+        doorMesh.castShadow = true;
+        doorMesh.receiveShadow = true;
         doorGroup.add(doorMesh);
 
         // Stepped cross carving (Chakana)
         const chakanaCrossGroup = new THREE.Group();
-        const hBar = new THREE.Mesh(new THREE.BoxGeometry(6, 2, 0.5), carvedStoneMat);
-        const vBar = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 0.5), carvedStoneMat);
+        const hBar = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.8, 0.4), carvedStoneMat);
+        const vBar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 5.2, 0.4), carvedStoneMat);
+        hBar.castShadow = true;
+        vBar.castShadow = true;
         chakanaCrossGroup.add(hBar, vBar);
-        chakanaCrossGroup.position.set(0, 10, 1.25);
+        chakanaCrossGroup.position.set(0, 9.2, 0.9);
         doorGroup.add(chakanaCrossGroup);
 
         // Bronze mirror dial (Puzzle element)
-        const dialGeo = new THREE.CylinderGeometry(2, 2, 0.5, 16);
+        const dialGeo = new THREE.CylinderGeometry(1.8, 1.8, 0.4, 24);
         dialGeo.rotateX(Math.PI / 2);
         const dial = new THREE.Mesh(dialGeo, bronzeMat);
-        dial.position.set(0, 5, 1.25);
+        dial.position.set(0, 4.2, 0.9);
+        dial.castShadow = true;
         
-        // Add a marker on the dial
-        const marker = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.6), bronzeMat);
-        marker.position.set(0, 1, 0);
+        // Marker on the dial
+        const marker = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 0.5), bronzeMat);
+        marker.position.set(0, 0.8, 0);
         dial.add(marker);
 
         doorGroup.add(dial);
         
-        // Export refs for animation later (typed userData — p10 audit defect ③:
-        // the `as any` casts violated the repo rule)
         chakanaGroup.userData = { doorMesh, dial };
-
         chakanaGroup.add(doorGroup);
         group.add(chakanaGroup);
 
@@ -441,23 +479,41 @@ export const highSierra: RegionModule = {
         const oX = 0, oZ = 1050;
         outpostGroup.position.set(oX, api.terrainHeight(oX, oZ), oZ);
 
-        // Ruined walls
-        const wallMat = stoneMat; // Reuse stone
-        const wall1 = new THREE.Mesh(new THREE.BoxGeometry(14.99, 5.99, 1.99), wallMat);
-        wall1.position.set(-10, 3, -15);
-        const wall2 = new THREE.Mesh(new THREE.BoxGeometry(19.99, 4.99, 1.99), wallMat);
-        wall2.position.set(10, 2.5, 10);
+        // Stone foundation terrace leveling the ridge crest
+        const terrace = new THREE.Mesh(new THREE.BoxGeometry(26, 3.2, 26), stoneMat);
+        terrace.position.set(0, -1.4, 0);
+        terrace.receiveShadow = true;
+        terrace.castShadow = true;
+        outpostGroup.add(terrace);
+
+        // Ruined coursed ashlar fortress walls with seismic batter
+        const wall1 = createAshlarWall({
+            width: 18,
+            height: 6.5,
+            depth: 1.8,
+            courses: 7,
+            material: stoneMat
+        });
+        wall1.position.set(0, 0, -8);
+        const wall2 = createAshlarWall({
+            width: 20,
+            height: 5.6,
+            depth: 1.8,
+            courses: 6,
+            material: stoneMat
+        });
+        wall2.position.set(8, 0, 2);
         wall2.rotation.y = Math.PI / 2;
         outpostGroup.add(wall1, wall2);
 
         // Watch platform
-        const platGeo = new THREE.BoxGeometry(8, 0.5, 8);
+        const platGeo = new THREE.BoxGeometry(7, 0.5, 7);
         const plat = new THREE.Mesh(platGeo, darkCrateMat);
-        plat.position.set(-8, 6, -12);
+        plat.position.set(-5, 5.8, -4);
         const postGeo = new THREE.CylinderGeometry(0.2, 0.2, 6);
         for(let i=0; i<4; i++) {
             const post = new THREE.Mesh(postGeo, darkCrateMat);
-            post.position.set(-8 + (i%2==0 ? 3 : -3), 3, -12 + (i<2 ? 3 : -3));
+            post.position.set(-5 + (i%2==0 ? 2.5 : -2.5), 2.9, -4 + (i<2 ? 2.5 : -2.5));
             outpostGroup.add(post);
         }
         outpostGroup.add(plat);
