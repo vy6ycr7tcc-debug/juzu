@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { InputManager } from './input.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics } from './physics.js';
@@ -54,13 +55,18 @@ export class CharacterController {
   private deceleration: number = 15.0;
   private rotationSpeed: number = 10.0;
 
-  // Animation state
+  // Rigged GLB Model & Animation state
+  public isLoaded: boolean = false;
+  private loadPromise: Promise<void> | null = null;
+  private mixer: THREE.AnimationMixer | null = null;
+  private actions: {
+    idle?: THREE.AnimationAction;
+    walk?: THREE.AnimationAction;
+    run?: THREE.AnimationAction;
+  } = {};
+  private activeAction: THREE.AnimationAction | null = null;
+  private characterModel: THREE.Group | null = null;
   private time: number = 0;
-  private torso: THREE.Mesh;
-  private leftArm: THREE.Mesh;
-  private rightArm: THREE.Mesh;
-  private leftLeg: THREE.Mesh;
-  private rightLeg: THREE.Mesh;
 
   public disableCameraUpdate: boolean = false;
 
@@ -68,116 +74,120 @@ export class CharacterController {
     this.camera = camera;
     this.input = input;
 
-    // Realistic proportions and anatomy for Naira
+    // Protagonist root group — positioned in world coordinates
     this.mesh = new THREE.Group();
-
-    // Skin with subsurface scattering approximation
-    const skinMat = skinNaira();
-
-    // Cloth PBR (weather-worn field clothing) — jacket tone
-    const clothMat = clothField();
-
-    // Pants (tough fabric) — p7: darker ground-grime tone (was the same
-    // clothField() olive as the torso: the costume read as a green bodysuit)
-    const pantsMat = clothFieldDark();
-
-    // Gear (leather/straps)
-    const gearMat = leatherDark();
-
-    // Torso (Jacket/Shirt)
-    const torsoGeo = new THREE.CylinderGeometry(0.22, 0.18, 0.6, 16);
-    this.torso = new THREE.Mesh(torsoGeo, clothMat);
-    this.torso.position.y = 1.0;
-    this.torso.castShadow = true;
-    this.mesh.add(this.torso);
-
-    // Pack/Field Gear
-    const packGeo = new THREE.BoxGeometry(0.3, 0.4, 0.15);
-    const pack = new THREE.Mesh(packGeo, gearMat);
-    pack.position.set(0, 0.1, -0.15);
-    this.torso.add(pack);
-
-    // Head
-    const headGeo = new THREE.SphereGeometry(0.11, 16, 16);
-    const head = new THREE.Mesh(headGeo, skinMat);
-    head.position.y = 1.45;
-    head.castShadow = true;
-
-    // Dark braid (tube geometry)
-    const braidPath = new THREE.CatmullRomCurve3([
-       new THREE.Vector3(0, 0, -0.1),
-       new THREE.Vector3(0, -0.1, -0.15),
-       new THREE.Vector3(0, -0.3, -0.18)
-    ]);
-    const braidGeo = new THREE.TubeGeometry(braidPath, 8, 0.03, 8, false);
-    const hairMat = hairDark();
-    const braid = new THREE.Mesh(braidGeo, hairMat);
-    braid.castShadow = true;
-    head.add(braid);
-
-    this.mesh.add(head);
-
-    // Legs (~0.8m)
-    const legGeo = new THREE.CylinderGeometry(0.09, 0.06, 0.8, 16);
-    // Move pivot to top of leg
-    legGeo.translate(0, -0.4, 0);
-
-    // Boots (p7 costume zoning): leather over the lower leg, extending 2 cm
-    // below the leg end so the boot embeds into sloped ground — mitigates the
-    // "legs end mid-air on a downslope" read of the center-point terrain snap
-    // (the snap itself is the shared height function; geometry/rig stays).
-    const bootGeo = new THREE.CylinderGeometry(0.07, 0.082, 0.26, 12);
-    bootGeo.translate(0, -0.71, 0);
-    const bootMat = leatherBoot();
-
-    this.leftLeg = new THREE.Mesh(legGeo, pantsMat);
-    this.leftLeg.position.set(-0.11, 0.8, 0);
-    this.leftLeg.castShadow = true;
-    const leftBoot = new THREE.Mesh(bootGeo, bootMat);
-    leftBoot.castShadow = true;
-    this.leftLeg.add(leftBoot);
-    this.mesh.add(this.leftLeg);
-
-    this.rightLeg = new THREE.Mesh(legGeo, pantsMat);
-    this.rightLeg.position.set(0.11, 0.8, 0);
-    this.rightLeg.castShadow = true;
-    const rightBoot = new THREE.Mesh(bootGeo, bootMat);
-    rightBoot.castShadow = true;
-    this.rightLeg.add(rightBoot);
-    this.mesh.add(this.rightLeg);
-
-    // Arms (~0.6m) — pivot at the top; skin forearm/hand below the sleeve
-    const armGeo = new THREE.CylinderGeometry(0.06, 0.045, 0.6, 16);
-    // Move pivot to top of arm
-    armGeo.translate(0, -0.3, 0);
-
-    // Sleeves (p7 costume zoning): the arms were FULL skin cylinders ("tight
-    // sleeves" comment, never implemented) — she read bare-armed. A cloth
-    // sleeve shell over the upper arm keeps the animated arm mesh untouched;
-    // the forearm/hand below stays skin.
-    const sleeveGeo = new THREE.CylinderGeometry(0.068, 0.056, 0.3, 16);
-    sleeveGeo.translate(0, -0.15, 0);
-
-    this.leftArm = new THREE.Mesh(armGeo, skinMat);
-    this.leftArm.position.set(-0.28, 1.3, 0);
-    this.leftArm.castShadow = true;
-    const leftSleeve = new THREE.Mesh(sleeveGeo, clothMat);
-    leftSleeve.castShadow = true;
-    this.leftArm.add(leftSleeve);
-    this.mesh.add(this.leftArm);
-
-    this.rightArm = new THREE.Mesh(armGeo, skinMat);
-    this.rightArm.position.set(0.28, 1.3, 0);
-    this.rightArm.castShadow = true;
-    const rightSleeve = new THREE.Mesh(sleeveGeo, clothMat);
-    rightSleeve.castShadow = true;
-    this.rightArm.add(rightSleeve);
-    this.mesh.add(this.rightArm);
-
     scene.add(this.mesh);
+
+    // Asynchronously load the rigged GLB model
+    this.load();
 
     // Camera orbit controls are handled via input manager now
     this.updateCamera();
+  }
+
+  public load(): Promise<void> {
+    if (this.loadPromise) return this.loadPromise;
+    this.loadPromise = new Promise<void>((resolve, reject) => {
+      const loader = new GLTFLoader();
+      const modelUrl = `${import.meta.env.BASE_URL}models/soldier.glb`;
+      loader.load(
+        modelUrl,
+        (gltf) => {
+          const model = gltf.scene;
+
+          // Scale model to human adventurer height (1.75 m)
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          const targetHeight = 1.75;
+          const scale = targetHeight / (size.y || 1);
+          model.scale.setScalar(scale);
+
+          // Center model and align soles of feet to y = 0
+          const alignedBox = new THREE.Box3().setFromObject(model);
+          model.position.y = -alignedBox.min.y;
+
+          // Ensure proper material configuration, shadows, and colorSpace
+          model.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const mesh = child as THREE.Mesh;
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              mesh.frustumCulled = false;
+              if (mesh.material) {
+                const mat = mesh.material as THREE.MeshStandardMaterial;
+                mat.envMapIntensity = 1.0;
+                mat.roughness = 0.85;
+                mat.metalness = 0.05;
+                if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+              }
+            }
+          });
+
+          // Mixamo bone attachments for Naira's signature braids and gear
+          const headBone = model.getObjectByName('mixamorig:Head');
+          const spineBone = model.getObjectByName('mixamorig:Spine2');
+
+          // Signature twin dark braids (hairDark) attached to head bone
+          if (headBone) {
+            const braidMat = hairDark();
+            const leftBraidCurve = new THREE.CatmullRomCurve3([
+              new THREE.Vector3(-6, -2, -6),
+              new THREE.Vector3(-10, -18, -2),
+              new THREE.Vector3(-12, -35, 4)
+            ]);
+            const rightBraidCurve = new THREE.CatmullRomCurve3([
+              new THREE.Vector3(6, -2, -6),
+              new THREE.Vector3(10, -18, -2),
+              new THREE.Vector3(12, -35, 4)
+            ]);
+            const leftBraid = new THREE.Mesh(new THREE.TubeGeometry(leftBraidCurve, 8, 2.2, 8, false), braidMat);
+            const rightBraid = new THREE.Mesh(new THREE.TubeGeometry(rightBraidCurve, 8, 2.2, 8, false), braidMat);
+            leftBraid.castShadow = true;
+            rightBraid.castShadow = true;
+            headBone.add(leftBraid);
+            headBone.add(rightBraid);
+          }
+
+          // Signature leather field pack attached to spine bone
+          if (spineBone) {
+            const packMat = leatherDark();
+            const packMesh = new THREE.Mesh(new THREE.BoxGeometry(28, 36, 18), packMat);
+            packMesh.position.set(0, 10, -15);
+            packMesh.castShadow = true;
+            spineBone.add(packMesh);
+          }
+
+          this.characterModel = model;
+          this.mesh.add(model);
+
+          // Setup AnimationMixer
+          this.mixer = new THREE.AnimationMixer(model);
+          for (const clip of gltf.animations) {
+            if (clip.name === 'Idle') {
+              this.actions.idle = this.mixer.clipAction(clip);
+            } else if (clip.name === 'Walk') {
+              this.actions.walk = this.mixer.clipAction(clip);
+            } else if (clip.name === 'Run') {
+              this.actions.run = this.mixer.clipAction(clip);
+            }
+          }
+
+          if (this.actions.idle) {
+            this.actions.idle.play();
+            this.activeAction = this.actions.idle;
+          }
+
+          this.isLoaded = true;
+          resolve();
+        },
+        undefined,
+        (err) => {
+          console.error('Failed to load character GLB:', err);
+          reject(err);
+        }
+      );
+    });
+    return this.loadPromise;
   }
 
   public setForceState(state: MovementState) { this.state = state; this.stateTimer = 0; }
@@ -421,44 +431,40 @@ export class CharacterController {
         }
     }
 
+    // Update AnimationMixer for rigged skeletal motion
+    if (this.mixer) {
+      this.mixer.update(dt);
+    }
+
+    // Determine target animation action based on speed and state
+    let desiredAction = this.actions.idle;
     if (this.speed > 0.1) {
-
-      let cycleSpeed = isRunning ? 15 : 8;
-      if (this.state === MovementState.SWIM) cycleSpeed = 5;
-      if (this.state === MovementState.CLIMB) cycleSpeed = 4;
-      const cycle = Math.sin(this.time * cycleSpeed);
-
-      this.leftLeg.rotation.x = cycle * 0.8;
-      this.rightLeg.rotation.x = -cycle * 0.8;
-
-      if (this.state === MovementState.CLIMB) {
-          this.leftArm.rotation.x = Math.PI - cycle * 0.5;
-          this.rightArm.rotation.x = Math.PI + cycle * 0.5;
-      } else if (this.state === MovementState.SWIM) {
-          this.leftArm.rotation.z = Math.PI / 2 + cycle * 0.5;
-          this.rightArm.rotation.z = -Math.PI / 2 - cycle * 0.5;
+      if (this.speed > this.maxWalkSpeed * 1.1) {
+        desiredAction = this.actions.run;
       } else {
-          this.leftArm.rotation.x = -cycle * 0.5;
-          this.rightArm.rotation.x = cycle * 0.5;
+        desiredAction = this.actions.walk;
       }
+    }
 
-      this.torso.position.y = 1.0 + Math.abs(cycle) * 0.05;
-
-      if (this.state === MovementState.SLIDE) {
-          this.mesh.rotation.x = Math.PI / 6;
-      } else {
-          this.mesh.rotation.x = 0;
+    if (desiredAction && desiredAction !== this.activeAction) {
+      if (this.activeAction) {
+        this.activeAction.fadeOut(0.2);
       }
+      desiredAction.reset().fadeIn(0.2).play();
+      this.activeAction = desiredAction;
+    }
 
+    // Dynamically pace locomotion cycle to match ground speed
+    if (this.activeAction === this.actions.walk && this.actions.walk) {
+      this.actions.walk.timeScale = Math.max(0.2, this.speed / this.maxWalkSpeed);
+    } else if (this.activeAction === this.actions.run && this.actions.run) {
+      this.actions.run.timeScale = Math.max(0.5, this.speed / this.maxRunSpeed);
+    }
+
+    if (this.state === MovementState.SLIDE) {
+      this.mesh.rotation.x = Math.PI / 6;
     } else {
-      const breathe = Math.sin(this.time * 2);
-      this.torso.scale.set(1, 1 + breathe * 0.02, 1 + breathe * 0.05);
-
-      this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, dt * 10);
-      this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, dt * 10);
-      this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, dt * 10);
-      this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, dt * 10);
-      this.torso.position.y = THREE.MathUtils.lerp(this.torso.position.y, 1.0, dt * 10);
+      this.mesh.rotation.x = 0;
     }
 
     window.__playerDebug = {

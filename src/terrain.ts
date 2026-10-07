@@ -27,7 +27,7 @@ export function getGlobalTerrainHeight(x: number, z: number): number {
 
 import { physics } from './physics.js';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createNormalTexture, createTerrainDetailTexture, createTerrainRoughnessTexture } from './textures.js';
+import { createNormalTexture, createTerrainDetailTexture, createTerrainRoughnessTexture, ASSET_PATHS, getImageTexture } from './textures.js';
 import type { RenderCaps } from './renderer.js';
 
 // Deterministic per-world-position hash (p3-2). Replaces the previous
@@ -61,17 +61,13 @@ export class TerrainManager {
     this.maxAnisotropy = caps?.maxAnisotropy ?? 4;
     this.lowTier = caps?.tier === 'LOW';
 
-    // §6.3 texture budget: terrain detail ≤ 256². Per-map repeats turn each
-    // 256² tile into the right world scale on a 200 m chunk (uv spans 0..1
-    // per chunk): albedo flecks ~20 m tile, normal ridges ~20 m, roughness
-    // blotches ~40 m (the sanctioned wet-specular mechanism: noise
-    // roughnessMap), AO macro variation ~100 m. All maps are strictly
-    // low-frequency — the generic fbm generators decorrelate neighboring
-    // texels and read as per-texel static at terrain tiling (p3-5 probe).
+    // Environment Asset Pack: real PBR mossy cloud-forest floor map
     const texSize = 256;
-    const detailMap = createTerrainDetailTexture(texSize);
-    detailMap.colorSpace = THREE.SRGBColorSpace;
-    detailMap.repeat.set(10, 10);
+    const detailMap = getImageTexture(ASSET_PATHS.environment.forestFloor, {
+      repeatX: 20,
+      repeatY: 20,
+      anisotropy: this.maxAnisotropy
+    });
 
     const roughnessMap = createTerrainRoughnessTexture(texSize);
     roughnessMap.repeat.set(5, 5);
