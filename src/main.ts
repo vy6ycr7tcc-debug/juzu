@@ -372,6 +372,12 @@ async function init() {
 
   const character = new CharacterController(scene, camera, input);
   await character.load();
+  (window as any).__character = character;
+
+  // Hide character during title screen so protagonist does not clip into title menu
+  if (!urlParams.has('shot')) {
+    character.mesh.visible = false;
+  }
 
   // PWA/offline boot block
   registerServiceWorker();
@@ -398,6 +404,9 @@ async function init() {
     isPaused = true;
     touchControls.releaseAll();
     releaseWakeLock();
+    if (document.exitPointerLock) {
+      document.exitPointerLock();
+    }
   };
   ui.menu.onResume = () => {
     isPaused = false;
@@ -407,10 +416,24 @@ async function init() {
 
   ui.onJourneyStart = () => {
     journeyStarted = true;
+    character.mesh.visible = true;
     touchUI.setVisible(touchMode);
     resumeAudioContext();
     void requestWakeLock();
+    if (!touchMode && renderer.domElement.requestPointerLock) {
+      try {
+        renderer.domElement.requestPointerLock();
+      } catch (_) {}
+    }
   };
+
+  renderer.domElement.addEventListener('click', () => {
+    if (journeyStarted && !ui.title.isOpen && !ui.menu.isOpen && !touchMode) {
+      if (document.pointerLockElement !== renderer.domElement) {
+        renderer.domElement.requestPointerLock();
+      }
+    }
+  });
 
   const flags = createQuestFlags();
   const saveAPI = createSaveSystem();
