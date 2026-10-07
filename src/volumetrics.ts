@@ -53,24 +53,25 @@ function createShaftTexture(): THREE.CanvasTexture {
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  // Vertical falloff: transparent at BOTH ends, peaking in the upper third.
-  // The first profile started at alpha 1 at the pivot — a bright straight
-  // top edge floating mid-air (the "slab over the ridgeline" read in the
-  // dawn captures; the bottom edge was always soft).
+  // Vertical falloff: transparent at top pivot and bottom tip, peaking in the upper third.
   const v = ctx.createLinearGradient(0, 0, 0, 256);
-  v.addColorStop(0, 'rgba(255, 240, 220, 0)');
-  v.addColorStop(0.28, 'rgba(255, 240, 220, 1)');
-  v.addColorStop(0.62, 'rgba(255, 240, 220, 0.5)');
-  v.addColorStop(1, 'rgba(255, 240, 220, 0)');
+  v.addColorStop(0, 'rgba(255, 245, 230, 0)');
+  v.addColorStop(0.12, 'rgba(255, 245, 230, 0.65)');
+  v.addColorStop(0.30, 'rgba(255, 245, 230, 1.0)');
+  v.addColorStop(0.65, 'rgba(255, 245, 230, 0.45)');
+  v.addColorStop(0.90, 'rgba(255, 245, 230, 0.1)');
+  v.addColorStop(1, 'rgba(255, 245, 230, 0)');
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, 128, 256);
 
-  // Horizontal falloff (destination-in keeps only what survives the radial
-  // mask) — soft left/right edges, the p4 hard-edge fix.
+  // Horizontal falloff across width: smooth Gaussian-like curve so beam edges
+  // fade continuously to zero without vertical streak lines or circular pinching.
   ctx.globalCompositeOperation = 'destination-in';
-  const h = ctx.createRadialGradient(64, 128, 0, 64, 128, 64);
-  h.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  h.addColorStop(0.65, 'rgba(255, 255, 255, 0.55)');
+  const h = ctx.createLinearGradient(0, 0, 128, 0);
+  h.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  h.addColorStop(0.20, 'rgba(255, 255, 255, 0.5)');
+  h.addColorStop(0.50, 'rgba(255, 255, 255, 1.0)');
+  h.addColorStop(0.80, 'rgba(255, 255, 255, 0.5)');
   h.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = h;
   ctx.fillRect(0, 0, 128, 256);
@@ -99,6 +100,7 @@ export class VolumetricLightShafts {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
+      fog: false, // Prevent distant additive bloom over fogColor
       opacity: 0, // update() owns intensity from the §3.3 table
     });
 
@@ -153,6 +155,11 @@ export class VolumetricLightShafts {
     } else if (regionId === 'high_sierra') {
       intensity *= 0.6;
       thickness = 0.5; // thin high-altitude shafts
+    }
+    if (gradeKey === 'dawn' || gradeKey === 'dusk') {
+      this.material.color.setHex(0xFFD4A4); // Warm golden-hour alpenglow
+    } else {
+      this.material.color.setHex(0xFFF2E6); // Clean daylight
     }
     this.material.opacity = intensity;
     for (const cluster of this.clusters) cluster.scale.set(thickness, 1, thickness);

@@ -13,7 +13,7 @@ async function run() {
     ]
   });
 
-  const scenarios = scenarioArg ? [scenarioArg] : ['valley_overview', 'river_crossing', 'character_closeup', 'climb_wall', 'rope_swing', 'swim_river'];
+  const scenarios = scenarioArg ? [scenarioArg] : ['valley_overview', 'bridge', 'river_crossing', 'character_closeup', 'water_check', 'atmos_check'];
   const modeArg = process.argv[3];
   const modes = modeArg ? [modeArg] : ['webgl2', 'webgpu'];
 
@@ -28,7 +28,12 @@ async function run() {
       page.on('console', msg => console.log(`[${mode}] ${msg.type()}: ${msg.text()}`));
 
       console.log(`Loading ${scenario} in ${mode}...`);
-      await page.goto(`http://localhost:5173/juzu/?shot=${scenario}&t=2`);
+      const url = scenario.startsWith('http')
+        ? scenario
+        : (scenario.includes('=')
+            ? `http://localhost:5173/juzu/?${scenario}`
+            : `http://localhost:5173/juzu/?shot=${scenario}&t=2`);
+      await page.goto(url);
 
       try {
         await page.waitForFunction(() => window.__shotReady === true, { timeout: 10000 });
