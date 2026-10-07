@@ -935,17 +935,17 @@ export const jungleLowlands: RegionModule = {
 
         // 1. jl_serpent_waters simulation & feedback
         if (!serpentPuzzleSolved) {
-          const w0 = Math.sin(time) > 0 ? 'high' : 'low';
-          const w1 = 'low';
-          const w2 = Math.cos(time) > 0 ? 'high' : 'low';
+          const w0: 'high' | 'low' = Math.sin(time) > 0 ? 'high' : 'low';
+          const w1: 'high' | 'low' = 'low';
+          const w2: 'high' | 'low' = Math.cos(time) > 0 ? 'high' : 'low';
 
           serpentWheels[0] = w0;
           serpentWheels[1] = w1;
           serpentWheels[2] = w2;
 
-          if (wheels[0]) wheels[0].rotation.x = w0 === 'high' ? Math.PI / 4 : 0;
-          if (wheels[1]) wheels[1].rotation.x = w1 === 'high' ? Math.PI / 4 : 0;
-          if (wheels[2]) wheels[2].rotation.x = w2 === 'high' ? Math.PI / 4 : 0;
+          if (wheels[0]) wheels[0].rotation.x = (w0 as string) === 'high' ? Math.PI / 4 : 0;
+          if (wheels[1]) wheels[1].rotation.x = (w1 as string) === 'high' ? Math.PI / 4 : 0;
+          if (wheels[2]) wheels[2].rotation.x = (w2 as string) === 'high' ? Math.PI / 4 : 0;
 
           if (serpentWheels[0] === 'high' && serpentWheels[1] === 'low' && serpentWheels[2] === 'high') {
             serpentPuzzleSolved = true;
