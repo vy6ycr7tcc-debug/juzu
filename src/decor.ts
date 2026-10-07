@@ -7,7 +7,7 @@ import {
   createFoliageCardTexture, createMistTexture, createNormalTexture,
   type FoliageCardKind,
 } from './textures.js';
-import { granite, limestoneSwallowed, woodAged } from './materials.js';
+import { granite, limestoneSwallowed, woodAged, treeBark } from './materials.js';
 import type { RenderCaps } from './renderer.js';
 import type { RegionModule } from './world/contracts.js';
 
@@ -347,7 +347,7 @@ export class DecorManager {
 
         let trunkMesh: THREE.InstancedMesh | null = null;
         if (pal.trunk) {
-          const trunkMat = woodAged();
+          const trunkMat = treeBark();
           trunkMat.normalMap = barkNormal;
           trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
           trunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

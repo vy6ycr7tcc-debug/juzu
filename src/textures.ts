@@ -951,3 +951,59 @@ export function createMistTexture(size: number = 128): THREE.Texture {
     tex.wrapT = THREE.ClampToEdgeWrapping;
     return tex;
 }
+
+// ============================================================================
+// Real PBR Image Asset Registry & Loader (Juzu Visual Asset Pack)
+// ============================================================================
+
+export const ASSET_PATHS = {
+  character: {
+    leather: `${import.meta.env.BASE_URL}assets/character-textures/character-leather.jpeg`,
+    fabric: `${import.meta.env.BASE_URL}assets/character-textures/character-fabric.jpeg`,
+    canvas: `${import.meta.env.BASE_URL}assets/character-textures/character-canvas.jpeg`,
+    skin: `${import.meta.env.BASE_URL}assets/character-textures/character-skin.jpeg`,
+  },
+  environment: {
+    forestFloor: `${import.meta.env.BASE_URL}assets/environment-textures/environment-forest-floor.jpeg`,
+    stonework: `${import.meta.env.BASE_URL}assets/environment-textures/environment-stonework.jpeg`,
+    bark: `${import.meta.env.BASE_URL}assets/environment-textures/environment-bark.jpeg`,
+    foliage: `${import.meta.env.BASE_URL}assets/environment-textures/environment-foliage.jpeg`,
+    planks: `${import.meta.env.BASE_URL}assets/environment-textures/environment-planks.jpeg`,
+  },
+  concept: {
+    character: `${import.meta.env.BASE_URL}assets/concept-art/concept-character.jpeg`,
+    valley: `${import.meta.env.BASE_URL}assets/concept-art/concept-valley.jpeg`,
+    ruins: `${import.meta.env.BASE_URL}assets/concept-art/concept-ruins.jpeg`,
+  }
+};
+
+const imageTextureLoader = new THREE.TextureLoader();
+const imageTextureCache = new Map<string, THREE.Texture>();
+
+export function getImageTexture(
+  path: string,
+  opts: { isSRGB?: boolean; repeatX?: number; repeatY?: number; anisotropy?: number } = {}
+): THREE.Texture {
+  const isSRGB = opts.isSRGB ?? true;
+  const repeatX = opts.repeatX ?? 1;
+  const repeatY = opts.repeatY ?? 1;
+  const anisotropy = opts.anisotropy ?? 4;
+  const cacheKey = `${path}:${isSRGB}:${repeatX}:${repeatY}:${anisotropy}`;
+
+  const cached = imageTextureCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const tex = imageTextureLoader.load(path);
+  tex.colorSpace = isSRGB ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  tex.anisotropy = anisotropy;
+  tex.generateMipmaps = true;
+
+  imageTextureCache.set(cacheKey, tex);
+  return tex;
+}
+

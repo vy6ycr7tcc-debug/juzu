@@ -7,7 +7,9 @@ import {
   createClothWeaveTexture,
   createHairStrandTexture,
   TRIM_BAND_COUNT,
-  type TrimSheetMaps
+  type TrimSheetMaps,
+  ASSET_PATHS,
+  getImageTexture
 } from './textures.js';
 import type { MeshStandardNodeMaterial } from 'three/webgpu';
 import type { RenderCaps } from './renderer.js';
@@ -262,7 +264,8 @@ export async function buildAshlarTrimNodeMaterial(
 // Ashlar light (Paititi primary stone, sunlit faces) — fresh ashlar 0.75–0.85
 export function ashlarLight(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0xCFC6B4,
+        color: 0xE8E0D2,
+        map: getImageTexture(ASSET_PATHS.environment.stonework, { repeatX: 4, repeatY: 4 }),
         roughness: 0.8,
         metalness: 0.0,
         normalMap: getNormalMap(),
@@ -274,7 +277,8 @@ export function ashlarLight(): THREE.MeshStandardMaterial {
 // Ashlar weathered (Paititi shadow faces / older structures) — weathered 0.85–0.95
 export function ashlarWeathered(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x34322e, // P-CANON-2: ashlar shadow → darker than plazaWorn, granite family
+        color: 0x999488,
+        map: getImageTexture(ASSET_PATHS.environment.stonework, { repeatX: 4, repeatY: 4 }),
         roughness: 0.9,
         metalness: 0.0,
         normalMap: getNormalMap(),
@@ -298,7 +302,8 @@ export function granite(): THREE.MeshStandardMaterial {
 // Limestone swallowed (Jungle lowlands ruined stone, heavy moss)
 export function limestoneSwallowed(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x3d3c37, // P-CANON-2: limestone → canon granite band (L≈60)
+        color: 0x758062,
+        map: getImageTexture(ASSET_PATHS.environment.stonework, { repeatX: 4, repeatY: 4 }),
         roughness: 0.9,
         metalness: 0.0,
         normalMap: getNormalMap(),
@@ -340,7 +345,8 @@ export function caveDark(): THREE.MeshStandardMaterial {
 // Humus/earth (§2.2: ground, excavation pit) — raw wet earth
 export function humusEarth(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x26200f, // P-CANON-2: humus → canon floor band (L≈32)
+        color: 0xFFFFFF,
+        map: getImageTexture(ASSET_PATHS.environment.forestFloor, { repeatX: 4, repeatY: 4 }),
         roughness: 0.95,
         metalness: 0.0,
         normalMap: getNormalMap(),
@@ -375,9 +381,10 @@ export function lichenPatch(): THREE.MeshStandardMaterial {
 
 // Broadleaf card (§2.2 canopy greens #2D4A22 / #3E5E2A) — foliage card read,
 // two-sided because cards are flat planes seen from both sides (V-FOLIAGE style)
-export function broadleafCard(hex: number = 0x303f24): THREE.MeshStandardMaterial {
+export function broadleafCard(hex: number = 0xffffff): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
         color: hex,
+        map: getImageTexture(ASSET_PATHS.environment.foliage, { repeatX: 1, repeatY: 1 }),
         roughness: 0.8,
         metalness: 0.0,
         side: THREE.DoubleSide,
@@ -465,8 +472,22 @@ export function copperWorn(): THREE.MeshStandardMaterial {
 // Wood aged (old structures, barricades) — wood 0.8–0.9
 export function woodAged(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x2d2b26, // P-CANON-2: wood aged → canon fissured bark anchor (L≈42)
+        color: 0xFFFFFF,
+        map: getImageTexture(ASSET_PATHS.environment.planks, { repeatX: 2, repeatY: 4 }),
         roughness: 0.85,
+        metalness: 0.0,
+        normalMap: getNormalMap(),
+        roughnessMap: getNoiseMap(),
+        envMapIntensity: 1.0,
+    });
+}
+
+// Tree bark (cloud forest / jungle trunks — §4.2 catalog)
+export function treeBark(): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({
+        color: 0xFFFFFF,
+        map: getImageTexture(ASSET_PATHS.environment.bark, { repeatX: 1, repeatY: 4 }),
+        roughness: 0.9,
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
@@ -477,7 +498,8 @@ export function woodAged(): THREE.MeshStandardMaterial {
 // Wood wet (jungle / near-water structures) — wet lowers roughness
 export function woodWet(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x4A3025,
+        color: 0x888888,
+        map: getImageTexture(ASSET_PATHS.environment.planks, { repeatX: 2, repeatY: 4 }),
         roughness: 0.6,
         metalness: 0.0,
         normalMap: getNormalMap(),
@@ -513,10 +535,8 @@ export function fabricWorn(hex: number): THREE.MeshStandardMaterial {
 // the other organic factories use; §4.1 "roughness story" at pack/strap scale)
 export function leatherDark(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        // P-CANON-5 (albedo-source audit p13): harness/pack leather regraded to
-        // the concept-character measured band (canon-palette.json
-        // concept-character.harness_leather median #33261d; was 0x2C1A10).
-        color: 0x33261D,
+        color: 0xFFFFFF,
+        map: getImageTexture(ASSET_PATHS.character.leather, { repeatX: 2, repeatY: 2 }),
         roughness: 0.75,
         metalness: 0.05,
         normalMap: getNormalMap(),
@@ -629,7 +649,8 @@ export function setCharacterDetailMapsEnabled(v: boolean): void {
 //    distance; 0.5 keeps them sub-millimeter but present.
 export function skinNaira(): THREE.MeshPhysicalMaterial {
     const mat = new THREE.MeshPhysicalMaterial({
-        color: 0x8D5524,
+        color: 0xFFFFFF,
+        map: getImageTexture(ASSET_PATHS.character.skin, { repeatX: 1, repeatY: 1 }),
         roughness: 1.0,           // × pore map (0.40–0.70) — see note above
         metalness: 0.0,
         sheen: 0.3,
@@ -659,7 +680,8 @@ export function skinNaira(): THREE.MeshPhysicalMaterial {
 //    the interference.
 export function clothField(): THREE.MeshPhysicalMaterial {
     const mat = new THREE.MeshPhysicalMaterial({
-        color: 0x1A1A18,          // canon jacket charcoal (concept-character.jacket)
+        color: 0xCCCCCC,
+        map: getImageTexture(ASSET_PATHS.character.fabric, { repeatX: 3, repeatY: 3 }),
         roughness: 1.08,          // × weave map (0.80–0.92, clamped ≤1.0)
         metalness: 0.0,
         envMapIntensity: 1.0,
@@ -677,9 +699,8 @@ export function clothField(): THREE.MeshPhysicalMaterial {
 // work pants (§1.2: weather-worn; ground contact takes the grime).
 export function clothFieldDark(): THREE.MeshPhysicalMaterial {
     const mat = new THREE.MeshPhysicalMaterial({
-        // P-CANON-5 (p13): pants regraded to concept-character.pants median
-        // #231b14 (was 0x3B4A1E — same green-family problem as the jacket).
-        color: 0x231B14,          // canon work-pants brown (concept-character.pants)
+        color: 0xBBBBBB,
+        map: getImageTexture(ASSET_PATHS.character.canvas, { repeatX: 3, repeatY: 3 }),
         roughness: 1.0,           // muddiest cloth: map × 1.0 clamps at 1.0 in dips
         metalness: 0.0,
         envMapIntensity: 1.0,
@@ -697,7 +718,8 @@ export function clothFieldDark(): THREE.MeshPhysicalMaterial {
 // shared leatherDark() for both, flattening the costume's leather story.
 export function leatherBoot(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x141311,
+        color: 0x888888,
+        map: getImageTexture(ASSET_PATHS.character.leather, { repeatX: 2, repeatY: 2 }),
         roughness: 0.85,          // scuffed boot leather, duller than harness
         metalness: 0.03,
         normalMap: getNormalMap(),

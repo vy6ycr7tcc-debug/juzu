@@ -365,6 +365,7 @@ async function init() {
   if (urlParams.get('ncm') === '1') setCharacterDetailMapsEnabled(false);
 
   const character = new CharacterController(scene, camera, input);
+  await character.load();
 
   // PWA/offline boot block
   registerServiceWorker();
