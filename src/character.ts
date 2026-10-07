@@ -27,6 +27,8 @@ export enum MovementState {
   WALK = 'WALK',
   CLIMB = 'CLIMB',
   LEDGE_GRAB = 'LEDGE_GRAB',
+  LEDGE_HANG = 'LEDGE_HANG',
+  MANTLE = 'MANTLE',
   SWIM = 'SWIM',
   SLIDE = 'SLIDE',
   ROPE_SWING = 'ROPE_SWING',
@@ -128,6 +130,24 @@ export class CharacterController {
   public isInstinctActive: boolean = false;
   public instinctTimer: number = 0;
 
+  // Ledge Hang & Mantle Traversal (Shadow of the Tomb Raider North Star)
+  public ledgeInfo: {
+    ledgeY: number;
+    wallNormal: THREE.Vector3;
+    hangPosition: THREE.Vector3;
+    mantleTargetPosition: THREE.Vector3;
+  } | null = null;
+  public mantleTimer: number = 0;
+  public readonly mantleDuration: number = 0.65;
+  public mantleStartPosition: THREE.Vector3 = new THREE.Vector3();
+  public ledgeCooldown: number = 0;
+
+  // Cached Mixamo bones for upper-body IK and ledge-hang arm postures
+  private leftArmBone: THREE.Object3D | null = null;
+  private rightArmBone: THREE.Object3D | null = null;
+  private leftForeArmBone: THREE.Object3D | null = null;
+  private rightForeArmBone: THREE.Object3D | null = null;
+
   // Rigged GLB Model & Animation state
   public isLoaded: boolean = false;
   private loadPromise: Promise<void> | null = null;
@@ -227,6 +247,12 @@ export class CharacterController {
         this.characterModel = model;
         this.mesh.add(model);
 
+        // Cache Mixamo arm and forearm bones for ledge hanging posture
+        this.leftArmBone = (model.getObjectByName('mixamorigLeftArm') ?? model.getObjectByName('mixamorig:LeftArm')) ?? null;
+        this.rightArmBone = (model.getObjectByName('mixamorigRightArm') ?? model.getObjectByName('mixamorig:RightArm')) ?? null;
+        this.leftForeArmBone = (model.getObjectByName('mixamorigLeftForeArm') ?? model.getObjectByName('mixamorig:LeftForeArm')) ?? null;
+        this.rightForeArmBone = (model.getObjectByName('mixamorigRightForeArm') ?? model.getObjectByName('mixamorig:RightForeArm')) ?? null;
+
         // AnimationMixer with RETARGETED locomotion clips. The soldier/xbot
         // exports share Michelle's 65 mixamorig bone names but NOT her
         // armature-root orientation (soldier root −90°X / Z-up hips, Michelle
@@ -298,6 +324,103 @@ export class CharacterController {
     this.instinctTimer = 3.5;
   }
 
+  /**
+   * Dual-probe ledge sensor (Shadow of the Tomb Raider North Star):
+   * Casts a horizontal ray forward from chest level to detect a vertical wall/cliff,
+   * then casts a vertical downward ray from above the detected wall to find the exact top surface lip.
+   * Also verifies headroom clearance to ensure the player can stand on the ledge.
+   */
+  public checkLedge(forwardDir?: THREE.Vector3): {
+    ledgeY: number;
+    wallNormal: THREE.Vector3;
+    hangPosition: THREE.Vector3;
+    mantleTargetPosition: THREE.Vector3;
+  } | null {
+    const dir = (forwardDir && forwardDir.lengthSq() > 0.001)
+      ? forwardDir.clone().normalize()
+      : new THREE.Vector3(-Math.sin(this.mesh.rotation.y), 0, -Math.cos(this.mesh.rotation.y)).normalize();
+
+    const charPos = this.mesh.position;
+    const charFeetY = charPos.y;
+
+    // 1. Check Rapier physics colliders (stone architecture, temple ruins, bridges, terraces)
+    const chestOrigin = new THREE.Vector3(charPos.x, charFeetY + 1.15, charPos.z);
+    const forwardReach = 0.95;
+    const forwardHit = physics.raycast(chestOrigin, dir, forwardReach, this.body ?? undefined);
+
+    if (forwardHit && Math.abs(forwardHit.normal.y) < 0.35) {
+      // Hit a vertical or near-vertical obstacle (wall)
+      const wallNormal = new THREE.Vector3(forwardHit.normal.x, 0, forwardHit.normal.z).normalize();
+
+      // Top-down probe: position slightly past the wall into the platform, cast down from overhead
+      const probeOverhang = 0.25;
+      const topProbeOrigin = new THREE.Vector3(
+        forwardHit.point.x - wallNormal.x * probeOverhang,
+        charFeetY + 2.6,
+        forwardHit.point.z - wallNormal.z * probeOverhang
+      );
+      const downHit = physics.raycast(topProbeOrigin, new THREE.Vector3(0, -1, 0), 2.8, this.body ?? undefined);
+
+      if (downHit && downHit.normal.y > 0.55) {
+        const ledgeY = downHit.point.y;
+        const deltaY = ledgeY - charFeetY;
+
+        // Reachable range: 0.8m (low vaultable ledge) up to 2.45m (high jump reach)
+        if (deltaY >= 0.8 && deltaY <= 2.45) {
+          // Headroom check: at least 1.8m vertical clearance above the ledge
+          const headroomCheck = physics.raycast(
+            new THREE.Vector3(downHit.point.x, ledgeY + 0.1, downHit.point.z),
+            new THREE.Vector3(0, 1, 0),
+            1.8,
+            this.body ?? undefined
+          );
+          if (!headroomCheck) {
+            // Hands grip the edge at ledgeY. Character root hangs suspended flush against wall
+            const wallOffset = 0.32; // Body radius to avoid clipping into stone
+            const hangPosition = new THREE.Vector3(
+              forwardHit.point.x + wallNormal.x * wallOffset,
+              ledgeY - 1.55,
+              forwardHit.point.z + wallNormal.z * wallOffset
+            );
+            const mantleTargetPosition = new THREE.Vector3(
+              forwardHit.point.x - wallNormal.x * 0.55,
+              ledgeY,
+              forwardHit.point.z - wallNormal.z * 0.55
+            );
+            return { ledgeY, wallNormal, hangPosition, mantleTargetPosition };
+          }
+        }
+      }
+    }
+
+    // 2. Check analytical terrain height (cliffs, dirt terraces, ridges)
+    const probeDist = 0.7;
+    const terrainAheadX = charPos.x + dir.x * probeDist;
+    const terrainAheadZ = charPos.z + dir.z * probeDist;
+    const terrainAheadY = getGlobalTerrainHeight(terrainAheadX, terrainAheadZ);
+    const deltaTerrainY = terrainAheadY - charFeetY;
+
+    if (deltaTerrainY >= 0.85 && deltaTerrainY <= 2.45) {
+      // Check that the terrain further ahead is relatively flat (a walkable shelf/plateau, not infinite steep slope)
+      const shelfX = charPos.x + dir.x * (probeDist + 0.5);
+      const shelfZ = charPos.z + dir.z * (probeDist + 0.5);
+      const shelfY = getGlobalTerrainHeight(shelfX, shelfZ);
+
+      if (Math.abs(shelfY - terrainAheadY) < 0.45) {
+        const wallNormal = new THREE.Vector3(-dir.x, 0, -dir.z).normalize();
+        const hangPosition = new THREE.Vector3(
+          charPos.x + dir.x * 0.4,
+          terrainAheadY - 1.55,
+          charPos.z + dir.z * 0.4
+        );
+        const mantleTargetPosition = new THREE.Vector3(shelfX, shelfY, shelfZ);
+        return { ledgeY: terrainAheadY, wallNormal, hangPosition, mantleTargetPosition };
+      }
+    }
+
+    return null;
+  }
+
   private detectStateTransitions(nextX: number, _nextZ: number, terrainData: { y: number, normal: THREE.Vector3 }) {
     // Swimming only applies when down in river water surface level (< 0.5m)
     const isRiver = this.mesh.position.y < 0.5 && terrainData.y < -3.0 && Math.abs(nextX) < 15;
@@ -358,6 +481,120 @@ export class CharacterController {
       right = joy.x;
     }
 
+    // Camera-relative planar vectors
+    const camForward = new THREE.Vector3(
+      -Math.sin(this.theta),
+      0,
+      -Math.cos(this.theta)
+    ).normalize();
+
+    const camRight = new THREE.Vector3(
+      Math.cos(this.theta),
+      0,
+      -Math.sin(this.theta)
+    ).normalize();
+
+    const moveDir = new THREE.Vector3()
+      .addScaledVector(camForward, forward)
+      .addScaledVector(camRight, right);
+
+    if (moveDir.lengthSq() > 0.001) {
+      moveDir.normalize();
+    }
+
+    // 4. Ledge Hang & Mantle Traversal State Machine (Shadow of the Tomb Raider North Star)
+    if (this.state === MovementState.LEDGE_HANG) {
+      if (this.ledgeInfo) {
+        // Face directly into the wall face
+        const wallFacingAngle = Math.atan2(this.ledgeInfo.wallNormal.x, this.ledgeInfo.wallNormal.z);
+        this.mesh.rotation.y = wallFacingAngle;
+        this.mesh.position.copy(this.ledgeInfo.hangPosition);
+        this.velocityY = 0;
+        this.speed = 0;
+        this.isGrounded = false;
+
+        // Mantle input (Space or W)
+        const wantsMantle = this.input.consumeJustPressed('Space') || this.input.consumeJustPressed('KeyW');
+        if (wantsMantle) {
+          this.state = MovementState.MANTLE;
+          this.mantleTimer = 0;
+          this.mantleStartPosition.copy(this.mesh.position);
+        }
+
+        // Drop down input (S or C)
+        const wantsDrop = this.input.consumeJustPressed('KeyS') || this.input.consumeJustPressed('KeyC');
+        if (wantsDrop) {
+          this.state = MovementState.WALK;
+          this.isGrounded = false;
+          this.velocityY = -2.0;
+          this.ledgeCooldown = 0.6;
+          this.ledgeInfo = null;
+          this.updateAnimationAndCamera(dt);
+          return;
+        }
+
+        // Lateral shimmy (A / D)
+        const lateralDir = new THREE.Vector3(-this.ledgeInfo.wallNormal.z, 0, this.ledgeInfo.wallNormal.x).normalize();
+        let shimmy = 0;
+        if (this.input.isDown('KeyD')) shimmy += 1;
+        if (this.input.isDown('KeyA')) shimmy -= 1;
+        if (shimmy !== 0) {
+          const shimmySpeed = 1.2;
+          const delta = lateralDir.clone().multiplyScalar(shimmy * shimmySpeed * dt);
+          this.ledgeInfo.hangPosition.add(delta);
+          this.ledgeInfo.mantleTargetPosition.add(delta);
+          this.mesh.position.copy(this.ledgeInfo.hangPosition);
+        }
+      } else {
+        this.state = MovementState.WALK;
+      }
+
+      this.updateAnimationAndCamera(dt);
+      return;
+    }
+
+    if (this.state === MovementState.MANTLE) {
+      if (this.ledgeInfo) {
+        this.mantleTimer += dt;
+        const progress = Math.min(1.0, this.mantleTimer / this.mantleDuration);
+
+        if (progress < 0.45) {
+          // Phase 1: Vertical pull-up (hands push down on rim, torso ascends above ledge lip)
+          const t1 = progress / 0.45;
+          const smooth1 = t1 * t1 * (3 - 2 * t1);
+          const y = THREE.MathUtils.lerp(this.mantleStartPosition.y, this.ledgeInfo.ledgeY + 0.08, smooth1);
+          const x = THREE.MathUtils.lerp(this.mantleStartPosition.x, this.mantleStartPosition.x - this.ledgeInfo.wallNormal.x * 0.15, smooth1);
+          const z = THREE.MathUtils.lerp(this.mantleStartPosition.z, this.mantleStartPosition.z - this.ledgeInfo.wallNormal.z * 0.15, smooth1);
+          this.mesh.position.set(x, y, z);
+        } else {
+          // Phase 2: Shift weight forward onto platform surface
+          const t2 = (progress - 0.45) / 0.55;
+          const smooth2 = t2 * t2 * (3 - 2 * t2);
+          const startX = this.mantleStartPosition.x - this.ledgeInfo.wallNormal.x * 0.15;
+          const startZ = this.mantleStartPosition.z - this.ledgeInfo.wallNormal.z * 0.15;
+          const x = THREE.MathUtils.lerp(startX, this.ledgeInfo.mantleTargetPosition.x, smooth2);
+          const z = THREE.MathUtils.lerp(startZ, this.ledgeInfo.mantleTargetPosition.z, smooth2);
+          const y = THREE.MathUtils.lerp(this.ledgeInfo.ledgeY + 0.08, this.ledgeInfo.mantleTargetPosition.y, smooth2);
+          this.mesh.position.set(x, y, z);
+        }
+
+        if (progress >= 1.0) {
+          this.mesh.position.copy(this.ledgeInfo.mantleTargetPosition);
+          this.state = MovementState.WALK;
+          this.isGrounded = true;
+          this.velocityY = 0;
+          this.speed = 0;
+          this.ledgeInfo = null;
+          this.ledgeCooldown = 0.4;
+        }
+      } else {
+        this.state = MovementState.WALK;
+      }
+
+      this.updateAnimationAndCamera(dt);
+      return;
+    }
+
     // Crouch & Dodge Roll actions
     if (this.input.consumeJustPressed('KeyC')) {
       if (this.isGrounded && this.speed > 1.2 && !this.isRolling) {
@@ -389,33 +626,40 @@ export class CharacterController {
       }
     }
 
-    // Jump Input
+    // Jump Input & Ledge Grab
     const wantsJump = this.input.consumeJustPressed('Space');
     if (this.isGrounded && wantsJump && !this.isRolling && (this.state === MovementState.WALK || this.state === MovementState.CROUCH)) {
-      this.velocityY = this.jumpForce;
-      this.isGrounded = false;
-      this.isCrouched = false;
-      if (this.state === MovementState.CROUCH) this.state = MovementState.WALK;
+      const ledge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
+      if (ledge && this.ledgeCooldown <= 0) {
+        const deltaY = ledge.ledgeY - this.mesh.position.y;
+        if (deltaY <= 1.35) {
+          // Direct vault / low mantle over chest-high obstacle
+          this.ledgeInfo = ledge;
+          this.state = MovementState.MANTLE;
+          this.mantleTimer = 0;
+          this.mantleStartPosition.copy(this.mesh.position);
+          this.updateAnimationAndCamera(dt);
+          return;
+        } else {
+          // Jump and grab high ledge!
+          this.ledgeInfo = ledge;
+          this.state = MovementState.LEDGE_HANG;
+          this.mesh.position.copy(ledge.hangPosition);
+          this.velocityY = 0;
+          this.speed = 0;
+          this.isGrounded = false;
+          this.updateAnimationAndCamera(dt);
+          return;
+        }
+      } else {
+        this.velocityY = this.jumpForce;
+        this.isGrounded = false;
+        this.isCrouched = false;
+        if (this.state === MovementState.CROUCH) this.state = MovementState.WALK;
+      }
     }
 
     const isRunning = this.input.isDown('ShiftLeft');
-
-    // Camera-relative planar vectors
-    const camForward = new THREE.Vector3(
-      -Math.sin(this.theta),
-      0,
-      -Math.cos(this.theta)
-    ).normalize();
-
-    const camRight = new THREE.Vector3(
-      Math.cos(this.theta),
-      0,
-      -Math.sin(this.theta)
-    ).normalize();
-
-    const moveDir = new THREE.Vector3()
-      .addScaledVector(camForward, forward)
-      .addScaledVector(camRight, right);
 
     if (moveDir.lengthSq() > 0.001) {
       moveDir.normalize();
@@ -482,6 +726,22 @@ export class CharacterController {
           this.mesh.position.y = groundH;
           this.velocityY = 0;
           this.isGrounded = true;
+        } else if (this.velocityY <= 3.5 && this.ledgeCooldown <= 0) {
+          // Mid-air ledge grab check (catch ledge rim)
+          const airborneLedge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
+          if (airborneLedge) {
+            const deltaY = airborneLedge.ledgeY - this.mesh.position.y;
+            if (deltaY >= 0.8 && deltaY <= 2.45) {
+              this.ledgeInfo = airborneLedge;
+              this.state = MovementState.LEDGE_HANG;
+              this.mesh.position.copy(airborneLedge.hangPosition);
+              this.velocityY = 0;
+              this.speed = 0;
+              this.isGrounded = false;
+              this.updateAnimationAndCamera(dt);
+              return;
+            }
+          }
         }
       } else {
         // Step-up / step-down tolerance
@@ -492,6 +752,17 @@ export class CharacterController {
           // Walking off an edge or drop
           this.isGrounded = false;
           this.velocityY = 0;
+        } else if (diff >= 0.6 && this.speed > 1.6 && this.ledgeCooldown <= 0) {
+          // Running against a low ledge: auto-mantle
+          const runLedge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
+          if (runLedge && (runLedge.ledgeY - this.mesh.position.y) <= 1.35) {
+            this.ledgeInfo = runLedge;
+            this.state = MovementState.MANTLE;
+            this.mantleTimer = 0;
+            this.mantleStartPosition.copy(this.mesh.position);
+            this.updateAnimationAndCamera(dt);
+            return;
+          }
         }
       }
     }
@@ -542,13 +813,36 @@ export class CharacterController {
       }
     }
 
+    this.updateAnimationAndCamera(dt);
+  }
+
+  private updateAnimationAndCamera(dt: number) {
     // Skeletal animation updates
     if (this.mixer) {
       this.mixer.update(dt);
     }
 
+    // Rig arm adjustment for authentic ledge hanging posture (Shadow of the Tomb Raider North Star)
+    if (this.state === MovementState.LEDGE_HANG) {
+      if (this.leftArmBone && this.rightArmBone) {
+        this.leftArmBone.rotation.set(-1.1, 0.25, 0.35);
+        this.rightArmBone.rotation.set(-1.1, -0.25, -0.35);
+        if (this.leftForeArmBone) this.leftForeArmBone.rotation.set(0.35, 0, 0);
+        if (this.rightForeArmBone) this.rightForeArmBone.rotation.set(0.35, 0, 0);
+      }
+    } else if (this.state === MovementState.MANTLE) {
+      if (this.leftArmBone && this.rightArmBone) {
+        const u = Math.min(1.0, this.mantleTimer / this.mantleDuration);
+        const armX = THREE.MathUtils.lerp(-1.1, 0.2, u);
+        this.leftArmBone.rotation.set(armX, 0.25 * (1 - u), 0.35 * (1 - u));
+        this.rightArmBone.rotation.set(armX, -0.25 * (1 - u), -0.35 * (1 - u));
+      }
+    }
+
     let desiredAction = this.actions.idle;
-    if (this.isCrouched && this.actions.crouch) {
+    if (this.state === MovementState.LEDGE_HANG || this.state === MovementState.MANTLE) {
+      desiredAction = this.actions.idle;
+    } else if (this.isCrouched && this.actions.crouch) {
       desiredAction = this.actions.crouch;
     } else if (this.speed > 0.1) {
       if (this.speed > this.maxWalkSpeed * 1.1) {
@@ -660,6 +954,8 @@ export class CharacterController {
     this.isGrounded = true;
     this.isRolling = false;
     this.isCrouched = false;
+    this.ledgeInfo = null;
+    this.ledgeCooldown = 0;
     this.updateCamera(0.016);
   }
 }

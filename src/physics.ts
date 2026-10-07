@@ -66,6 +66,38 @@ export class PhysicsSystem {
       return null;
   }
 
+  raycast(
+    origin: THREE.Vector3,
+    direction: THREE.Vector3,
+    maxDistance: number = 10,
+    excludeBody?: RAPIER.RigidBody
+  ): { point: THREE.Vector3; normal: THREE.Vector3; distance: number } | null {
+    if (this.isFallback || !this.world) return null;
+    const ray = new RAPIER.Ray(
+      { x: origin.x, y: origin.y, z: origin.z },
+      { x: direction.x, y: direction.y, z: direction.z }
+    );
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      maxDistance,
+      true,
+      RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
+      undefined,
+      undefined,
+      excludeBody ?? undefined
+    );
+    if (hit) {
+      const point = new THREE.Vector3(
+        origin.x + direction.x * hit.timeOfImpact,
+        origin.y + direction.y * hit.timeOfImpact,
+        origin.z + direction.z * hit.timeOfImpact
+      );
+      const normal = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
+      return { point, normal, distance: hit.timeOfImpact };
+    }
+    return null;
+  }
+
   private timeAccumulator: number = 0;
   private timeStep: number = 1.0 / 60.0;
 
