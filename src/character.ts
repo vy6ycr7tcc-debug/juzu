@@ -4,7 +4,7 @@ import { InputManager } from './input.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics } from './physics.js';
 import { getGlobalTerrainHeight } from './terrain.js';
-import { skinNaira, clothField, clothFieldDark, hairDark, leatherDark, leatherBoot } from './materials.js';
+import { hairDark, leatherDark } from './materials.js';
 import { createMistTexture } from './textures.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
@@ -18,6 +18,7 @@ declare global {
       state: MovementState;
       x: number;
       z: number;
+      isGrounded?: boolean;
     };
   }
 }
@@ -28,32 +29,104 @@ export enum MovementState {
   LEDGE_GRAB = 'LEDGE_GRAB',
   SWIM = 'SWIM',
   SLIDE = 'SLIDE',
-  ROPE_SWING = 'ROPE_SWING'
+  ROPE_SWING = 'ROPE_SWING',
+  CROUCH = 'CROUCH',
+  ROLL = 'ROLL'
 }
 
+const HIPS = 'mixamorigHips';
+
+/**
+ * Retarget a Mixamo clip authored on one export onto another export that
+ * shares bone NAMES but differs in armature-root orientation / proportions.
+ *
+ * Hips (the only bone whose parent differs between exports) satisfies
+ *   R_dstRoot · hips_dst = R_srcRoot · hips_src
+ * so every Hips key is pre-multiplied by C = R_dstRoot⁻¹ · R_srcRoot
+ * (rotation AND translation). Hip translation is scaled by the bind
+ * hip-height ratio so the feet stay planted on her shorter legs. All other
+ * translation / scale tracks encode the SOURCE skeleton's bone lengths and are
+ * dropped (rotations-only retarget — the standard Mixamo practice).
+ */
+function retargetMixamoClip(clip: THREE.AnimationClip, srcScene: THREE.Object3D, dstModel: THREE.Object3D): THREE.AnimationClip | null {
+  const srcHips = srcScene.getObjectByName(HIPS);
+  const dstHips = dstModel.getObjectByName(HIPS);
+  if (!srcHips || !dstHips || !srcHips.parent || !dstHips.parent) return null;
+
+  const C = dstHips.parent.quaternion.clone().invert().multiply(srcHips.parent.quaternion);
+  // Bind hip height measured in each root frame (vertical component after root rotation).
+  const srcH = srcHips.position.clone().applyQuaternion(srcHips.parent.quaternion).y;
+  const dstH = dstHips.position.clone().applyQuaternion(dstHips.parent.quaternion).y;
+  const hScale = srcH !== 0 ? dstH / srcH : 1;
+
+  const tracks: THREE.KeyframeTrack[] = [];
+  const q = new THREE.Quaternion();
+  const v = new THREE.Vector3();
+  for (const track of clip.tracks) {
+    const dot = track.name.lastIndexOf('.');
+    const bone = track.name.slice(0, dot);
+    const prop = track.name.slice(dot + 1);
+    if (prop === 'scale') continue;
+    if (bone !== HIPS) {
+      if (prop === 'quaternion') tracks.push(track.clone());
+      continue; // non-hips position = source bone length
+    }
+    const t = track.clone();
+    const vals = t.values;
+    if (prop === 'quaternion') {
+      for (let i = 0; i < vals.length; i += 4) {
+        q.fromArray(vals, i).premultiply(C).toArray(vals, i);
+      }
+    } else if (prop === 'position') {
+      for (let i = 0; i < vals.length; i += 3) {
+        v.fromArray(vals, i).applyQuaternion(C).multiplyScalar(hScale).toArray(vals, i);
+      }
+    }
+    tracks.push(t);
+  }
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+}
 
 export class CharacterController {
   public mesh: THREE.Group;
   private camera: THREE.PerspectiveCamera;
   protected input: InputManager;
 
-  // Orbit camera parameters
-  private theta: number = 0;
-  private phi: number = Math.PI / 3;
-  private radius: number = 5;
-  private target: THREE.Vector3 = new THREE.Vector3(0, 1, 0);
+  // Spring-arm orbit camera parameters — Tomb Raider over-the-shoulder framing
+  public theta: number = 0;
+  public phi: number = Math.PI * 0.44; // ~79°: dramatic horizontal Andean horizon vista
+  public radius: number = 3.8;
+  public target: THREE.Vector3 = new THREE.Vector3(0, 1.35, 0);
+  public currentCameraDistance: number = 3.8;
+  public minCameraDistance: number = 0.85;
 
   // Traversal State Machine
   public state: MovementState = MovementState.WALK;
   private stateTimer: number = 0;
 
-  // Locomotion parameters
+  // Locomotion & Physics parameters (Tomb Raider / Assassin's Creed feel)
   public speed: number = 0;
-  private maxWalkSpeed: number = 2.0;
-  private maxRunSpeed: number = 5.0;
-  private acceleration: number = 10.0;
-  private deceleration: number = 15.0;
-  private rotationSpeed: number = 10.0;
+  private maxWalkSpeed: number = 2.4;
+  private maxRunSpeed: number = 5.6;
+  private maxCrouchSpeed: number = 1.5;
+  private acceleration: number = 24.0;
+  private deceleration: number = 28.0;
+  private rotationSpeed: number = 16.0;
+
+  // Vertical dynamics & jumping
+  public velocityY: number = 0;
+  public isGrounded: boolean = true;
+  private gravity: number = 18.0;
+  private jumpForce: number = 6.4;
+
+  // Dodge roll & crouch mechanics
+  public isRolling: boolean = false;
+  public rollTimer: number = 0;
+  public isCrouched: boolean = false;
+
+  // Archaeologist survival instinct pulse (Tomb Raider survival instinct)
+  public isInstinctActive: boolean = false;
+  public instinctTimer: number = 0;
 
   // Rigged GLB Model & Animation state
   public isLoaded: boolean = false;
@@ -63,12 +136,23 @@ export class CharacterController {
     idle?: THREE.AnimationAction;
     walk?: THREE.AnimationAction;
     run?: THREE.AnimationAction;
+    crouch?: THREE.AnimationAction;
   } = {};
   private activeAction: THREE.AnimationAction | null = null;
-  private characterModel: THREE.Group | null = null;
+  public characterModel: THREE.Group | null = null;
+  private modelBaseY: number = 0;
   private time: number = 0;
 
   public disableCameraUpdate: boolean = false;
+
+  // Optional rigid body reference for physics interaction
+  public body: RAPIER.RigidBody | null = null;
+  public collider: RAPIER.Collider | null = null;
+
+  // Breath particles for high altitude Sierra
+  private breathParticles: THREE.Sprite[] = [];
+  private breathAccum = 0;
+  private breathMat: THREE.SpriteMaterial | null = null;
 
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
@@ -78,119 +162,115 @@ export class CharacterController {
     this.mesh = new THREE.Group();
     scene.add(this.mesh);
 
-    // Asynchronously load the rigged GLB model
+    // Asynchronously load the authentic female archaeologist model and retargeted animations
     this.load();
 
-    // Camera orbit controls are handled via input manager now
-    this.updateCamera();
+    // Camera initial orientation
+    this.updateCamera(0.016);
   }
 
   public load(): Promise<void> {
     if (this.loadPromise) return this.loadPromise;
     this.loadPromise = new Promise<void>((resolve, reject) => {
       const loader = new GLTFLoader();
-      const modelUrl = `${import.meta.env.BASE_URL}models/soldier.glb`;
-      loader.load(
-        modelUrl,
-        (gltf) => {
-          const model = gltf.scene;
+      const michelleUrl = `${import.meta.env.BASE_URL}models/michelle.glb`;
+      const soldierUrl = `${import.meta.env.BASE_URL}models/soldier.glb`;
+      const xbotUrl = `${import.meta.env.BASE_URL}models/xbot.glb`;
 
-          // Scale model to human adventurer height (1.75 m)
-          const box = new THREE.Box3().setFromObject(model);
-          const size = box.getSize(new THREE.Vector3());
-          const targetHeight = 1.75;
-          const scale = targetHeight / (size.y || 1);
-          model.scale.setScalar(scale);
+      Promise.all([
+        loader.loadAsync(michelleUrl),
+        loader.loadAsync(soldierUrl),
+        loader.loadAsync(xbotUrl).catch(() => null)
+      ]).then(([michelleGltf, soldierGltf, xbotGltf]) => {
+        const model = michelleGltf.scene;
 
-          // Center model and align soles of feet to y = 0
-          const alignedBox = new THREE.Box3().setFromObject(model);
-          model.position.y = -alignedBox.min.y;
+        // Scale model to authentic human adventurer height (1.75 m)
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const targetHeight = 1.75;
+        const scale = targetHeight / (size.y || 1);
+        model.scale.setScalar(scale);
 
-          // Ensure proper material configuration, shadows, and colorSpace
-          model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const mesh = child as THREE.Mesh;
-              mesh.castShadow = true;
-              mesh.receiveShadow = true;
-              mesh.frustumCulled = false;
-              if (mesh.material) {
-                const mat = mesh.material as THREE.MeshStandardMaterial;
-                mat.envMapIntensity = 1.0;
-                mat.roughness = 0.85;
-                mat.metalness = 0.05;
-                if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-              }
-            }
-          });
+        // Center model and align soles of boots precisely to local y = 0
+        const alignedBox = new THREE.Box3().setFromObject(model);
+        this.modelBaseY = -alignedBox.min.y;
+        model.position.y = this.modelBaseY;
 
-          // Mixamo bone attachments for Naira's signature braids and gear
-          const headBone = model.getObjectByName('mixamorig:Head');
-          const spineBone = model.getObjectByName('mixamorig:Spine2');
+        // Load authentic Andean archaeologist albedo texture
+        const texLoader = new THREE.TextureLoader();
+        const customAlbedo = texLoader.load(`${import.meta.env.BASE_URL}assets/character-textures/naira_adventurer_albedo.png`);
+        customAlbedo.colorSpace = THREE.SRGBColorSpace;
+        customAlbedo.flipY = false;
 
-          // Signature twin dark braids (hairDark) attached to head bone
-          if (headBone) {
-            const braidMat = hairDark();
-            const leftBraidCurve = new THREE.CatmullRomCurve3([
-              new THREE.Vector3(-6, -2, -6),
-              new THREE.Vector3(-10, -18, -2),
-              new THREE.Vector3(-12, -35, 4)
-            ]);
-            const rightBraidCurve = new THREE.CatmullRomCurve3([
-              new THREE.Vector3(6, -2, -6),
-              new THREE.Vector3(10, -18, -2),
-              new THREE.Vector3(12, -35, 4)
-            ]);
-            const leftBraid = new THREE.Mesh(new THREE.TubeGeometry(leftBraidCurve, 8, 2.2, 8, false), braidMat);
-            const rightBraid = new THREE.Mesh(new THREE.TubeGeometry(rightBraidCurve, 8, 2.2, 8, false), braidMat);
-            leftBraid.castShadow = true;
-            rightBraid.castShadow = true;
-            headBone.add(leftBraid);
-            headBone.add(rightBraid);
-          }
-
-          // Signature leather field pack attached to spine bone
-          if (spineBone) {
-            const packMat = leatherDark();
-            const packMesh = new THREE.Mesh(new THREE.BoxGeometry(28, 36, 18), packMat);
-            packMesh.position.set(0, 10, -15);
-            packMesh.castShadow = true;
-            spineBone.add(packMesh);
-          }
-
-          this.characterModel = model;
-          this.mesh.add(model);
-
-          // Setup AnimationMixer
-          this.mixer = new THREE.AnimationMixer(model);
-          for (const clip of gltf.animations) {
-            if (clip.name === 'Idle') {
-              this.actions.idle = this.mixer.clipAction(clip);
-            } else if (clip.name === 'Walk') {
-              this.actions.walk = this.mixer.clipAction(clip);
-            } else if (clip.name === 'Run') {
-              this.actions.run = this.mixer.clipAction(clip);
+        // Ensure proper PBR material configuration: skin & clothing realism (not shiny plastic/metal)
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.frustumCulled = false;
+            if (mesh.material) {
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              mat.map = customAlbedo;
+              mat.envMapIntensity = 0.9;
+              mat.roughness = 0.85; // Weather-worn field clothing & natural skin
+              mat.metalness = 0.02; // Non-metallic organic surface
+              mat.needsUpdate = true;
             }
           }
+        });
 
-          if (this.actions.idle) {
-            this.actions.idle.play();
-            this.activeAction = this.actions.idle;
-          }
+        // No code-sculpted attachments (AGENTS.md: the protagonist is the
+        // rigged GLB only). Bone names are sanitized by GLTFLoader
+        // ("mixamorig:Head" → "mixamorigHead") if gear sockets are added later.
 
-          this.isLoaded = true;
-          resolve();
-        },
-        undefined,
-        (err) => {
-          console.error('Failed to load character GLB:', err);
-          reject(err);
+        this.characterModel = model;
+        this.mesh.add(model);
+
+        // AnimationMixer with RETARGETED locomotion clips. The soldier/xbot
+        // exports share Michelle's 65 mixamorig bone names but NOT her
+        // armature-root orientation (soldier root −90°X / Z-up hips, Michelle
+        // +90°X, xbot identity) — binding the raw clips flipped her upside
+        // down ~1 m under the terrain. retargetMixamoClip re-expresses the
+        // Hips tracks in her root frame and drops foreign bone-length tracks.
+        this.mixer = new THREE.AnimationMixer(model);
+
+        for (const clip of soldierGltf.animations) {
+          const name = clip.name;
+          if (name !== 'Idle' && name !== 'Walk' && name !== 'Run') continue;
+          const rc = retargetMixamoClip(clip, soldierGltf.scene, model);
+          if (!rc) continue;
+          const action = this.mixer.clipAction(rc);
+          if (name === 'Idle') this.actions.idle = action;
+          else if (name === 'Walk') this.actions.walk = action;
+          else this.actions.run = action;
         }
-      );
+
+        if (xbotGltf) {
+          const sneak = xbotGltf.animations.find((c) => c.name === 'sneak_pose');
+          const rc = sneak ? retargetMixamoClip(sneak, xbotGltf.scene, model) : null;
+          if (rc) this.actions.crouch = this.mixer.clipAction(rc);
+        }
+
+        if (this.actions.idle) {
+          this.actions.idle.play();
+          this.activeAction = this.actions.idle;
+        }
+
+        this.isLoaded = true;
+        resolve();
+      }).catch((err) => {
+        console.error('Failed to load character GLB models:', err);
+        reject(err);
+      });
     });
     return this.loadPromise;
   }
 
-  public setForceState(state: MovementState) { this.state = state; this.stateTimer = 0; }
+  public setForceState(state: MovementState) {
+    this.state = state;
+    this.stateTimer = 0;
+  }
 
   public getTerrainHeightAndNormal(x: number, z: number): { y: number, normal: THREE.Vector3 } {
     const y = getGlobalTerrainHeight(x, z);
@@ -203,202 +283,231 @@ export class CharacterController {
     return { y, normal };
   }
 
+  public getGroundedHeight(x: number, z: number): number {
+    let h = this.getTerrainHeightAndNormal(x, z).y;
+    // Check physics colliders (bridges, stairs, stone platforms)
+    const physHeight = physics.raycastDown(x, this.mesh.position.y + 2.0, z, 6.0, this.body ?? undefined);
+    if (physHeight !== null && physHeight > h) {
+      h = physHeight;
+    }
+    return h;
+  }
+
+  public triggerArchaeologistInstinct(): void {
+    this.isInstinctActive = true;
+    this.instinctTimer = 3.5;
+  }
 
   private detectStateTransitions(nextX: number, _nextZ: number, terrainData: { y: number, normal: THREE.Vector3 }) {
-    // Swimming only applies when the character is actually down at the river water surface level (< 0.5m),
-    // never when traversing a bridge high above the gorge.
+    // Swimming only applies when down in river water surface level (< 0.5m)
     const isRiver = this.mesh.position.y < 0.5 && terrainData.y < -3.0 && Math.abs(nextX) < 15;
 
     if (this.state === MovementState.WALK && this.mesh.position.y > 10 && terrainData.normal.y < 0.1 && this.input.isDown('KeyW')) {
-        this.state = MovementState.CLIMB;
+      this.state = MovementState.CLIMB;
     }
 
     if (this.state === MovementState.WALK && isRiver) {
-        this.state = MovementState.SWIM;
+      this.state = MovementState.SWIM;
     } else if (this.state === MovementState.SWIM && !isRiver && terrainData.y > -2.0) {
-        this.state = MovementState.WALK;
+      this.state = MovementState.WALK;
     }
 
     const slope = 1.0 - terrainData.normal.y;
-    if (this.state === MovementState.WALK && slope > 0.6 && this.speed > 2.0) {
-        this.state = MovementState.SLIDE;
+    if (this.state === MovementState.WALK && slope > 0.65 && this.speed > 2.5) {
+      this.state = MovementState.SLIDE;
     } else if (this.state === MovementState.SLIDE && slope < 0.3) {
-        this.state = MovementState.WALK;
+      this.state = MovementState.WALK;
     }
   }
-
-  // Optional rigid body reference for physics interaction
-  public body: RAPIER.RigidBody | null = null;
-  public collider: RAPIER.Collider | null = null;
-
-  // Breath particles — p7: seeded deterministic spawn (the old Math.random()
-  // violated the J7 determinism discipline every other system was fixed for)
-  // and soft normal-blended sprites (the p4 mist lesson: unlit white MeshBasic
-  // spheres read as glow blobs — §4.4 spirit).
-  private breathParticles: THREE.Sprite[] = [];
-  private breathAccum = 0;
-  private breathMat: THREE.SpriteMaterial | null = null;
 
   public update(dt: number) {
     this.stateTimer += dt;
     this.time += dt;
 
-    // touch-controls: Consume camera delta from touch input
+    // 1. Consume camera mouse delta (with pointer lock or mouse drag)
     if (typeof this.input.getCameraDelta === 'function') {
       const camDelta = this.input.getCameraDelta();
       if (camDelta.x !== 0 || camDelta.y !== 0) {
-        this.theta -= camDelta.x * 0.01;
-        this.phi -= camDelta.y * 0.01;
-        this.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, this.phi));
+        const mouseSensitivity = 0.003;
+        this.theta -= camDelta.x * mouseSensitivity;
+        // Invert-pitch fix: moving mouse down (camDelta.y > 0) increases phi (tilts camera down toward character/ground)
+        this.phi += camDelta.y * mouseSensitivity;
+        this.phi = Math.max(0.15, Math.min(Math.PI * 0.48, this.phi));
       }
     }
 
-    // Optional sync to physics
-    if (this.body) {
-        // Very basic sync for physics interaction, ideally we'd use a proper KinematicCharacterController
-        // but for now we just want to push things.
-        this.body.setNextKinematicTranslation({
-            x: this.mesh.position.x,
-            y: this.mesh.position.y,
-            z: this.mesh.position.z
-        });
+    // 2. Archaeologist survival instinct timer
+    if (this.isInstinctActive) {
+      this.instinctTimer -= dt;
+      if (this.instinctTimer <= 0) {
+        this.isInstinctActive = false;
+      }
+    }
+    if (this.input.consumeJustPressed('KeyQ')) {
+      this.triggerArchaeologistInstinct();
     }
 
-    // Movement Input
+    // 3. Movement Direction Input
     const joy = this.input.getJoystickVector();
     const joystickActive = joy.x !== 0 || joy.y !== 0;
     let forward = this.input.isDown('KeyW') ? 1 : (this.input.isDown('KeyS') ? -1 : 0);
     let right = this.input.isDown('KeyD') ? 1 : (this.input.isDown('KeyA') ? -1 : 0);
 
-    // touch-controls: Inject analog joystick input
     if (joystickActive) {
       forward = -joy.y;
       right = joy.x;
     }
 
-    const isRunning = this.input.isDown('ShiftLeft');
-
-    let actualForward = forward;
-    let actualRight = right;
-
-    if (this.state === MovementState.SLIDE) {
-        actualForward = 1;
-        actualRight = right * 0.5;
-    } else if (this.state === MovementState.CLIMB) {
-        actualForward = forward * 0.5;
-        actualRight = right * 0.5;
-    } else if (this.state === MovementState.SWIM) {
-        actualForward = forward * 0.6;
-        actualRight = right * 0.6;
+    // Crouch & Dodge Roll actions
+    if (this.input.consumeJustPressed('KeyC')) {
+      if (this.isGrounded && this.speed > 1.2 && !this.isRolling) {
+        this.isRolling = true;
+        this.rollTimer = 0.6;
+      } else if (this.isGrounded && !this.isRolling) {
+        this.isCrouched = !this.isCrouched;
+        if (this.isCrouched) this.state = MovementState.CROUCH;
+        else if (this.state === MovementState.CROUCH) this.state = MovementState.WALK;
+      }
     }
 
-    const inputDir = new THREE.Vector3(actualRight, 0, -actualForward);
+    // Dodge Roll state update
+    if (this.isRolling) {
+      this.rollTimer -= dt;
+      if (this.rollTimer <= 0) {
+        this.isRolling = false;
+        if (this.characterModel) {
+          this.characterModel.position.y = this.modelBaseY;
+        }
+        this.mesh.rotation.x = 0;
+      } else {
+        const rollFrac = 1.0 - (this.rollTimer / 0.6);
+        // Forward tuck pitch
+        this.mesh.rotation.x = Math.sin(rollFrac * Math.PI) * 0.35;
+        if (this.characterModel) {
+          this.characterModel.position.y = this.modelBaseY - Math.sin(rollFrac * Math.PI) * 0.3;
+        }
+      }
+    }
 
-    if (inputDir.lengthSq() > 0) {
-      inputDir.normalize();
+    // Jump Input
+    const wantsJump = this.input.consumeJustPressed('Space');
+    if (this.isGrounded && wantsJump && !this.isRolling && (this.state === MovementState.WALK || this.state === MovementState.CROUCH)) {
+      this.velocityY = this.jumpForce;
+      this.isGrounded = false;
+      this.isCrouched = false;
+      if (this.state === MovementState.CROUCH) this.state = MovementState.WALK;
+    }
 
-      const camDir = new THREE.Vector3();
-      this.camera.getWorldDirection(camDir);
-      camDir.y = 0;
-      camDir.normalize();
+    const isRunning = this.input.isDown('ShiftLeft');
 
-      const camRight = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
+    // Camera-relative planar vectors
+    const camForward = new THREE.Vector3(
+      -Math.sin(this.theta),
+      0,
+      -Math.cos(this.theta)
+    ).normalize();
 
-      const moveDir = new THREE.Vector3()
-        .addScaledVector(camRight, inputDir.x)
-        .addScaledVector(camDir, -inputDir.z)
-        .normalize();
+    const camRight = new THREE.Vector3(
+      Math.cos(this.theta),
+      0,
+      -Math.sin(this.theta)
+    ).normalize();
 
-      const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+    const moveDir = new THREE.Vector3()
+      .addScaledVector(camForward, forward)
+      .addScaledVector(camRight, right);
 
+    if (moveDir.lengthSq() > 0.001) {
+      moveDir.normalize();
+
+      // Snappy turning: rotate mesh directly towards move direction (facing direction matches move vector)
+      const targetAngle = Math.atan2(-moveDir.x, -moveDir.z);
       let angleDiff = targetAngle - this.mesh.rotation.y;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-      this.mesh.rotation.y += angleDiff * this.rotationSpeed * dt;
+      this.mesh.rotation.y += angleDiff * Math.min(1.0, this.rotationSpeed * dt);
 
-      // P-MOBILE F3: analog walk→run blend from stick deflection. Keyboard
-      // keeps the Shift sprint; on touch, full sustained deflection IS the
-      // sprint (magnitude ≥ 0.95 → maxRunSpeed). t² eases fine control near
-      // the stick center; half deflection stays inside the walk band.
+      // Speed selection
       let targetSpeed: number;
-      if (joystickActive) {
+      if (this.isRolling) {
+        targetSpeed = this.maxRunSpeed * 1.35;
+      } else if (this.isCrouched) {
+        targetSpeed = this.maxCrouchSpeed;
+      } else if (joystickActive) {
         const t = THREE.MathUtils.clamp((this.input.joystickMagnitude - 0.35) / (0.95 - 0.35), 0, 1);
         targetSpeed = this.maxWalkSpeed + (this.maxRunSpeed - this.maxWalkSpeed) * t * t;
       } else {
         targetSpeed = isRunning ? this.maxRunSpeed : this.maxWalkSpeed;
       }
+
       this.speed = Math.min(targetSpeed, this.speed + this.acceleration * dt);
+
+      // DIRECT TRANSLATION ALONG INTENDED MOVE VECTOR (Eliminates ice-skating drift)
+      const stepDist = this.speed * dt;
+      this.mesh.position.x += moveDir.x * stepDist;
+      this.mesh.position.z += moveDir.z * stepDist;
 
     } else {
       this.speed = Math.max(0, this.speed - this.deceleration * dt);
     }
 
-    const moveOffset = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.mesh.rotation.y).multiplyScalar(this.speed * dt);
+    // Terrain sampling & grounding
+    const terrainData = this.getTerrainHeightAndNormal(this.mesh.position.x, this.mesh.position.z);
+    this.detectStateTransitions(this.mesh.position.x, this.mesh.position.z, terrainData);
 
-    const nextX = this.mesh.position.x + moveOffset.x;
-    const nextZ = this.mesh.position.z + moveOffset.z;
+    const groundH = this.getGroundedHeight(this.mesh.position.x, this.mesh.position.z);
 
-    const terrainData = this.getTerrainHeightAndNormal(nextX, nextZ);
+    if (this.state === MovementState.SWIM) {
+      const riverLevel = 0.5;
+      const bob = Math.sin(this.time * 2) * 0.1;
+      this.mesh.position.y = riverLevel - 1.5 + bob;
+      this.mesh.position.z -= 2.0 * dt; // River current drift
+      if (this.mesh.position.y < groundH) {
+        this.mesh.position.y = groundH;
+      }
+      this.isGrounded = false;
+      this.velocityY = 0;
+    } else if (this.state === MovementState.CLIMB) {
+      this.mesh.position.y += forward * this.maxWalkSpeed * 0.5 * dt;
+      this.isGrounded = false;
+      this.velocityY = 0;
+    } else {
+      // Grounded vs Airborne physics
+      if (!this.isGrounded) {
+        this.velocityY -= this.gravity * dt;
+        this.mesh.position.y += this.velocityY * dt;
 
-
-    this.detectStateTransitions(nextX, nextZ, terrainData);
-
-    const slope = 1.0 - terrainData.normal.y;
-
-    if (this.state === MovementState.CLIMB) {
-        this.mesh.position.y += actualForward * this.maxWalkSpeed * 0.5 * dt;
-        this.mesh.position.x = nextX;
-        this.mesh.position.z = nextZ;
-    } else if (this.state === MovementState.ROPE_SWING) {
-        const swingSpeed = 2.0;
-        const swingArc = Math.sin(this.stateTimer * swingSpeed) * 3;
-        this.mesh.position.y = this.getTerrainHeightAndNormal(this.mesh.position.x, this.mesh.position.z).y + 5 - Math.cos(this.stateTimer * swingSpeed) * 2;
-        this.mesh.position.x += Math.cos(this.mesh.rotation.y) * swingArc * dt;
-        this.mesh.position.z += Math.sin(this.mesh.rotation.y) * swingArc * dt;
-    } else if (slope < 0.4 || this.state === MovementState.SLIDE || this.state === MovementState.SWIM) {
-      this.mesh.position.x = nextX;
-      this.mesh.position.z = nextZ;
+        if (this.mesh.position.y <= groundH) {
+          this.mesh.position.y = groundH;
+          this.velocityY = 0;
+          this.isGrounded = true;
+        }
+      } else {
+        // Step-up / step-down tolerance
+        const diff = groundH - this.mesh.position.y;
+        if (diff > -1.2 && diff < 0.6) {
+          this.mesh.position.y = groundH;
+        } else if (diff <= -1.2) {
+          // Walking off an edge or drop
+          this.isGrounded = false;
+          this.velocityY = 0;
+        }
+      }
     }
 
-    if (this.state !== MovementState.CLIMB && this.state !== MovementState.ROPE_SWING) {
-        let h = this.getTerrainHeightAndNormal(this.mesh.position.x, this.mesh.position.z).y;
-
-        // Raycast down to find physics colliders (like the rope bridge).
-        // Excludes her OWN kinematic capsule — without the exclusion the probe
-        // hits it (origin is 2 m up, capsule top at +0.9 m) and she levitates
-        // +0.9 m per update step (p7 measured; broke character_closeup framing
-        // and every gameplay frame after the first physics step).
-        const physHeight = physics.raycastDown(this.mesh.position.x, this.mesh.position.y + 2.0, this.mesh.position.z, 5.0, this.body ?? undefined);
-        if (physHeight !== null && physHeight > h) {
-            h = physHeight;
-        }
-
-        if (this.state === MovementState.SWIM) {
-             const riverLevel = 0.5; // same as river height
-             // Bob slightly with time
-             const bob = Math.sin(this.time * 2) * 0.1;
-             this.mesh.position.y = riverLevel - 1.5 + bob;
-
-             // Drift slightly with current
-             const driftSpeed = 2.0;
-             this.mesh.position.z -= driftSpeed * dt;
-
-             // Ensure we don't clip through the ground while swimming
-             if (this.mesh.position.y < h) {
-                 this.mesh.position.y = h;
-             }
-        } else {
-             this.mesh.position.y = h;
-        }
+    // Sync kinematic physics body if present
+    if (this.body) {
+      this.body.setNextKinematicTranslation({
+        x: this.mesh.position.x,
+        y: this.mesh.position.y,
+        z: this.mesh.position.z
+      });
     }
 
-
-    // Breath vapor effect for high sierra
+    // High Sierra breath vapor particles
     const isHighSierra = this.mesh.position.z > 500 || this.mesh.position.y > 50;
     if (isHighSierra) {
-      // Deterministic spawn clock: ~6/s (the old 10%-per-frame rate at 60 fps)
-      // driven purely by dt — identical sequences for identical ?t=.
       this.breathAccum += dt * 6;
       while (this.breathAccum >= 1) {
         this.breathAccum -= 1;
@@ -412,35 +521,36 @@ export class CharacterController {
         }
         const breath = new THREE.Sprite(this.breathMat);
         breath.scale.setScalar(0.12);
-        // Position roughly at head
-        breath.position.copy(this.mesh.position).add(new THREE.Vector3(0, 1.8, 0.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.mesh.rotation.y));
+        breath.position.copy(this.mesh.position).add(
+          new THREE.Vector3(0, 1.8, 0.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.mesh.rotation.y)
+        );
         this.mesh.parent?.add(breath);
         this.breathParticles.push(breath);
       }
     }
 
-    // Update breath particles
     for (let i = this.breathParticles.length - 1; i >= 0; i--) {
-        const p = this.breathParticles[i];
-        p.position.y += dt * 1.5;
-        p.position.z += dt * 0.5 * Math.cos(this.mesh.rotation.y); // drift forward slightly
-        p.position.x += dt * 0.5 * Math.sin(this.mesh.rotation.y);
-        p.material.opacity -= dt * 0.5;
-        p.scale.addScalar(dt * 2.0);
-        if (p.material.opacity <= 0) {
-            p.parent?.remove(p);
-            this.breathParticles.splice(i, 1);
-        }
+      const p = this.breathParticles[i];
+      p.position.y += dt * 1.5;
+      p.position.z += dt * 0.5 * Math.cos(this.mesh.rotation.y);
+      p.position.x += dt * 0.5 * Math.sin(this.mesh.rotation.y);
+      p.material.opacity -= dt * 0.5;
+      p.scale.addScalar(dt * 2.0);
+      if (p.material.opacity <= 0) {
+        p.parent?.remove(p);
+        this.breathParticles.splice(i, 1);
+      }
     }
 
-    // Update AnimationMixer for rigged skeletal motion
+    // Skeletal animation updates
     if (this.mixer) {
       this.mixer.update(dt);
     }
 
-    // Determine target animation action based on speed and state
     let desiredAction = this.actions.idle;
-    if (this.speed > 0.1) {
+    if (this.isCrouched && this.actions.crouch) {
+      desiredAction = this.actions.crouch;
+    } else if (this.speed > 0.1) {
       if (this.speed > this.maxWalkSpeed * 1.1) {
         desiredAction = this.actions.run;
       } else {
@@ -456,16 +566,16 @@ export class CharacterController {
       this.activeAction = desiredAction;
     }
 
-    // Dynamically pace locomotion cycle to match ground speed
+    // Match animation cycle tempo to locomotion ground velocity
     if (this.activeAction === this.actions.walk && this.actions.walk) {
-      this.actions.walk.timeScale = Math.max(0.2, this.speed / this.maxWalkSpeed);
+      this.actions.walk.timeScale = Math.max(0.3, this.speed / this.maxWalkSpeed);
     } else if (this.activeAction === this.actions.run && this.actions.run) {
-      this.actions.run.timeScale = Math.max(0.5, this.speed / this.maxRunSpeed);
+      this.actions.run.timeScale = Math.max(0.6, this.speed / this.maxRunSpeed);
     }
 
     if (this.state === MovementState.SLIDE) {
       this.mesh.rotation.x = Math.PI / 6;
-    } else {
+    } else if (!this.isRolling) {
       this.mesh.rotation.x = 0;
     }
 
@@ -476,43 +586,80 @@ export class CharacterController {
       state: this.state,
       x: this.mesh.position.x,
       z: this.mesh.position.z,
+      isGrounded: this.isGrounded,
     };
 
-    this.updateCamera();
+    this.updateCamera(dt);
   }
 
-  public updateCamera() {
+  public updateCamera(dt: number = 0.016) {
     if (this.disableCameraUpdate) return;
-    this.target.copy(this.mesh.position).add(new THREE.Vector3(0, 1.2, 0));
 
-    const x = this.target.x + this.radius * Math.sin(this.phi) * Math.sin(this.theta);
-    const y = this.target.y + this.radius * Math.cos(this.phi);
-    const z = this.target.z + this.radius * Math.sin(this.phi) * Math.cos(this.theta);
+    // 1. Calculate camera orientation vectors
+    const sinPhi = Math.sin(this.phi);
+    const cosPhi = Math.cos(this.phi);
+    const sinTheta = Math.sin(this.theta);
+    const cosTheta = Math.cos(this.theta);
 
-    this.camera.position.set(x, y, z);
+    // Lateral right vector on horizontal plane
+    const camRight = new THREE.Vector3(cosTheta, 0, -sinTheta).normalize();
+
+    // 2. Over-the-shoulder offset:
+    // Offset target 0.35m to the right shoulder so adventurer occupies the lower-left third
+    const shoulderOffset = camRight.clone().multiplyScalar(0.35);
+    this.target.copy(this.mesh.position).add(new THREE.Vector3(0, 1.35, 0)).add(shoulderOffset);
+
+    // 3. Desired camera position at full radius
+    const desiredOffset = new THREE.Vector3(
+      this.radius * sinPhi * sinTheta,
+      this.radius * cosPhi,
+      this.radius * sinPhi * cosTheta
+    );
+
+    // 4. Spring-arm collision avoidance:
+    // Ray-march 12 samples from target towards desired camera position to detect terrain occlusions
+    let safeDistance = this.radius;
+    const rayDir = desiredOffset.clone().normalize();
+    const sampleSteps = 12;
+    for (let i = 1; i <= sampleSteps; i++) {
+      const dist = (this.radius * i) / sampleSteps;
+      const samplePos = this.target.clone().addScaledVector(rayDir, dist);
+      const groundAtSample = getGlobalTerrainHeight(samplePos.x, samplePos.z);
+      if (samplePos.y <= groundAtSample + 0.35) {
+        safeDistance = Math.max(this.minCameraDistance, dist * 0.85);
+        break;
+      }
+    }
+
+    // Smooth damping of spring-arm distance to prevent jarring snaps
+    const lerpSpeed = Math.min(1.0, 14.0 * dt);
+    this.currentCameraDistance += (safeDistance - this.currentCameraDistance) * lerpSpeed;
+
+    // Compute final camera position
+    const finalPos = this.target.clone().addScaledVector(rayDir, this.currentCameraDistance);
+
+    // Ensure camera never clips through terrain floor
+    const camFloor = getGlobalTerrainHeight(finalPos.x, finalPos.z) + 0.45;
+    if (finalPos.y < camFloor) {
+      finalPos.y = camFloor;
+    }
+
+    this.camera.position.copy(finalPos);
     this.camera.lookAt(this.target);
   }
 
   public teleport(x: number, z: number, theta: number = 0, yOverride?: number) {
-    const y = yOverride ?? this.getTerrainHeightAndNormal(x, z).y;
+    const y = yOverride ?? this.getGroundedHeight(x, z);
     this.mesh.position.set(x, y, z);
-    // p7: callers pass theta as a FACING (rockslide: "position character
-    // looking at the slope", shot overrides &ry=) — the old code only set the
-    // orbit-camera theta and never touched mesh.rotation.y, so every teleported
-    // facing silently no-opped (she always faced +z; the pack/braid framing
-    // could not be captured).
     this.mesh.rotation.y = theta;
     this.theta = theta;
-    // P-FRESH: a teleport must not inherit the previous location's traversal
-    // state. The boot spawn sat in the river channel (V-WATER water table), so
-    // state became SWIM on frame 1 — and every later teleport (gate probes,
-    // save loads) carried SWIM with it, floating her at the swim height over
-    // dry lakebeds with no visible water. WALK re-enters SWIM on the next
-    // update if the destination really is river; forced states (shots) use
-    // setForceState AFTER teleport, which still wins.
     this.state = MovementState.WALK;
     this.stateTimer = 0;
     this.speed = 0;
-    this.updateCamera();
+    this.velocityY = 0;
+    this.isGrounded = true;
+    this.isRolling = false;
+    this.isCrouched = false;
+    this.updateCamera(0.016);
   }
 }

@@ -28,10 +28,18 @@ def main() -> int:
     ap.add_argument("--height", type=int, default=800)
     args = ap.parse_args()
 
-    from playwright.sync_api import sync_playwright
-
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        import subprocess
+        # Node playwright fallback
+        node_script = Path(__file__).resolve().parent.parent / "screenshot.cjs"
+        cmd = ["node", str(node_script), args.url, "webgl2"]
+        res = subprocess.run(cmd, capture_output=False)
+        return res.returncode
 
     with sync_playwright() as p:
         browser = p.chromium.launch(args=[

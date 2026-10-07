@@ -1,5 +1,6 @@
 export class InputManager {
   public keys: Record<string, boolean> = {};
+  public justPressed: Record<string, boolean> = {};
   public joystickVector: { x: number; y: number } = { x: 0, y: 0 };
   // Analog magnitude (0..1) of the virtual stick — P-MOBILE F3: the
   // character controller maps this onto the walk→run band (full deflection
@@ -13,8 +14,16 @@ export class InputManager {
   private previousMousePosition = { x: 0, y: 0 };
 
   constructor() {
-    window.addEventListener('keydown', (e) => this.keys[e.code] = true);
-    window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+    window.addEventListener('keydown', (e) => {
+      if (!this.keys[e.code]) {
+        this.justPressed[e.code] = true;
+      }
+      this.keys[e.code] = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      this.keys[e.code] = false;
+      delete this.justPressed[e.code];
+    });
 
     window.addEventListener('mousedown', (e) => {
       this.isDragging = true;
@@ -22,7 +31,10 @@ export class InputManager {
     });
     window.addEventListener('mouseup', () => this.isDragging = false);
     window.addEventListener('mousemove', (e) => {
-      if (this.isDragging) {
+      if (document.pointerLockElement) {
+        this.cameraDelta.x += e.movementX;
+        this.cameraDelta.y += e.movementY;
+      } else if (this.isDragging) {
         this.cameraDelta.x += e.clientX - this.previousMousePosition.x;
         this.cameraDelta.y += e.clientY - this.previousMousePosition.y;
       }
@@ -32,7 +44,10 @@ export class InputManager {
     // P-MOBILE F7: an app switch must never leave a key latched down
     // (the character kept walking after returning to the tab).
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.keys = {};
+      if (document.hidden) {
+        this.keys = {};
+        this.justPressed = {};
+      }
     });
   }
 
@@ -40,10 +55,19 @@ export class InputManager {
     return !!this.keys[code];
   }
 
+  consumeJustPressed(code: string): boolean {
+    if (this.justPressed[code]) {
+      delete this.justPressed[code];
+      return true;
+    }
+    return false;
+  }
+
   // P-MOBILE F7: full input wipe (used alongside TouchControls.releaseAll
   // when the tab hides or the pause menu opens).
   clear(): void {
     this.keys = {};
+    this.justPressed = {};
     this.joystickVector = { x: 0, y: 0 };
     this.joystickMagnitude = 0;
     this.cameraDelta = { x: 0, y: 0 };
