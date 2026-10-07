@@ -5,7 +5,7 @@ import { setupEnvironment, getActiveLightRig } from './environment.js';
 import { createTerrain } from './terrain.js';
 import { createRiver } from './river.js';
 import { createDecor } from './decor.js';
-import { CharacterController } from './character.js';
+import { CharacterController, MovementState } from './character.js';
 import { InputManager, isTouchLikeDevice } from './input.js';
 import { TouchControls } from './touch/controls.js';
 import { TouchUI } from './ui/touchui.js';
@@ -24,7 +24,7 @@ import { createSaveSystem } from './save/saveSystem.js';
 import { REGIONS } from './regions/registry.js';
 import { createRegionManager } from './world/regionManager.js';
 import { getGlobalTerrainHeight } from './terrain.js';
-import { ashlarTrimMaterial, buildAshlarTrimNodeMaterial, mapGeometryToTrimBand, setCharacterDetailMapsEnabled, type TrimNodeMaterialResult } from './materials.js';
+import { ashlarTrimMaterial, ashlarWeathered, buildAshlarTrimNodeMaterial, mapGeometryToTrimBand, setCharacterDetailMapsEnabled, type TrimNodeMaterialResult } from './materials.js';
 import { getKTX2Loader } from './assets.js';
 import { createIncaRopeBridge } from './bridge.js';
 
@@ -1162,6 +1162,64 @@ async function init() {
       // measured water surface under the SAME channel solve (river.ts), for
       // the float-equilibrium evidence. Shot-mode only, zero play cost.
       window.__buoyancyProbe = () => physics.probeBodies();
+    } else if (shot === 'ledge_hang' || shot === 'ledge_mantle') {
+      // Phase 1.1 Traversal Verification (Shadow of the Tomb Raider North Star):
+      // Spawn an authentic Inca ashlar terrace ledge in front of the adventurer
+      const wallX = 50, wallZ = 50;
+      const groundY = getGlobalTerrainHeight(wallX, wallZ);
+      const ledgeTopY = groundY + 1.6; // 1.6m high stone terrace ledge
+
+      // Create an Inca ashlar terrace stone platform for the test
+      const ledgeGroup = new THREE.Group();
+      const ledgeMat = ashlarWeathered();
+      const wallBox = new THREE.Mesh(
+        new THREE.BoxGeometry(4.0, 1.8, 3.0),
+        ledgeMat
+      );
+      wallBox.position.set(wallX, groundY + 0.9, wallZ + 1.5);
+      wallBox.castShadow = true;
+      wallBox.receiveShadow = true;
+      ledgeGroup.add(wallBox);
+      scene.add(ledgeGroup);
+
+      // Register Rapier collider for the stone terrace ledge
+      if (physics.world && physics.getRapier()) {
+        const R = physics.getRapier()!;
+        const bodyDesc = R.RigidBodyDesc.fixed().setTranslation(wallX, groundY + 0.9, wallZ + 1.5);
+        const body = physics.world.createRigidBody(bodyDesc);
+        const colDesc = R.ColliderDesc.cuboid(2.0, 0.9, 1.5);
+        physics.world.createCollider(colDesc, body);
+      }
+
+      // Position character at the ledge
+      const wallNormal = new THREE.Vector3(0, 0, -1);
+      const hangPos = new THREE.Vector3(wallX, ledgeTopY - 1.55, wallZ - 0.32);
+      const mantleTarget = new THREE.Vector3(wallX, ledgeTopY, wallZ + 0.8);
+
+      character.mesh.position.copy(hangPos);
+      character.mesh.rotation.y = Math.PI; // Face +Z into the wall
+      character.isGrounded = false;
+      character.velocityY = 0;
+      character.speed = 0;
+      character.ledgeInfo = {
+        ledgeY: ledgeTopY,
+        wallNormal: wallNormal,
+        hangPosition: hangPos.clone(),
+        mantleTargetPosition: mantleTarget.clone(),
+      };
+
+      if (shot === 'ledge_mantle') {
+        character.state = MovementState.MANTLE;
+        character.mantleTimer = 0.32; // mid-mantle pull up
+        character.mantleStartPosition.copy(hangPos);
+      } else {
+        character.state = MovementState.LEDGE_HANG;
+      }
+
+      character.disableCameraUpdate = true;
+      // Position camera at a dramatic three-quarters angle to audit hand grip on the stone lip and suspended body
+      camera.position.set(wallX - 2.2, groundY + 1.4, wallZ - 2.8);
+      camera.lookAt(wallX, ledgeTopY - 0.2, wallZ);
     } else {
       character.teleport(0, 0, 0);
     }
