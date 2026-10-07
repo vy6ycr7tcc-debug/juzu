@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import { ashlarLight, gold, bronze, plazaWorn, type RenderCaps } from '../materials.js';
 import { createWaterSurface } from '../river.js';
+import {
+  createTrapezoidalPortal,
+  createChakanaPlazaPlatform,
+  createIntihuatanaAltar,
+  createPlazaColonnade,
+  createTorreonSunTemple,
+  createAshlarWall
+} from '../architecture.js';
 import type {
   RegionModule,
   RegionBuildAPI,
@@ -77,8 +85,8 @@ export const paititi: RegionModule = {
     // re-anchored to the measured terrain (camera = terrain + 25–45 m).
     { id: 'pa_overview', camera: { x: 1000, y: 440, z: -200 }, lookAt: { x: 1100, y: 490, z: -50 } },
     { id: 'pa_outer_terraces', camera: { x: 800, y: 278, z: -100 }, lookAt: { x: 900, y: 345, z: -100 } },
-    { id: 'pa_plaza_of_sun', camera: { x: 1050, y: 492, z: -50 }, lookAt: { x: 1100, y: 485, z: -50 } },
-    { id: 'pa_sanctuary', camera: { x: 1250, y: 700, z: 50 }, lookAt: { x: 1300, y: 695, z: 50 } },
+    { id: 'pa_plaza_of_sun', camera: { x: 1045, y: 498, z: -50 }, lookAt: { x: 1100, y: 491, z: -50 } },
+    { id: 'pa_sanctuary', camera: { x: 1255, y: 698, z: 50 }, lookAt: { x: 1300, y: 694, z: 50 } },
     { id: 'pa_aqueduct_line', camera: { x: 1150, y: 578, z: 0 }, lookAt: { x: 1200, y: 572, z: 0 } }
   ],
   build(api: RegionBuildAPI) {
@@ -118,80 +126,71 @@ export const paititi: RegionModule = {
     }
     paititiGroup.add(terracesGroup);
 
-    // 2. The Plaza of the Sun
+    // 2. The Plaza of the Sun (Imperial Inca Ceremonial Center)
     const plazaCenter = { x: 1100, z: -50 };
     const plazaHeight = Math.max(api.terrainHeight(plazaCenter.x, plazaCenter.z), 100);
     this.pois[1].position.y = plazaHeight;
     const plazaGroup = new THREE.Group();
-    
-    const plazaGeo = new THREE.CylinderGeometry(40, 45, 2, 64);
-    const plazaMesh = new THREE.Mesh(plazaGeo, pavingMaterial);
-    plazaMesh.position.set(plazaCenter.x, plazaHeight, plazaCenter.z);
-    plazaMesh.receiveShadow = true;
-    plazaGroup.add(plazaMesh);
 
-    // §2.5 plaza dais — three stepped courses under the Punchao (the p3-flagged
-    // "plaza flats" read: a bare disk floating over an empty slab)
-    const daisRadii = [16, 12.5, 9];
-    const daisHeights = [0.7, 0.65, 0.6];
-    let daisY = plazaHeight + 1;
-    for (let i = 0; i < 3; i++) {
-      const course = new THREE.Mesh(
-        new THREE.CylinderGeometry(daisRadii[i], daisRadii[i] + 0.6, daisHeights[i], 48),
-        stoneMaterial
+    // 2a. 3-Tiered Monumental Chakana Platform
+    const chakanaPlatform = createChakanaPlazaPlatform({
+      radius: 44,
+      stoneMat: stoneMaterial,
+      pavingMat: pavingMaterial,
+    });
+    chakanaPlatform.position.set(plazaCenter.x, plazaHeight, plazaCenter.z);
+    plazaGroup.add(chakanaPlatform);
+
+    // 2b. Monumental Colonnade Gallery (Kallanka stone pillars & entablature beams)
+    const colonnade = createPlazaColonnade({
+      radius: 34,
+      numPillars: 12,
+      height: 7.2,
+      stoneMat: stoneMaterial,
+    });
+    colonnade.position.set(plazaCenter.x, plazaHeight + 1.6, plazaCenter.z);
+    plazaGroup.add(colonnade);
+
+    // 2c. Central Intihuatana Solar Altar & Worked Gold Punchao Disc
+    const intihuatana = createIntihuatanaAltar({
+      stoneMat: stoneMaterial,
+      goldMat: goldMaterial,
+      bronzeMat: bronzeMaterial,
+    });
+    intihuatana.position.set(plazaCenter.x, plazaHeight + 3.7, plazaCenter.z);
+    plazaGroup.add(intihuatana);
+
+    // 2d. 4 Monumental Trapezoidal Portals at the Cardinal Entrances (N, S, E, W)
+    for (let i = 0; i < 4; i++) {
+      const angle = i * (Math.PI / 2);
+      const portal = createTrapezoidalPortal({
+        widthBottom: 3.6,
+        height: 5.6,
+        depth: 1.6,
+        material: stoneMaterial,
+      });
+      portal.position.set(
+        plazaCenter.x + Math.sin(angle) * 42,
+        plazaHeight + 0.2,
+        plazaCenter.z + Math.cos(angle) * 42
       );
-      course.position.set(plazaCenter.x, daisY + daisHeights[i] / 2, plazaCenter.z);
-      course.castShadow = true;
-      course.receiveShadow = true;
-      plazaGroup.add(course);
-      daisY += daisHeights[i];
+      portal.rotation.y = angle + Math.PI;
+      plazaGroup.add(portal);
     }
 
-    // §2.5 pillar colonnade ring (civic scale: ≥ 3× Naira's 1.8 m → 7 m shafts)
-    const colonnadeGeo = new THREE.CylinderGeometry(0.9, 1.05, 7, 12);
-    const capGeo = new THREE.BoxGeometry(2.4, 0.5, 2.4);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const px = plazaCenter.x + Math.cos(a) * 30;
-      const pz = plazaCenter.z + Math.sin(a) * 30;
-      const shaft = new THREE.Mesh(colonnadeGeo, stoneMaterial);
-      shaft.position.set(px, plazaHeight + 4.5, pz);
-      shaft.castShadow = true;
-      const cap = new THREE.Mesh(capGeo, stoneMaterial);
-      cap.position.set(px, plazaHeight + 8.2, pz);
-      cap.rotation.y = a;
-      cap.castShadow = true;
-      plazaGroup.add(shaft, cap);
-    }
-
-    // §2.5 encroaching green — vegetation at the city's EDGES only (the city
-    // itself is maintained stone). Low mounds + fringe cards on the rim.
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 + 0.3;
-      const mound = new THREE.Mesh(new THREE.SphereGeometry(2 + (i % 3), 8, 6), greenMaterial);
-      mound.position.set(plazaCenter.x + Math.cos(a) * 43, plazaHeight - 0.5, plazaCenter.z + Math.sin(a) * 48);
+    // 2e. §2.5 encroaching green — vegetation at the city's EDGES only (the city
+    // itself is maintained stone). Low mounds on the outer terrace rim.
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + 0.3;
+      const mound = new THREE.Mesh(new THREE.SphereGeometry(2.5 + (i % 3), 8, 6), greenMaterial);
+      mound.position.set(plazaCenter.x + Math.cos(a) * 46, plazaHeight - 0.4, plazaCenter.z + Math.sin(a) * 50);
       mound.scale.y = 0.45;
       plazaGroup.add(mound);
     }
 
-    // The Punchao (Golden Disk) — seated above the dais it now crowns
-    const diskGeo = new THREE.CylinderGeometry(10, 10, 0.5, 32);
-    const diskMesh = new THREE.Mesh(diskGeo, goldMaterial);
-    diskMesh.position.set(plazaCenter.x, plazaHeight + 10, plazaCenter.z);
-    diskMesh.rotation.x = Math.PI / 2;
-    diskMesh.rotation.y = Math.PI / 4;
-    diskMesh.castShadow = true;
-    plazaGroup.add(diskMesh);
-
-    const ringGeo1 = new THREE.RingGeometry(11, 12, 32);
-    const ringMesh1 = new THREE.Mesh(ringGeo1, goldMaterial);
-    ringMesh1.position.copy(diskMesh.position);
-    ringMesh1.rotation.copy(diskMesh.rotation);
-    plazaGroup.add(ringMesh1);
-
     paititiGroup.add(plazaGroup);
 
-    // 3. The Sanctuary
+    // 3. The Sanctuary (Imperial Sun Temple / Torreón)
     const sanctuaryCenter = { x: 1300, z: 50 };
     const sanctuaryHeight = Math.max(api.terrainHeight(sanctuaryCenter.x, sanctuaryCenter.z), 150);
     this.pois[2].position.y = sanctuaryHeight;
@@ -199,50 +198,48 @@ export const paititi: RegionModule = {
     this.encounters[1].position.y = sanctuaryHeight;
     const sanctuaryGroup = new THREE.Group();
 
-    // Rotunda
-    const rotundaGeo = new THREE.CylinderGeometry(25, 25, 30, 32, 1, true);
-    const rotundaMesh = new THREE.Mesh(rotundaGeo, stoneMaterial);
-    rotundaMesh.position.set(sanctuaryCenter.x, sanctuaryHeight + 15, sanctuaryCenter.z);
-    rotundaMesh.material.side = THREE.DoubleSide;
-    rotundaMesh.castShadow = true;
-    rotundaMesh.receiveShadow = true;
-    sanctuaryGroup.add(rotundaMesh);
+    // 3a. Parabolic Imperial Ashlar Torreón Temple with Trapezoidal Solar Windows & Entrance Portal
+    const torreon = createTorreonSunTemple({
+      radius: 25,
+      height: 18,
+      stoneMat: stoneMaterial,
+      weatheredMat: pavingMaterial,
+    });
+    torreon.position.set(sanctuaryCenter.x, sanctuaryHeight, sanctuaryCenter.z);
+    sanctuaryGroup.add(torreon);
 
-    // Pillars with explosive charges
-    const pillarGeo = new THREE.CylinderGeometry(1.5, 1.5, 30, 16);
+    // 3b. Inner Colonnade & Sol Negro Explosive Charges
+    const pillarGeo = new THREE.CylinderGeometry(1.2, 1.4, 18, 12);
     const chargeMaterial = bronze();
     const charges: THREE.Mesh[] = [];
 
     for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI) / 2;
-      const px = sanctuaryCenter.x + Math.cos(angle) * 18;
-      const pz = sanctuaryCenter.z + Math.sin(angle) * 18;
+      const angle = (i * Math.PI) / 2 + Math.PI / 4;
+      const px = sanctuaryCenter.x + Math.cos(angle) * 16;
+      const pz = sanctuaryCenter.z + Math.sin(angle) * 16;
 
       const pillar = new THREE.Mesh(pillarGeo, stoneMaterial);
-      pillar.position.set(px, sanctuaryHeight + 15, pz);
+      pillar.position.set(px, sanctuaryHeight + 9, pz);
+      pillar.castShadow = true;
+      pillar.receiveShadow = true;
       sanctuaryGroup.add(pillar);
 
-      const chargeGeo = new THREE.BoxGeometry(1, 1, 1);
+      const chargeGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
       const charge = new THREE.Mesh(chargeGeo, chargeMaterial);
-      charge.position.set(px - 1, sanctuaryHeight + 10, pz);
+      charge.position.set(px - 1, sanctuaryHeight + 4, pz);
       charge.visible = false;
       charges.push(charge);
       sanctuaryGroup.add(charge);
     }
 
-    // Floor
-    const sanctuaryFloorGeo = new THREE.CylinderGeometry(25, 25, 1, 32);
-    const sanctuaryFloor = new THREE.Mesh(sanctuaryFloorGeo, stoneMaterial);
-    sanctuaryFloor.position.set(sanctuaryCenter.x, sanctuaryHeight, sanctuaryCenter.z);
-    sanctuaryFloor.receiveShadow = true;
-    sanctuaryGroup.add(sanctuaryFloor);
-
-    // Central Mechanism (Dials)
+    // 3c. Central Stepped Solstice Mechanism
     const mechanismGroup = new THREE.Group();
-    mechanismGroup.position.set(sanctuaryCenter.x, sanctuaryHeight + 5, sanctuaryCenter.z);
+    mechanismGroup.position.set(sanctuaryCenter.x, sanctuaryHeight + 2, sanctuaryCenter.z);
 
     const baseGeo = new THREE.CylinderGeometry(5, 6, 2, 16);
     const baseMesh = new THREE.Mesh(baseGeo, bronzeMaterial);
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = true;
     mechanismGroup.add(baseMesh);
 
     const solarDialGeo = new THREE.RingGeometry(3, 4, 32);
@@ -260,29 +257,45 @@ export const paititi: RegionModule = {
     sanctuaryGroup.add(mechanismGroup);
     paititiGroup.add(sanctuaryGroup);
 
-    // 4. The Aqueduct Line
+    // 4. The Aqueduct Line (Stone-lined gravity conduit)
     const aqueductGroup = new THREE.Group();
     const aquaductLength = 200;
-    
-    const channelGeo = new THREE.BoxGeometry(3, 2, aquaductLength);
-    const channelMesh = new THREE.Mesh(channelGeo, stoneMaterial);
     const channelX = 1200;
     const channelZ = 0;
     const channelY = api.terrainHeight(channelX, channelZ) + 5;
     this.pois[3].position.y = channelY;
-    channelMesh.position.set(channelX, channelY, channelZ);
-    channelMesh.rotation.y = Math.PI / 4;
-    aqueductGroup.add(channelMesh);
+
+    // Stone trough base and retaining walls
+    const channelBase = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.4, aquaductLength), stoneMaterial);
+    channelBase.position.set(channelX, channelY, channelZ);
+    channelBase.rotation.y = Math.PI / 4;
+    channelBase.castShadow = true;
+    channelBase.receiveShadow = true;
+    aqueductGroup.add(channelBase);
+
+    // Stone support piers along the aqueduct run
+    const pierGeo = new THREE.BoxGeometry(2.4, 12, 2.4);
+    for (let p = -aquaductLength / 2 + 15; p <= aquaductLength / 2 - 15; p += 25) {
+      const pier = new THREE.Mesh(pierGeo, stoneMaterial);
+      const rad = Math.PI / 4;
+      const px = channelX - Math.sin(rad) * p;
+      const pz = channelZ + Math.cos(rad) * p;
+      pier.position.set(px, channelY - 5, pz);
+      pier.rotation.y = Math.PI / 4;
+      pier.castShadow = true;
+      pier.receiveShadow = true;
+      aqueductGroup.add(pier);
+    }
 
     const waterSurface = createWaterSurface(
       api.scene,
       { color: 0x2E5A6E, roughness: 0.15, opacity: 1.0, flowSpeed: 0.6, flowDir: [0, 1], foamAtEdges: false },
-      2.5,
+      2.6,
       aquaductLength,
       caps
     );
     const waterPlane = waterSurface.mesh;
-    waterPlane.position.set(channelX, channelY + 1.1, channelZ);
+    waterPlane.position.set(channelX, channelY + 0.8, channelZ);
     waterPlane.rotation.z = Math.PI / 4;
     aqueductGroup.add(waterPlane);
 
