@@ -14,7 +14,8 @@ async function run() {
   });
 
   const scenarios = scenarioArg ? [scenarioArg] : ['valley_overview', 'river_crossing', 'character_closeup', 'climb_wall', 'rope_swing', 'swim_river'];
-  const modes = ['webgpu', 'webgl2'];
+  const modeArg = process.argv[3];
+  const modes = modeArg ? [modeArg] : ['webgl2', 'webgpu'];
 
   for (const mode of modes) {
     for (const scenario of scenarios) {
@@ -35,9 +36,10 @@ async function run() {
         // Wait a small amount for the frame to be presented
         await page.waitForTimeout(500);
 
+        const safeName = scenario.replace(/[^a-zA-Z0-9_-]/g, '_');
         const canvas = await page.locator('canvas');
-        await canvas.screenshot({ path: `shot_${scenario}_${mode}.png` });
-        console.log(`Saved shot_${scenario}_${mode}.png`);
+        await canvas.screenshot({ path: `shot_${safeName}_${mode}.png` });
+        console.log(`Saved shot_${safeName}_${mode}.png`);
       } catch (e) {
         console.error(`Timeout for ${scenario} in ${mode}`, e);
       }
