@@ -49,17 +49,13 @@ interface Profile {
 
 const PROFILES: Record<ParticleType, Profile> = {
   // Sierra: sparse backlit dust hanging in hard light, slow settle.
-  // spread is a look-dev dial (§6.3 pins COUNTS, not spread): 36 m keeps
-  // enough motes inside the view cone to read at eye scale — the first
-  // probe's 50 m box put 200 points mostly out of frame (presence A/B
-  // measured 0.066 mean|d| = structurally present, visually absent).
-  dust:   { color: 0xe8dcc8, size: 0.4, spread: 36, opacity: 0.55, vyMin: -0.012, vyMax: -0.004, windX: 0.010, windZ: 0.004, flutter: 0.008 },
+  dust:   { color: 0xe8dcc8, size: 0.16, spread: 36, opacity: 0.35, vyMin: -0.012, vyMax: -0.004, windX: 0.010, windZ: 0.004, flutter: 0.008 },
   // Jungle: wind-biased pollen with visible flutter.
-  leaves: { color: 0x88aa44, size: 0.35, spread: 30, opacity: 0.55, vyMin: -0.050, vyMax: -0.020, windX: 0.050, windZ: 0.010, flutter: 0.030 },
+  leaves: { color: 0x88aa44, size: 0.20, spread: 30, opacity: 0.40, vyMin: -0.050, vyMax: -0.020, windX: 0.050, windZ: 0.010, flutter: 0.030 },
   // Cloud forest: near-weightless motes drifting in the mist.
-  snow:   { color: 0xffffff, size: 0.30, spread: 36, opacity: 0.5,  vyMin: -0.010, vyMax: -0.005, windX: 0.004, windZ: 0.002, flutter: 0.012 },
-  // Falls spray: rises, then falls (contract-complete; unwired — see header).
-  spray:  { color: 0xccddff, size: 0.60, spread: 30, opacity: 0.5,  vyMin: -0.030, vyMax:  0.060, windX: 0.010, windZ: 0.000, flutter: 0.010 },
+  snow:   { color: 0xe8e5dc, size: 0.14, spread: 36, opacity: 0.28, vyMin: -0.010, vyMax: -0.005, windX: 0.004, windZ: 0.002, flutter: 0.012 },
+  // Falls spray: rises, then falls.
+  spray:  { color: 0xccddff, size: 0.30, spread: 30, opacity: 0.35, vyMin: -0.030, vyMax:  0.060, windX: 0.010, windZ: 0.000, flutter: 0.010 },
 };
 
 const SEEDS: Record<ParticleType, number> = { dust: 111, leaves: 222, snow: 333, spray: 444 };
@@ -91,8 +87,9 @@ function createSpriteTexture(): THREE.CanvasTexture {
   canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
   const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+  gradient.addColorStop(0.25, 'rgba(255, 255, 255, 0.4)');
+  gradient.addColorStop(0.60, 'rgba(255, 255, 255, 0.1)');
   gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 64, 64);
@@ -140,16 +137,12 @@ export class ParticleSystem {
       size: profile.size,
       map: createSpriteTexture(),
       color: profile.color,
-      // NormalBlending, not additive: the p4 mist lesson (measured again in
-      // this session's presence A/B — additive white over a bright day sky
-      // contributes ~0.1 mean|d|, i.e. invisible; the §8.3 presence gate
-      // failed until this switch). Normal-blended sprites read as lit
-      // organic matter against sky AND shadow, with no glow halo (§4.4).
       blending: THREE.NormalBlending,
       transparent: true,
       opacity: profile.opacity,
       depthWrite: false,
       sizeAttenuation: true,
+      fog: true, // Attenuate naturally with distance fog
     });
 
     this.obj = new THREE.Points(geometry, material);

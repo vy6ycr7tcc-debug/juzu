@@ -26,6 +26,7 @@ import { createRegionManager } from './world/regionManager.js';
 import { getGlobalTerrainHeight } from './terrain.js';
 import { ashlarTrimMaterial, buildAshlarTrimNodeMaterial, mapGeometryToTrimBand, setCharacterDetailMapsEnabled, type TrimNodeMaterialResult } from './materials.js';
 import { getKTX2Loader } from './assets.js';
+import { createIncaRopeBridge } from './bridge.js';
 
 // Setup for global hook
 declare global {
@@ -299,6 +300,11 @@ async function init() {
   // WebGPU transmission branch never ran and tier rules never applied).
   // &nf=1 disables the foam band (p5 foam A/B isolation).
   const river = createRiver(scene, renderCaps, { foam: urlParams.get('nf') !== '1' });
+  // Authentic Inca Suspension Rope Bridge (Q'eswachaka) spanning the river canyon
+  createIncaRopeBridge(scene, physics, {
+    start: new THREE.Vector3(0, 20, -50),
+    end: new THREE.Vector3(0, 20, 50),
+  });
   // §7.2: decor takes RenderCaps (the old callsite passed nothing — tier
   // counts/shadow rules never applied and the WebGPU wind branch was dead).
   const decor = createDecor(scene, renderCaps);
@@ -1117,8 +1123,13 @@ async function init() {
       // y on steep slope ~200
       physics.spawnRockslide(scene, startX, startZ, 250);
     } else if (shot === 'bridge') {
-      character.teleport(0, 10, 0);
-      physics.createRopeBridge(scene, new THREE.Vector3(0, 20, -50), new THREE.Vector3(0, 20, 50));
+      // Teleport character walking forward onto the bridge deck
+      character.teleport(0, -42, Math.PI, 20.1);
+      character.speed = 2.2; // Active walk locomotion cycle across the span
+      character.disableCameraUpdate = true;
+      // Over-the-shoulder dramatic view looking down the bridge catenary across the gorge
+      camera.position.set(-1.3, 21.6, -47.2);
+      camera.lookAt(0.1, 19.2, -15);
     } else if (shot === 'buoyancy') {
       // Bank position (p5): the trench at x=0 now holds water — spawn her on
       // the east shoulder so the shot frames logs dropping INTO the river.
@@ -1132,17 +1143,14 @@ async function init() {
       character.teleport(0, 0, 0);
     }
 
-    // Fast forward
-    if (tStr) {
-      const t = parseFloat(tStr);
-      // Simulate multiple frames to let animations settle
-      const steps = 60;
-      const dt = t / steps;
-      for (let i = 0; i < steps; i++) {
-        physics.update(dt);
-        character.update(dt);
-        river.update(i * dt);
-      }
+    // Fast forward — simulate frames to let animations and physics settle (default 2s)
+    const t = tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0;
+    const steps = 60;
+    const dt = t / steps;
+    for (let i = 0; i < steps; i++) {
+      physics.update(dt);
+      character.update(dt);
+      river.update(i * dt);
     }
 
     // Sun/shadow rig follows the shot's viewpoint (§3.2)

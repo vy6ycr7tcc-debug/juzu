@@ -48,7 +48,7 @@ export class CharacterController {
   private stateTimer: number = 0;
 
   // Locomotion parameters
-  private speed: number = 0;
+  public speed: number = 0;
   private maxWalkSpeed: number = 2.0;
   private maxRunSpeed: number = 5.0;
   private acceleration: number = 10.0;
@@ -205,7 +205,9 @@ export class CharacterController {
 
 
   private detectStateTransitions(nextX: number, _nextZ: number, terrainData: { y: number, normal: THREE.Vector3 }) {
-    const isRiver = terrainData.y < -3.0 && Math.abs(nextX) < 15;
+    // Swimming only applies when the character is actually down at the river water surface level (< 0.5m),
+    // never when traversing a bridge high above the gorge.
+    const isRiver = this.mesh.position.y < 0.5 && terrainData.y < -3.0 && Math.abs(nextX) < 15;
 
     if (this.state === MovementState.WALK && this.mesh.position.y > 10 && terrainData.normal.y < 0.1 && this.input.isDown('KeyW')) {
         this.state = MovementState.CLIMB;
@@ -491,8 +493,9 @@ export class CharacterController {
     this.camera.lookAt(this.target);
   }
 
-  public teleport(x: number, z: number, theta: number = 0) {
-    this.mesh.position.set(x, this.getTerrainHeightAndNormal(x, z).y, z);
+  public teleport(x: number, z: number, theta: number = 0, yOverride?: number) {
+    const y = yOverride ?? this.getTerrainHeightAndNormal(x, z).y;
+    this.mesh.position.set(x, y, z);
     // p7: callers pass theta as a FACING (rockslide: "position character
     // looking at the slope", shot overrides &ry=) — the old code only set the
     // orbit-camera theta and never touched mesh.rotation.y, so every teleported

@@ -55,7 +55,7 @@ export const TOD_GRADES: Record<'day'|'dawn'|'noon'|'dusk'|'night', LightRigConf
     sunColor: 0xFFF4E5, sunIntensity: 4.5, sunElevationDeg: 25, sunAzimuthDeg: 135,
     hemiSky: 0xBDD3F0, hemiGround: 0x5A5A48, hemiIntensity: 0.5,
     fillIntensity: 0.35, exposure: 1.1,
-    fogColor: 0x87B5FF, fogDensity: 0.0015, envIntensity: 0.55
+    fogColor: 0xA6BED2, fogDensity: 0.0015, envIntensity: 0.55
   },
   dawn: {
     sunColor: 0xFFA500, sunIntensity: 2.2, sunElevationDeg: 6, sunAzimuthDeg: 90,
@@ -75,7 +75,7 @@ export const TOD_GRADES: Record<'day'|'dawn'|'noon'|'dusk'|'night', LightRigConf
     sunColor: 0xFFFFFF, sunIntensity: 5.5, sunElevationDeg: 82, sunAzimuthDeg: 180,
     hemiSky: 0xC8DCF5, hemiGround: 0x6A6A55, hemiIntensity: 0.65,
     fillIntensity: 0.35, exposure: 1.15,
-    fogColor: 0x9BC0FF, fogDensity: 0.0011, envIntensity: 0.55
+    fogColor: 0xB4C6D8, fogDensity: 0.0011, envIntensity: 0.55
   },
   dusk: {
     sunColor: 0xFF8C00, sunIntensity: 2.0, sunElevationDeg: 6, sunAzimuthDeg: 270,
@@ -120,9 +120,19 @@ export function setupEnvironment(scene: THREE.Scene, quality: RendererQuality, r
   let fogDensity = grade.fogDensity;
 
   if (regionId === 'cloud_forest') {
-    fogColor.setHex(0xA8B8B0); // Mist blue-grey base
+    if (gradeKey === 'dawn' || gradeKey === 'dusk') {
+      fogColor.lerp(new THREE.Color(0xB89E8C), 0.35); // Keep warm golden-hour alpenglow mist
+    } else if (gradeKey === 'night') {
+      fogColor.setHex(0x182430);
+    } else {
+      fogColor.setHex(0xA8B8B0); // Mist blue-grey base
+    }
   } else if (regionId === 'jungle_lowlands') {
-    fogColor.setHex(0x14261E); // Swallowed ruins/dark water baseline
+    if (gradeKey === 'dawn' || gradeKey === 'dusk') {
+      fogColor.lerp(new THREE.Color(0x283020), 0.4);
+    } else {
+      fogColor.setHex(0x14261E); // Swallowed ruins/dark water baseline
+    }
     fogDensity *= 1.5;
   } else if (regionId === 'high_sierra') {
     fogDensity *= 0.5; // clear

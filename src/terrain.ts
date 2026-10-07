@@ -110,7 +110,7 @@ export class TerrainManager {
   }
 
   update(cameraPosition: THREE.Vector3) {
-    const viewDistance = 4; // chunk radius
+    const viewDistance = this.lowTier ? 4 : 6; // chunk radius (up to 1200m on high/med)
     const cx = Math.floor(cameraPosition.x / this.chunkSize);
     const cz = Math.floor(cameraPosition.z / this.chunkSize);
 
@@ -128,21 +128,21 @@ export class TerrainManager {
         activeKeys.add(key);
 
         const dist = Math.max(Math.abs(x), Math.abs(z));
-        let segments = 64; // LOD 0 (near)
-        // §6.3: far-chunk segment density 16→4 on LOW.
-        if (dist > 2) segments = this.lowTier ? 4 : 16; // LOD 1 (mid)
-        if (dist > 3) segments = 4; // LOD 2 (far)
+        let segments = 64; // LOD 0 (near, dist <= 2)
+        if (dist > 2) segments = this.lowTier ? 4 : 16; // LOD 1 (mid, dist 3)
+        if (dist > 3) segments = 8; // LOD 2 (mid-far, dist 4)
+        if (dist > 4) segments = 4; // LOD 3 (horizon backdrop, dist 5-6)
+
+        const withCollider = dist <= 2; // Physics only within 400m of camera
 
         if (!this.chunks.has(key)) {
-          this.loadChunk(chunkX, chunkZ, segments);
+          this.loadChunk(chunkX, chunkZ, segments, withCollider);
         } else {
-          // If we want to dynamically update LOD, we'd do it here.
-          // For now we'll just stick with what we loaded to keep it simple, or recreate it.
           const existingChunk = this.chunks.get(key);
           const currentSegments = (existingChunk?.geometry as THREE.PlaneGeometry).parameters?.widthSegments;
           if (existingChunk && currentSegments !== segments) {
              this.unloadChunk(key);
-             this.loadChunk(chunkX, chunkZ, segments);
+             this.loadChunk(chunkX, chunkZ, segments, withCollider);
           }
         }
       }
@@ -156,7 +156,7 @@ export class TerrainManager {
     }
   }
 
-  loadChunk(cx: number, cz: number, segments: number) {
+  loadChunk(cx: number, cz: number, segments: number, withCollider: boolean = true) {
     const geometry = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize, segments, segments);
     geometry.rotateX(-Math.PI / 2);
 
@@ -295,7 +295,7 @@ export class TerrainManager {
     // the edge color/normal/uv so the band reads as terrain inside the gaps.
     // The trimesh collider picks the skirt up too (vertical walls at chunk
     // edges — harmless, closes the same holes for physics).
-    const SKIRT_DEPTH = 14;
+    const SKIRT_DEPTH = 60;
     {
       const gridN = segments + 1;
       const baseVerts = position.count;
@@ -390,9 +390,11 @@ export class TerrainManager {
     const key = this.getChunkKey(cx, cz);
     this.chunks.set(key, chunk);
 
-    const colliderData = physics.createTerrainCollider(chunk);
-    if (colliderData) {
-      this.chunkColliders.set(key, colliderData);
+    if (withCollider) {
+      const colliderData = physics.createTerrainCollider(chunk);
+      if (colliderData) {
+        this.chunkColliders.set(key, colliderData);
+      }
     }
   }
 
