@@ -581,6 +581,9 @@ async function init() {
   const vignetteStrength = postNum('vs', 0.25);
   const grainAmount = postNum('gs', 0.012);
   const selectiveBloomParam = postNum('sel', 1);
+  const enableAO = urlParams.get('ao') !== '0';
+  const aoRadius = postNum('aor', 0.45);
+  const aoIntensity = postNum('aoi', 0.75);
 
   if (!skipPost) {
       selectiveBloom = selectiveBloomParam !== 0;
@@ -598,11 +601,25 @@ async function init() {
           // ±0.035 grain was ±30 SDR levels on shadow pixels — the measured dusk
           // edge-crush driver. The p1 double-grade lesson is respected: the
           // default transform is REMOVED, not stacked on.)
-          const { pass, uv, float, vec4, Fn, vec2, fract, renderOutput } = await import('three/tsl');
+          const { pass, uv, float, vec4, Fn, vec2, fract, renderOutput, mix } = await import('three/tsl');
           const { PostProcessing: PostProcessingCtor } = await import('three/webgpu');
           const { bloom } = await import('three/examples/jsm/tsl/display/BloomNode.js');
+          const { ao } = await import('three/examples/jsm/tsl/display/GTAONode.js');
 
           const scenePass = pass( scene, camera );
+          let sceneWithAO: any = scenePass;
+
+          if (enableAO) {
+              const sceneDepth = scenePass.getTextureNode('depth');
+              const aoPass = ao( sceneDepth, null, camera );
+              aoPass.radius.value = aoRadius;
+              aoPass.thickness.value = 1.0;
+              aoPass.scale.value = 1.0;
+              aoPass.samples.value = 16;
+              const aoFloor = Math.max(0.1, 1.0 - aoIntensity);
+              const aoFactor = mix( float( aoFloor ), float( 1.0 ), aoPass.getTextureNode().r );
+              sceneWithAO = vec4( scenePass.rgb.mul( aoFactor ), scenePass.a );
+          }
 
           // Bloom: §5.4 (0.35, 0.4, 0.85) — levered for the p9 attribution A/Bs.
           // Phase 12 (sel=1 default): the bloom SOURCE is the scene itself via
@@ -616,9 +633,9 @@ async function init() {
           if (selectiveBloom && bloomCamera) {
               const skylessPass = pass( scene, bloomCamera );
               const lampBloom = bloom(skylessPass, bloomStrength, bloomRadius, bloomThreshold);
-              bloomInput = scenePass.add( vec4( lampBloom.rgb, 0 ) );
+              bloomInput = sceneWithAO.add( vec4( lampBloom.rgb, 0 ) );
           } else {
-              bloomInput = bloom(scenePass, bloomStrength, bloomRadius, bloomThreshold);
+              bloomInput = bloom(sceneWithAO, bloomStrength, bloomRadius, bloomThreshold);
           }
 
           const random = Fn(([p]: [any]) => {
@@ -675,10 +692,55 @@ async function init() {
           const { UnrealBloomPass } = await import('three/examples/jsm/postprocessing/UnrealBloomPass.js');
           const { ShaderPass } = await import('three/examples/jsm/postprocessing/ShaderPass.js');
           const { OutputPass } = await import('three/examples/jsm/postprocessing/OutputPass.js');
+          const { GTAOPass } = await import('three/examples/jsm/postprocessing/GTAOPass.js');
 
-          composer = new EffectComposerCtor(renderer as THREE.WebGLRenderer);
+          const depthTexture = new THREE.DepthTexture(window.innerWidth, window.innerHeight);
+          depthTexture.format = THREE.DepthStencilFormat;
+          depthTexture.type = THREE.UnsignedInt248Type;
+          const baseRenderTarget = new THREE.WebGLRenderTarget(
+              window.innerWidth,
+              window.innerHeight,
+              {
+                  type: THREE.HalfFloatType,
+                  depthTexture: depthTexture,
+              }
+          );
+
+          composer = new EffectComposerCtor(renderer as THREE.WebGLRenderer, baseRenderTarget);
           const renderPass = new RenderPass(scene, camera);
           composer.addPass(renderPass);
+
+          if (enableAO) {
+              const gtaoPass = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+              gtaoPass.output = GTAOPass.OUTPUT.Default;
+              gtaoPass.blendIntensity = aoIntensity;
+              // Screen-space depth normal reconstruction (NORMAL_VECTOR_TYPE: 0, _renderGBuffer: false)
+              // Prevents T-posing character mesh and skips expensive override render pass entirely
+              gtaoPass.setGBuffer(depthTexture, null);
+              gtaoPass.updateGtaoMaterial({
+                  radius: aoRadius,
+                  distanceExponent: 1.5,
+                  thickness: 1.0,
+                  scale: 1.0,
+                  samples: 16,
+                  screenSpaceRadius: false,
+              });
+              gtaoPass.updatePdMaterial({
+                  radius: 6,
+                  samples: 16,
+                  rings: 2,
+                  radiusExponent: 2,
+              });
+              const origGtaoRender = gtaoPass.render.bind(gtaoPass);
+              gtaoPass.render = (r, writeBuffer, readBuffer, deltaTime, maskActive) => {
+                  if (readBuffer.depthTexture) {
+                      gtaoPass.gtaoMaterial.uniforms.tDepth.value = readBuffer.depthTexture;
+                      gtaoPass.pdMaterial.uniforms.tDepth.value = readBuffer.depthTexture;
+                  }
+                  origGtaoRender(r, writeBuffer, readBuffer, deltaTime, maskActive);
+              };
+              composer.addPass(gtaoPass);
+          }
 
           // Tone map + encode BEFORE the grade (display-referred grade, J8)
           const outputPass = new OutputPass();
@@ -756,6 +818,9 @@ async function init() {
     // Phase 12: keep the bloom proxy camera's projection in lockstep.
     syncBloomCamera(camera);
     renderer.setSize(window.innerWidth, window.innerHeight);
+    if (composer) {
+      composer.setSize(window.innerWidth, window.innerHeight);
+    }
   });
 
   const shot = urlParams.get('shot');
@@ -1812,6 +1877,26 @@ async function init() {
       character.updateCamera(0.016);
       sottrHUD.setObjective('ROCK SHELTER', 'Spring-arm geometry collision avoidance near cliff walls');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'gtao_contact_grounding') {
+      // Phase 2A GTAO Contact Grounding: Three-quarters medium close-up framing Michelle's boots on soil & foliage
+      const posX = 42, posZ = 18;
+      character.teleport(posX, posZ, 0.45);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.35, groundY + 0.95, posZ + 2.2);
+      camera.lookAt(posX + 0.1, groundY + 0.55, posZ);
+      sottrHUD.setObjective('CONTACT GROUNDING', 'Ground Truth Contact Ambient Occlusion beneath boots and foliage');
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'gtao_stone_crevices') {
+      // Phase 2A GTAO Architectural Crevice Occlusion: Excavated Incan ashlar ruin coursed masonry joints & ground contact
+      const posX = 150, posZ = -304;
+      character.teleport(posX, posZ, Math.PI);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 2.8, groundY + 1.65, posZ + 4.2);
+      camera.lookAt(posX - 0.2, groundY + 1.4, posZ - 4.5);
+      sottrHUD.setObjective('MASONRY OCCLUSION', 'Contact ambient occlusion in Incan coursed ashlar wall joints and crevices');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1823,7 +1908,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
