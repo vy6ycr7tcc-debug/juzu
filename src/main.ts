@@ -30,6 +30,7 @@ import { createIncaRopeBridge } from './bridge.js';
 import { createHydraulicCistern } from './puzzles/hydraulics.js';
 import { createCraggyCliffWall, climbingSystem } from './climbing.js';
 import { createIncaTrapCorridor } from './puzzles/traps.js';
+import { createSacredRelicSystem } from './relics.js';
 import { WeatherSystem, type WeatherState } from './weather.js';
 
 // Setup for global hook
@@ -331,6 +332,9 @@ async function init() {
     origin: new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55),
     rotationY: 0,
   });
+  // Sacred Relic Examination & Inspection Mode (Shadow of the Tomb Raider North Star)
+  const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
+  const relicSystem = createSacredRelicSystem(scene, new THREE.Vector3(35, cryptFloorY, -58.5));
   // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
   const weather = new WeatherSystem(scene);
   const weatherParam = urlParams.get('weather') as WeatherState | null;
@@ -411,6 +415,7 @@ async function init() {
   character.instinctSystem.registerInteractable(hydraulicCistern.gateMesh, 'mechanism');
   character.instinctSystem.registerInteractable(cryptTrap.pressurePlate, 'hazard');
   character.instinctSystem.registerInteractable(cryptTrap.portcullisSlab, 'hazard');
+  character.instinctSystem.registerInteractable(relicSystem.relicGroup, 'relic');
 
   // Hide character during title screen so protagonist does not clip into title menu
   if (!urlParams.has('shot')) {
@@ -1509,6 +1514,26 @@ async function init() {
       // Medium upward angle framing Michelle immersed in the dense broadleaf trees and ferns
       camera.position.set(posX - 3.2, groundY + 1.25, posZ + 4.2);
       camera.lookAt(posX + 0.6, groundY + 2.85, posZ - 1.2);
+    } else if (shot === 'relic_altar') {
+      // Phase 12 Sacred Relic Discovery: Ancient Incan Altar & Inti Sun Effigy
+      const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
+      character.teleport(35.35, -57.1, 0);
+      character.disableCameraUpdate = true;
+      character.triggerArchaeologistInstinct();
+
+      // Cinematic OTS perspective inside sanctuary framing Michelle admiring the Inti Sun Effigy on the illuminated stone altar
+      camera.position.set(35.65, cryptFloorY + 1.48, -55.8);
+      camera.lookAt(35.05, cryptFloorY + 1.32, -58.5);
+    } else if (shot === 'relic_inspect') {
+      // Phase 12 Archaeological Relic Inspection Mode (3D Macro Artifact View)
+      const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
+      character.teleport(35.25, -57.4, 0);
+      character.disableCameraUpdate = true;
+      relicSystem.toggleInspection();
+
+      // Close macro inspection view focusing directly on the elevated Inti Sun Effigy with museum lighting
+      camera.position.set(35.0, cryptFloorY + 1.88, -57.72);
+      camera.lookAt(35.0, cryptFloorY + 1.88, -58.5);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1520,7 +1545,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.45;
-    } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
+    } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect') {
       t = 0.35;
     } else if (shot === 'wetness_sheen') {
       t = 0.25;
@@ -1546,6 +1571,11 @@ async function init() {
         const posX = 45, posZ = 18;
         character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
         character.mesh.rotation.y = shot === 'foliage_parting' ? 0.25 : 0.4;
+      }
+      if (shot === 'relic_altar' || shot === 'relic_inspect') {
+        const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
+        character.mesh.position.set(35.35, cryptFloorY, -57.1);
+        character.mesh.rotation.y = 0;
       }
       if (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
         const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
@@ -1598,6 +1628,7 @@ async function init() {
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
       cryptTrap.update(dt, character.mesh.position);
+      relicSystem.update(dt, character.mesh.position);
     }
 
     if (shot === 'cliff_climb' || shot === 'axe_strike') {
@@ -1779,8 +1810,13 @@ async function init() {
         river.update(time);
         hydraulicCistern.update(dt, character.mesh.position);
         cryptTrap.update(dt, character.mesh.position);
-        if (input.consumeJustPressed('KeyE') && hydraulicCistern.canInteract(character.mesh.position)) {
-          hydraulicCistern.interact();
+        relicSystem.update(dt, character.mesh.position);
+        if (input.consumeJustPressed('KeyE')) {
+          if (hydraulicCistern.canInteract(character.mesh.position)) {
+            hydraulicCistern.interact();
+          } else if (relicSystem.canInteract(character.mesh.position)) {
+            relicSystem.toggleInspection(camera);
+          }
         }
         decor.update(camera, undefined, character.mesh.position);
         weather.update(dt, camera, character.mesh.position);
