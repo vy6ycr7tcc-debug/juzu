@@ -19,9 +19,9 @@ export interface WaterSpec {
 // createWaterSurface, never raw planes": §7.5 river example + the normative
 // §2.4 jungle dark water and §2.5 Paititi channel hexes.
 export const WATER_PRESETS: Record<'river' | 'junglePool' | 'paititiChannel', WaterSpec> = {
-  river:          { color: 0x163834, roughness: 0.16, opacity: 0.88, flowSpeed: 0.45, flowDir: [0, 1], foamAtEdges: true },
-  junglePool:     { color: 0x14261E, roughness: 0.12, opacity: 0.90, flowSpeed: 0.15, flowDir: [0, 1], foamAtEdges: true },
-  paititiChannel: { color: 0x224855, roughness: 0.08, opacity: 0.85, flowSpeed: 0.35, flowDir: [1, 0], foamAtEdges: false },
+  river:          { color: 0x1A4240, roughness: 0.10, opacity: 0.68, flowSpeed: 0.45, flowDir: [0, 1], foamAtEdges: true },
+  junglePool:     { color: 0x14261E, roughness: 0.10, opacity: 0.78, flowSpeed: 0.15, flowDir: [0, 1], foamAtEdges: true },
+  paititiChannel: { color: 0x224855, roughness: 0.08, opacity: 0.72, flowSpeed: 0.35, flowDir: [1, 0], foamAtEdges: false },
 };
 
 export interface WaterSurfaceOptions {
@@ -42,7 +42,7 @@ export interface WaterSurfaceOptions {
 // injection must produce the same image by construction).
 const DEPTH_CENTER = 6.0;   // m of water above the channel-centerline bed
 const PLANE_W = 120;        // covers measured max waterline half-width (~60 m)
-const ABSORB: [number, number, number] = [0.28, 0.10, 0.06]; // Beer-Lambert σ per meter (r,g,b)
+const ABSORB: [number, number, number] = [0.20, 0.08, 0.05]; // Beer-Lambert σ per meter (r,g,b) - allows natural underwater transmission
 const FOAM_NEAR = 0.08;      // depth (m) at which foam reaches full strength
 const FOAM_FAR = 0.75;       // depth (m) where the foam band ends
 const FADE_NEAR = 0.04;     // depth-alpha fade: transparent below this depth…
@@ -50,7 +50,7 @@ const FADE_FAR = 0.65;       // …opaque above it (kills floodplain spill visua
 const TILE_A: [number, number] = [12, 60];   // broad swell layer (~10 m × ~16 m tiles)
 const TILE_B: [number, number] = [18, 90];   // cross ripples & wake layer (~6.6 m × ~11 m tiles)
 const UV_SHEAR = 0.618;     // golden-ratio shear on layer B
-const NORMAL_STRENGTH = 0.50; // gentle, natural water wave slope (eliminates specular noise)
+const NORMAL_STRENGTH = 0.65; // crisp water surface wave slope with specular glints
 const CASCADE_DROP = 2.0;   // m drop per 4 m step that warrants a cascade sheet.
 const JUNGLE_WATER = 0x14261E; // §2.4 dark water (normative)
 const FOAM_COLOR = 0xd8e4dc;   // Soft Andean glacier froth tint (not clipped white)
@@ -470,13 +470,13 @@ async function buildWaterNodeMaterial(
     mat.metalness = 0.05;
     mat.transparent = true;
     mat.side = THREE.DoubleSide;
-    mat.envMapIntensity = 0.35; // same dark-water read as the WebGL2 path
-    // §6.3: transmission 0.6 is WebGPU HIGH only; LOW/MEDIUM ride the
+    mat.envMapIntensity = 0.65; // balanced sky and ambient mountain reflection
+    // §6.3: transmission 0.75 is WebGPU HIGH only; LOW/MEDIUM ride the
     // opacity fallback exactly like the WebGL2 path.
     const highTier = caps.tier === 'HIGH';
     if (highTier) {
-      mat.transmission = 0.6;
-      mat.ior = 1.33;
+      mat.transmission = 0.75;
+      mat.ior = 1.333;
       mat.opacity = 1.0;
     } else {
       mat.opacity = spec.opacity;

@@ -166,6 +166,37 @@ function createBubbleTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+function createWaterRippleTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, 128, 128);
+    // Concentric soft water ripple rings
+    ctx.beginPath();
+    ctx.arc(64, 64, 58, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(230, 250, 245, 0.75)';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(64, 64, 42, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(190, 235, 230, 0.50)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(64, 64, 26, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(160, 220, 215, 0.30)';
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export class CharacterController {
   public mesh: THREE.Group;
   private camera: THREE.PerspectiveCamera;
@@ -298,6 +329,10 @@ export class CharacterController {
   public bubbleTimer: number = 0;
   public bubbleMat: THREE.SpriteMaterial | null = null;
   public swimStrokeTimer: number = 0;
+  public waterRipples: Array<{ mesh: THREE.Mesh; life: number; maxLife: number }> = [];
+  private rippleMat: THREE.MeshBasicMaterial | null = null;
+  private rippleGeo: THREE.PlaneGeometry | null = null;
+  public rippleTimer: number = 0;
 
   // Survival Pine Torch & Chiaroscuro Flame (Shadow of the Tomb Raider North Star)
   public isTorchEquipped: boolean = false;
@@ -338,6 +373,7 @@ export class CharacterController {
 
     // Protagonist root group — positioned in world coordinates
     this.mesh = new THREE.Group();
+    this.mesh.rotation.order = 'YXZ'; // Critical: Yaw (heading) evaluates before Pitch (chest tilt)
     scene.add(this.mesh);
 
     // Asynchronously load the authentic female archaeologist model and retargeted animations
@@ -410,26 +446,27 @@ export class CharacterController {
 
         if (hipsBone) {
           const axe = createClimbingAxe();
-          axe.position.set(16.0, -2.0, 4.0); // right hip loop in cm bone coordinates
-          axe.rotation.set(0.1, 0, -0.15);
-          axe.scale.setScalar(95.0); // 100x scale to counter 0.01 armature scale
+          axe.position.set(13.5, -6.0, 2.0); // hung vertically along right thigh holster
+          axe.rotation.set(Math.PI, Math.PI * 0.5, 0); // blade flush along thigh (Z-axis), shaft hanging vertically down
+          axe.scale.setScalar(80.0); // authentic compact technical climbing axe scale
           hipsBone.add(axe);
           this.hipAxe = axe;
         }
 
         if (spine2Bone) {
           // 2. Survival Recurve Bow across spine
+          // Slung diagonally over right shoulder down to left rib, parallel behind quiver
           const bow = createRecurveBow();
-          bow.position.set(0, 4.0, -12.0); // slung diagonally across upper back
-          bow.rotation.set(0.2, 0.1, 0.75); // diagonal sling angle
+          bow.position.set(4.0, 3.0, -12.5); // slung diagonally across upper back behind quiver
+          bow.rotation.set(-0.25, -0.10, -0.48); // diagonal sling angle parallel to quiver
           bow.scale.setScalar(92.0); // 100x scale
           spine2Bone.add(bow);
           this.spineBow = bow;
 
           // 3. Arrow Quiver on right shoulder back
           const quiver = createQuiver();
-          quiver.position.set(10.0, 10.0, -10.0);
-          quiver.rotation.set(-0.25, -0.15, -0.55);
+          quiver.position.set(8.5, 7.0, -9.5);
+          quiver.rotation.set(-0.25, -0.10, -0.55);
           quiver.scale.setScalar(88.0); // 100x scale
           spine2Bone.add(quiver);
         }
@@ -771,9 +808,9 @@ export class CharacterController {
       }
     }
 
-    if (this.state === MovementState.WALK && isSwimmableWater && surfaceY !== null && this.mesh.position.y < surfaceY + 0.1) {
+    if (this.state === MovementState.WALK && isSwimmableWater && surfaceY !== null && this.mesh.position.y < surfaceY - 0.2) {
       this.state = MovementState.SWIM;
-    } else if ((this.state === MovementState.SWIM || this.state === MovementState.DIVE) && (!isSwimmableWater || (surfaceY !== null && terrainData.y > surfaceY - 0.4))) {
+    } else if ((this.state === MovementState.SWIM || this.state === MovementState.DIVE) && (!isSwimmableWater || (surfaceY !== null && terrainData.y > surfaceY - 0.5))) {
       this.state = MovementState.WALK;
       this.swimPitch = 0;
       this.swimRoll = 0;
@@ -1207,7 +1244,14 @@ export class CharacterController {
 
       // Speed selection
       let targetSpeed: number;
-      if (this.isRolling) {
+      if (this.state === MovementState.SWIM) {
+        if (joystickActive) {
+          const t = THREE.MathUtils.clamp((this.input.joystickMagnitude - 0.35) / (0.95 - 0.35), 0, 1);
+          targetSpeed = 1.6 + 1.1 * t; // 1.6 m/s gentle surface swim to 2.7 m/s sprint swim
+        } else {
+          targetSpeed = isRunning ? 2.6 : 1.7;
+        }
+      } else if (this.isRolling) {
         targetSpeed = this.maxRunSpeed * 1.35;
       } else if (this.isCrouched) {
         targetSpeed = this.maxCrouchSpeed;
@@ -1260,20 +1304,50 @@ export class CharacterController {
 
     if (this.state === MovementState.SWIM) {
       this.oxygen = Math.min(1.0, this.oxygen + dt * 2.0); // Surface breathing recharge
-      const bob = Math.sin(this.time * 2.2) * 0.08;
-      this.mesh.position.y = surfaceY - 0.75 + bob;
-      this.mesh.position.z -= 1.2 * dt; // Gentle river current drift
+      const bob = Math.sin(this.time * 2.2) * 0.04;
+      const targetWaterY = surfaceY - 1.25 + bob;
+      this.mesh.position.y = THREE.MathUtils.lerp(this.mesh.position.y, targetWaterY, 8.0 * dt);
+
+      // Gentle river current drift when player is moving slowly or idle
+      if (this.speed < 0.4) {
+        this.mesh.position.z -= 0.35 * dt;
+      }
+
       if (this.mesh.position.y < groundH) {
         this.mesh.position.y = groundH;
       }
       this.isGrounded = false;
       this.velocityY = 0;
-      this.mesh.rotation.x = -0.75; // Natural forward chest pitch in surface swim
+
+      // Smooth pitch: lean forward slightly into water stroke when swimming, upright when treading
+      const targetPitch = this.speed > 0.2 ? -0.12 : 0.0;
+      this.mesh.rotation.x = THREE.MathUtils.lerp(this.mesh.rotation.x, targetPitch, 6.0 * dt);
+
+      // Water surface ripple ring emitter
+      this.rippleTimer += dt;
+      if (this.rippleTimer > (this.speed > 0.5 ? 0.35 : 0.75)) {
+        this.rippleTimer = 0;
+        if (!this.rippleMat || !this.rippleGeo) {
+          this.rippleMat = new THREE.MeshBasicMaterial({
+            map: createWaterRippleTexture(),
+            transparent: true,
+            opacity: 0.65,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
+          this.rippleGeo = new THREE.PlaneGeometry(1.3, 1.3);
+          this.rippleGeo.rotateX(-Math.PI / 2);
+        }
+        const ripple = new THREE.Mesh(this.rippleGeo, this.rippleMat.clone());
+        ripple.position.set(this.mesh.position.x, surfaceY + 0.02, this.mesh.position.z);
+        this.mesh.parent?.add(ripple);
+        this.waterRipples.push({ mesh: ripple, life: 0, maxLife: 1.8 });
+      }
 
       // Dive underwater input (KeyC)
       if (this.input.consumeJustPressed('KeyC')) {
         this.state = MovementState.DIVE;
-        this.velocityY = -2.4;
+        this.velocityY = -2.2;
       }
     } else if (this.state === MovementState.DIVE) {
       // 6-DOF Submerged Cenote Diving Physics (Shadow of the Tomb Raider North Star)
@@ -1284,25 +1358,35 @@ export class CharacterController {
       const camDir = new THREE.Vector3();
       this.camera.getWorldDirection(camDir);
 
-      let forwardInput = 0;
-      if (this.input.isDown('KeyW')) forwardInput += 1;
-      if (this.input.isDown('KeyS')) forwardInput -= 1;
+      let forwardInput = forward;
+      let strafeInput = right;
 
       let verticalInput = 0;
       if (this.input.isDown('Space')) verticalInput += 1; // Surface
       if (this.input.isDown('KeyC')) verticalInput -= 1; // Dive deeper
 
       // Positive neutral buoyancy (gentle upward drift when idle)
-      const buoyancy = 0.45;
-      this.velocityY = THREE.MathUtils.clamp(this.velocityY + (verticalInput * 3.5 + buoyancy) * dt, -4.0, 3.5);
+      const buoyancy = 0.35;
+      this.velocityY = THREE.MathUtils.clamp(this.velocityY + (verticalInput * 3.0 + buoyancy) * dt, -3.5, 3.0);
 
-      if (forwardInput !== 0) {
-        const swimSpeed = 3.2;
-        this.mesh.position.addScaledVector(camDir, forwardInput * swimSpeed * dt);
-        const targetPitch = Math.asin(THREE.MathUtils.clamp(camDir.y, -0.9, 0.9));
-        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, targetPitch, 8.0 * dt);
+      const isRunningSwim = this.input.isDown('ShiftLeft');
+      const swimSpeed = isRunningSwim ? 3.2 : 2.2;
+      const move3D = camDir.clone().multiplyScalar(forwardInput)
+        .add(camRight.clone().multiplyScalar(strafeInput));
+
+      if (move3D.lengthSq() > 0.001) {
+        move3D.normalize();
+        this.mesh.position.addScaledVector(move3D, swimSpeed * dt);
+        const targetYaw = Math.atan2(-move3D.x, -move3D.z);
+        let yawDiff = targetYaw - this.mesh.rotation.y;
+        while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        this.mesh.rotation.y += yawDiff * Math.min(1.0, 8.0 * dt);
+
+        const targetPitch = Math.asin(THREE.MathUtils.clamp(move3D.y, -0.85, 0.85));
+        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -targetPitch, 8.0 * dt);
       } else {
-        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -0.75, 4.0 * dt);
+        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -0.25, 4.0 * dt);
       }
 
       this.mesh.position.y += this.velocityY * dt;
@@ -1315,12 +1399,12 @@ export class CharacterController {
       }
 
       // Break surface and transition to SWIM
-      if (this.mesh.position.y >= surfaceY - 0.75 && (verticalInput > 0 || this.velocityY > 0.2)) {
+      if (this.mesh.position.y >= surfaceY - 1.25 && (verticalInput > 0 || this.velocityY > 0.2 || (forwardInput > 0 && camDir.y > 0.15))) {
         this.state = MovementState.SWIM;
-        this.mesh.position.y = surfaceY - 0.75;
+        this.mesh.position.y = surfaceY - 1.20;
         this.velocityY = 0;
-        this.swimPitch = 0;
-        this.mesh.rotation.x = -0.75;
+        this.swimPitch = -0.35;
+        this.mesh.rotation.x = -0.35;
       }
 
       // Air Bubble Particle Emitter
@@ -1527,6 +1611,21 @@ export class CharacterController {
         y: this.mesh.position.y + 0.9,
         z: this.mesh.position.z
       });
+    }
+
+    // Update water surface ripple particles
+    for (let i = this.waterRipples.length - 1; i >= 0; i--) {
+      const r = this.waterRipples[i];
+      r.life += dt;
+      const progress = r.life / r.maxLife;
+      if (progress >= 1.0) {
+        r.mesh.parent?.remove(r.mesh);
+        this.waterRipples.splice(i, 1);
+      } else {
+        const scale = 1.0 + progress * 2.2;
+        r.mesh.scale.set(scale, 1, scale);
+        (r.mesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - progress) * 0.65;
+      }
     }
 
     // High Sierra breath vapor particles
@@ -1885,7 +1984,10 @@ export class CharacterController {
         this.rightUpLegBone.rotation.set(0.9, 0, 0.2);
       }
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
-      this.swimStrokeTimer += dt * (this.speed > 0.5 ? 4.5 : 2.2);
+      // Natural aquatic locomotion driven by retargeted Mixamo clips
+      // Elevate chin and gaze forward across water surface
+      if (this.neckBone) this.neckBone.rotation.set(0.24, 0, 0);
+      if (this.headBone) this.headBone.rotation.set(0.16, 0, 0);
     } else if (this.state === MovementState.CLIMB) {
       // Shadow of the Tomb Raider North Star: Climbing Axe Wall Traversal Pose
       const cycle = this.climbCycle * Math.PI;
@@ -1966,7 +2068,7 @@ export class CharacterController {
     } else if (this.state === MovementState.SLIDE) {
       desiredAction = this.actions.crouch ?? this.actions.idle;
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
-      desiredAction = this.actions.walk ?? this.actions.idle;
+      desiredAction = this.speed > 0.2 ? (this.actions.walk ?? this.actions.idle) : this.actions.idle;
     } else if (this.isCrouched && this.actions.crouch) {
       desiredAction = this.actions.crouch;
     } else if (this.speed > 0.1) {
@@ -1987,7 +2089,10 @@ export class CharacterController {
 
     // Match animation cycle tempo to locomotion ground velocity
     if (this.activeAction === this.actions.walk && this.actions.walk) {
-      this.actions.walk.timeScale = Math.max(0.3, this.speed / this.maxWalkSpeed);
+      const walkTempo = (this.state === MovementState.SWIM || this.state === MovementState.DIVE)
+        ? 0.65
+        : (this.speed / this.maxWalkSpeed);
+      this.actions.walk.timeScale = Math.max(0.3, walkTempo);
     } else if (this.activeAction === this.actions.run && this.actions.run) {
       this.actions.run.timeScale = Math.max(0.6, this.speed / this.maxRunSpeed);
     }
@@ -1995,7 +2100,7 @@ export class CharacterController {
     if (this.state === MovementState.SLIDE) {
       this.mesh.rotation.x = -0.35;
     } else if (this.state === MovementState.SWIM) {
-      this.mesh.rotation.x = -0.75;
+      // Smooth pitch already maintained in SWIM state update
     } else if (this.state === MovementState.DIVE) {
       this.mesh.rotation.x = this.swimPitch;
     } else if (!this.isRolling) {
