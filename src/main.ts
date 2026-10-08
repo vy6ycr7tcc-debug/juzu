@@ -27,6 +27,7 @@ import { getGlobalTerrainHeight } from './terrain.js';
 import { ashlarTrimMaterial, ashlarWeathered, buildAshlarTrimNodeMaterial, mapGeometryToTrimBand, setCharacterDetailMapsEnabled, type TrimNodeMaterialResult } from './materials.js';
 import { getKTX2Loader } from './assets.js';
 import { createIncaRopeBridge } from './bridge.js';
+import { createHydraulicCistern } from './puzzles/hydraulics.js';
 
 // Setup for global hook
 declare global {
@@ -306,6 +307,10 @@ async function init() {
   createIncaRopeBridge(scene, physics, {
     start: new THREE.Vector3(0, 20, -50),
     end: new THREE.Vector3(0, 20, 50),
+  });
+  // Ancient Inca Hydraulic Cistern Puzzle & Water Mechanism (Shadow of the Tomb Raider North Star)
+  const hydraulicCistern = createHydraulicCistern(scene, physics, {
+    origin: new THREE.Vector3(45, -2.0, -30),
   });
   // §7.2: decor takes RenderCaps (the old callsite passed nothing — tier
   // counts/shadow rules never applied and the WebGPU wind branch was dead).
@@ -1322,15 +1327,22 @@ async function init() {
       character.mesh.rotation.y = 0.25;
       character.mesh.rotation.x = -0.75;
       character.state = MovementState.SWIM;
+    } else if (shot === 'hydraulic_sluice') {
+      // Phase 4 Ancient Inca Hydraulic Cistern Puzzle (Shadow of the Tomb Raider North Star):
+      // Rotary bronze sluice wheel, lifted carved stone sluice gate, torrent cascade, and buoyant raft bridge
+      const cisternOrigin = new THREE.Vector3(45, -2.0, -30);
+      character.mesh.position.set(cisternOrigin.x + 0.6, cisternOrigin.y + 0.1, cisternOrigin.z + 8.5);
+      character.mesh.rotation.y = Math.PI; // Facing north toward the cistern chasm & lifted sluice gate
       character.disableCameraUpdate = true;
-      camera.position.set(posX + 1.6, 0.35, posZ + 3.2);
-      camera.lookAt(posX, -1.6, posZ);
+      camera.position.set(cisternOrigin.x - 1.6, cisternOrigin.y + 1.85, cisternOrigin.z + 12.6);
+      camera.lookAt(cisternOrigin.x, cisternOrigin.y - 0.4, cisternOrigin.z);
+      hydraulicCistern.interact(); // Trigger water wheel & dynamic water rise
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))));
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
@@ -1348,9 +1360,14 @@ async function init() {
         character.mesh.rotation.y = 0.25;
         character.mesh.rotation.x = -0.75;
       }
+      if (shot === 'hydraulic_sluice') {
+        character.mesh.position.set(45 + 0.6, -1.9, -30 + 8.5);
+        character.mesh.rotation.y = Math.PI;
+      }
       physics.update(dt);
       character.update(dt);
       river.update(i * dt);
+      hydraulicCistern.update(dt, character.mesh.position);
     }
 
     // Sun/shadow rig follows the shot's viewpoint (§3.2)
@@ -1499,6 +1516,10 @@ async function init() {
         terrainManager.update(character.mesh.position);
         regionManager.update(character.mesh.position);
         river.update(time);
+        hydraulicCistern.update(dt, character.mesh.position);
+        if (input.consumeJustPressed('KeyE') && hydraulicCistern.canInteract(character.mesh.position)) {
+          hydraulicCistern.interact();
+        }
         decor.update(camera);
         getActiveLightRig()?.update(character.mesh.position, camera);
 
