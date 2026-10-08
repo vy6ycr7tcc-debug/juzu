@@ -304,7 +304,8 @@ async function init() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
 
-  const todParam = urlParams.get('tod');
+  const shotParam = urlParams.get('shot');
+  const todParam = urlParams.get('tod') || (shotParam === 'godrays_canopy_dawn' ? 'dawn' : null);
 
   setupEnvironment(scene, quality, renderer, todParam);
   const defaultFogColor = (scene.fog as THREE.FogExp2)?.color ? (scene.fog as THREE.FogExp2).color.clone() : new THREE.Color(0xA6BED2);
@@ -584,6 +585,9 @@ async function init() {
   const enableAO = urlParams.get('ao') !== '0';
   const aoRadius = postNum('aor', 0.45);
   const aoIntensity = postNum('aoi', 0.75);
+  const enableGodrays = urlParams.get('gr') !== '0';
+  const godraysDensity = postNum('grd', 0.82);
+  const godraysExposure = postNum('gre', 0.38);
 
   if (!skipPost) {
       selectiveBloom = selectiveBloomParam !== 0;
@@ -605,12 +609,13 @@ async function init() {
           const { PostProcessing: PostProcessingCtor } = await import('three/webgpu');
           const { bloom } = await import('three/examples/jsm/tsl/display/BloomNode.js');
           const { ao } = await import('three/examples/jsm/tsl/display/GTAONode.js');
+          const { godrays } = await import('three/examples/jsm/tsl/display/GodraysNode.js');
 
           const scenePass = pass( scene, camera );
+          const sceneDepth = scenePass.getTextureNode('depth');
           let sceneWithAO: any = scenePass;
 
           if (enableAO) {
-              const sceneDepth = scenePass.getTextureNode('depth');
               const aoPass = ao( sceneDepth, null, camera );
               aoPass.radius.value = aoRadius;
               aoPass.thickness.value = 1.0;
@@ -619,6 +624,17 @@ async function init() {
               const aoFloor = Math.max(0.1, 1.0 - aoIntensity);
               const aoFactor = mix( float( aoFloor ), float( 1.0 ), aoPass.getTextureNode().r );
               sceneWithAO = vec4( scenePass.rgb.mul( aoFactor ), scenePass.a );
+          }
+
+          let sceneWithGodrays: any = sceneWithAO;
+          const activeRig = getActiveLightRig();
+          if (enableGodrays && activeRig?.sun) {
+              const godraysPass = godrays( sceneDepth, camera, activeRig.sun );
+              godraysPass.raymarchSteps.value = 32;
+              godraysPass.density.value = godraysDensity;
+              godraysPass.maxDensity.value = godraysExposure;
+              godraysPass.distanceAttenuation.value = 1.6;
+              sceneWithGodrays = sceneWithAO.add( vec4( godraysPass.rgb.mul( 0.7 ), 0 ) );
           }
 
           // Bloom: §5.4 (0.35, 0.4, 0.85) — levered for the p9 attribution A/Bs.
@@ -633,9 +649,9 @@ async function init() {
           if (selectiveBloom && bloomCamera) {
               const skylessPass = pass( scene, bloomCamera );
               const lampBloom = bloom(skylessPass, bloomStrength, bloomRadius, bloomThreshold);
-              bloomInput = sceneWithAO.add( vec4( lampBloom.rgb, 0 ) );
+              bloomInput = sceneWithGodrays.add( vec4( lampBloom.rgb, 0 ) );
           } else {
-              bloomInput = bloom(sceneWithAO, bloomStrength, bloomRadius, bloomThreshold);
+              bloomInput = bloom(sceneWithGodrays, bloomStrength, bloomRadius, bloomThreshold);
           }
 
           const random = Fn(([p]: [any]) => {
@@ -733,13 +749,22 @@ async function init() {
               });
               const origGtaoRender = gtaoPass.render.bind(gtaoPass);
               gtaoPass.render = (r, writeBuffer, readBuffer, deltaTime, maskActive) => {
-                  if (readBuffer.depthTexture) {
-                      gtaoPass.gtaoMaterial.uniforms.tDepth.value = readBuffer.depthTexture;
-                      gtaoPass.pdMaterial.uniforms.tDepth.value = readBuffer.depthTexture;
-                  }
+                  gtaoPass.gtaoMaterial.uniforms.tDepth.value = depthTexture;
+                  gtaoPass.pdMaterial.uniforms.tDepth.value = depthTexture;
                   origGtaoRender(r, writeBuffer, readBuffer, deltaTime, maskActive);
               };
               composer.addPass(gtaoPass);
+          }
+
+          if (enableGodrays) {
+              const { GodraysPass } = await import('./shaders/GodraysShader.js');
+              const godraysPass = new GodraysPass(camera, depthTexture, window.innerWidth, window.innerHeight, {
+                  density: godraysDensity,
+                  exposure: godraysExposure,
+              });
+              const activeRig = getActiveLightRig();
+              if (activeRig?.sun) godraysPass.setSun(activeRig.sun);
+              composer.addPass(godraysPass);
           }
 
           // Tone map + encode BEFORE the grade (display-referred grade, J8)
@@ -1897,6 +1922,17 @@ async function init() {
       camera.lookAt(posX - 0.2, groundY + 1.4, posZ - 4.5);
       sottrHUD.setObjective('MASONRY OCCLUSION', 'Contact ambient occlusion in Incan coursed ashlar wall joints and crevices');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'godrays_canopy_dawn') {
+      // Phase 2B God Rays / Crepuscular Canopy Shafts: Golden dawn sun low on horizon filtering through mountain ridge & trees
+      const posX = 42, posZ = 18;
+      character.teleport(posX, posZ, 0.45);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      // Camera looking East toward dawn sun with sun positioned directly behind upper canopy foliage
+      camera.position.set(posX - 4.5, groundY + 2.0, posZ + 3.0);
+      camera.lookAt(posX + 45.0, groundY + 7.5, posZ - 4.0);
+      sottrHUD.setObjective('GOLDEN CANOPY', 'Volumetric crepuscular light shafts streaming through the Andean mountain ridge');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1908,7 +1944,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2151,6 +2187,13 @@ async function init() {
       const playerPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 645), 645);
       camera.position.set(118.5, playerPos.y + 1.45, 642.5);
       camera.lookAt(vargasPos.x, vargasPos.y + 1.35, vargasPos.z);
+    }
+    if (shot === 'godrays_canopy_dawn') {
+      const posX = 42, posZ = 18;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 4.5, groundY + 2.0, posZ + 3.0);
+      camera.lookAt(posX + 45.0, groundY + 7.5, posZ - 4.0);
+      sottrHUD.update(camera, character.mesh.position);
     }
 
     if (shot === 'cliff_climb' || shot === 'axe_strike') {
