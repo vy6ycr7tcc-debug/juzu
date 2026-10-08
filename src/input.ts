@@ -45,13 +45,31 @@ export class InputManager {
       // Suppress browser context menu so Right Click can be used for survival bow aiming
       e.preventDefault();
     });
+    let ignorePointerLockSpike = 0;
+    document.addEventListener('pointerlockchange', () => {
+      // Browsers often fire a large synthetic mousemove delta on the initial lock frame.
+      // Ignore the first 2 move events following a lock state change to prevent camera snap-glitches.
+      ignorePointerLockSpike = 2;
+      this.cameraDelta.x = 0;
+      this.cameraDelta.y = 0;
+    });
+
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement) {
-        this.cameraDelta.x += e.movementX;
-        this.cameraDelta.y += e.movementY;
+        if (ignorePointerLockSpike > 0) {
+          ignorePointerLockSpike--;
+          return;
+        }
+        // Clamp raw delta per frame to reject browser hitch spikes
+        const mx = Math.max(-120, Math.min(120, e.movementX));
+        const my = Math.max(-120, Math.min(120, e.movementY));
+        this.cameraDelta.x += mx;
+        this.cameraDelta.y += my;
       } else if (this.isDragging) {
-        this.cameraDelta.x += e.clientX - this.previousMousePosition.x;
-        this.cameraDelta.y += e.clientY - this.previousMousePosition.y;
+        const dx = Math.max(-120, Math.min(120, e.clientX - this.previousMousePosition.x));
+        const dy = Math.max(-120, Math.min(120, e.clientY - this.previousMousePosition.y));
+        this.cameraDelta.x += dx;
+        this.cameraDelta.y += dy;
       }
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     });

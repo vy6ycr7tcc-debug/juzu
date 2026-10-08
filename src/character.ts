@@ -225,14 +225,23 @@ export class CharacterController {
   private maxRunSpeed: number = 5.6;
   private maxCrouchSpeed: number = 1.5;
   private acceleration: number = 24.0;
+  private airAcceleration: number = 9.5;
   private deceleration: number = 28.0;
+  private brakingDeceleration: number = 44.0;
   private rotationSpeed: number = 16.0;
+  private bankAngle: number = 0;
 
-  // Vertical dynamics & jumping
+  // Vertical dynamics, jumping & coyote time
   public velocityY: number = 0;
   public isGrounded: boolean = true;
   private gravity: number = 18.0;
   private jumpForce: number = 6.4;
+  public coyoteTimer: number = 0;
+  public readonly coyoteDuration: number = 0.12;
+  public jumpBufferTimer: number = 0;
+  public readonly jumpBufferDuration: number = 0.14;
+  public landingDip: number = 0;
+  public landingRecoveryTimer: number = 0;
 
   // Dodge roll & crouch mechanics
   public isRolling: boolean = false;
@@ -842,16 +851,16 @@ export class CharacterController {
     if (typeof this.input.getCameraDelta === 'function') {
       const camDelta = this.input.getCameraDelta();
       if (camDelta.x !== 0 || camDelta.y !== 0) {
-        const mouseSensitivity = this.isAiming ? 0.0012 : 0.0022;
+        const mouseSensitivity = this.isAiming ? 0.0013 : 0.0022;
         this.targetTheta -= camDelta.x * mouseSensitivity;
         // Invert-pitch fix: moving mouse down (camDelta.y > 0) increases phi (tilts camera down toward character/ground)
         this.targetPhi += camDelta.y * mouseSensitivity;
-        this.targetPhi = Math.max(0.10, Math.min(Math.PI * 0.52, this.targetPhi));
+        this.targetPhi = Math.max(0.08, Math.min(Math.PI * 0.48, this.targetPhi));
       }
     }
-    const smoothCamSpeed = Math.min(1.0, 32.0 * dt);
-    this.theta += (this.targetTheta - this.theta) * smoothCamSpeed;
-    this.phi += (this.targetPhi - this.phi) * smoothCamSpeed;
+    const smoothAlpha = 1.0 - Math.exp(-28.0 * dt);
+    this.theta += (this.targetTheta - this.theta) * smoothAlpha;
+    this.phi += (this.targetPhi - this.phi) * smoothAlpha;
 
     // 2. Archaeologist survival instinct timer
     if (this.isInstinctActive) {
@@ -1185,9 +1194,29 @@ export class CharacterController {
       }
     }
 
-    // Jump Input & Ledge Grab & Wall Scramble
-    const wantsJump = this.input.consumeJustPressed('Space');
-    if (this.isGrounded && wantsJump && !this.isRolling && (this.state === MovementState.WALK || this.state === MovementState.CROUCH)) {
+    // Jump Buffer & Coyote Time update
+    if (this.isGrounded) {
+      this.coyoteTimer = this.coyoteDuration;
+    } else {
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    }
+
+    if (this.input.consumeJustPressed('Space')) {
+      this.jumpBufferTimer = this.jumpBufferDuration;
+    } else {
+      this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+    }
+
+    // Can jump if grounded or within coyote time window
+    const canJump = (this.isGrounded || this.coyoteTimer > 0) &&
+      this.jumpBufferTimer > 0 &&
+      !this.isRolling &&
+      (this.state === MovementState.WALK || this.state === MovementState.CROUCH);
+
+    if (canJump) {
+      this.jumpBufferTimer = 0;
+      this.coyoteTimer = 0;
+
       const ledge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined, 2.45);
       if (ledge && this.ledgeCooldown <= 0) {
         const deltaY = ledge.ledgeY - this.mesh.position.y;
@@ -1240,13 +1269,24 @@ export class CharacterController {
       moveDir.normalize();
       this.facingDir.copy(moveDir);
 
-      // Snappy turning: rotate mesh directly towards move direction (facing direction matches move vector)
+      // Snappy turning: rotate mesh directly towards move direction with speed-dependent angular lerp
       const targetAngle = Math.atan2(-moveDir.x, -moveDir.z);
       let angleDiff = targetAngle - this.mesh.rotation.y;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-      this.mesh.rotation.y += angleDiff * Math.min(1.0, this.rotationSpeed * dt);
+      // Agile turns when walking, athletic momentum arc when sprinting
+      const turnAgility = this.speed > this.maxWalkSpeed ? 14.0 : 18.0;
+      this.mesh.rotation.y += angleDiff * Math.min(1.0, turnAgility * dt);
+
+      // Skid momentum bleed on sharp turnaround pivots (> 120°)
+      if (Math.abs(angleDiff) > 2.1 && this.speed > this.maxWalkSpeed && this.isGrounded) {
+        this.speed = Math.max(this.maxWalkSpeed * 0.8, this.speed - this.brakingDeceleration * dt * 0.6);
+      }
+
+      // Athletic body banking lean into turns
+      const targetBank = THREE.MathUtils.clamp(-angleDiff * (this.speed / this.maxRunSpeed) * 0.16, -0.15, 0.15);
+      this.bankAngle = THREE.MathUtils.lerp(this.bankAngle, targetBank, Math.min(1.0, 10.0 * dt));
 
       // Speed selection
       let targetSpeed: number;
@@ -1268,13 +1308,21 @@ export class CharacterController {
         targetSpeed = isRunning ? this.maxRunSpeed : this.maxWalkSpeed;
       }
 
-      this.speed = Math.min(targetSpeed, this.speed + this.acceleration * dt);
+      // Landing recovery speed dampening
+      if (this.landingRecoveryTimer > 0) {
+        targetSpeed = Math.min(targetSpeed, this.maxWalkSpeed * 0.85);
+        this.landingRecoveryTimer = Math.max(0, this.landingRecoveryTimer - dt);
+      }
+
+      const currentAccel = this.isGrounded ? this.acceleration : this.airAcceleration;
+      this.speed = Math.min(targetSpeed, this.speed + currentAccel * dt);
     } else {
-      // Natural deceleration along travel direction: eliminates freezing while running in place
+      // Natural deceleration along travel direction with ground friction
       this.speed = Math.max(0, this.speed - this.deceleration * dt);
       if (this.speed < 0.05) {
         this.speed = 0;
       }
+      this.bankAngle = THREE.MathUtils.lerp(this.bankAngle, 0, Math.min(1.0, 12.0 * dt));
     }
 
     if (this.speed > 0) {
@@ -1544,13 +1592,29 @@ export class CharacterController {
     } else {
       // Grounded vs Airborne physics
       if (!this.isGrounded) {
-        this.velocityY -= this.gravity * dt;
+        // Asymmetric gravity: snappy athletic fall (1.38x), variable jump height on early release (1.55x)
+        const isHoldingJump = this.input.isDown('Space');
+        let effectiveGravity = this.gravity;
+        if (this.velocityY > 0) {
+          effectiveGravity = isHoldingJump ? this.gravity : this.gravity * 1.55;
+        } else {
+          effectiveGravity = this.gravity * 1.38;
+        }
+        this.velocityY -= effectiveGravity * dt;
+        this.velocityY = Math.max(-24.0, this.velocityY); // Clamped terminal velocity
         this.mesh.position.y += this.velocityY * dt;
 
         if (this.mesh.position.y <= groundH) {
+          const fallImpactSpeed = Math.abs(this.velocityY);
           this.mesh.position.y = groundH;
           this.velocityY = 0;
           this.isGrounded = true;
+
+          // Physical landing weight & camera compression
+          if (fallImpactSpeed > 5.5) {
+            this.landingRecoveryTimer = 0.16;
+            this.landingDip = Math.min(0.20, (fallImpactSpeed / 20.0) * 0.20);
+          }
         } else if (this.velocityY <= 3.5 && this.ledgeCooldown <= 0) {
           // Mid-air craggy cliff climb grab check (strike axes into rock)
           _climbDir.set(-Math.sin(this.mesh.rotation.y), 0, -Math.cos(this.mesh.rotation.y)).normalize();
@@ -1579,26 +1643,26 @@ export class CharacterController {
           }
         }
       } else {
-        // Step-up / step-down tolerance & ground smoothing
+        // Step-up / step-down tolerance, downhill slope snapping & drop detection
         const diff = groundH - this.mesh.position.y;
-        if (diff > -1.2 && diff < 0.6) {
-          if (Math.abs(diff) < 0.35) {
-            this.mesh.position.y += diff * Math.min(1.0, 26.0 * dt);
+        if (diff < 0 && diff >= -0.48) {
+          // Downhill slope snapping: firmly glue feet to terrain, eliminating downhill bounce/micro-hops
+          this.mesh.position.y = groundH;
+        } else if (diff >= 0 && diff <= 0.40) {
+          // Step-up tolerance for steps, stairs, rocks, terraces
+          if (diff < 0.20) {
+            this.mesh.position.y = groundH;
           } else {
-            this.mesh.position.y = groundH;
+            this.mesh.position.y += diff * Math.min(1.0, 30.0 * dt);
           }
-          // Strict guarantee: feet NEVER sink under soil
-          if (this.mesh.position.y < groundH) {
-            this.mesh.position.y = groundH;
-          }
-        } else if (diff <= -1.2) {
-          // Walking off an edge or drop
+        } else if (diff < -0.48) {
+          // True drop-off / cliff edge: begin falling
           this.isGrounded = false;
           this.velocityY = 0;
-        } else if (diff >= 0.6 && this.speed > 1.6 && this.ledgeCooldown <= 0) {
-          // Running against a low ledge: auto-mantle
+        } else if (diff > 0.40 && this.speed > 1.6 && this.ledgeCooldown <= 0) {
+          // Running against a low ledge / stone terrace: auto-mantle
           const runLedge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
-          if (runLedge && (runLedge.ledgeY - this.mesh.position.y) <= 1.35) {
+          if (runLedge && (runLedge.ledgeY - this.mesh.position.y) <= 1.45) {
             this.ledgeInfo = runLedge;
             this.state = MovementState.MANTLE;
             this.mantleTimer = 0;
@@ -1606,6 +1670,10 @@ export class CharacterController {
             this.updateAnimationAndCamera(dt);
             return;
           }
+        }
+        // Strict guarantee: feet NEVER sink under soil
+        if (this.mesh.position.y < groundH) {
+          this.mesh.position.y = groundH;
         }
       }
     }
@@ -2111,6 +2179,7 @@ export class CharacterController {
       this.mesh.rotation.x = this.swimPitch;
     } else if (!this.isRolling) {
       this.mesh.rotation.x = 0;
+      this.mesh.rotation.z = this.bankAngle;
     }
 
     window.__playerDebug = {
@@ -2150,6 +2219,12 @@ export class CharacterController {
     // Lower-third cinematic framing: targetHeight at 1.18m (torso) gives 70% upper screen to vistas
     const targetHeight = this.isAiming ? 1.42 : 1.18;
     this.target.copy(this.mesh.position).add(new THREE.Vector3(0, targetHeight, 0)).add(shoulderOffset);
+
+    // Physical landing impact camera compression
+    if (this.landingDip > 0.001) {
+      this.target.y -= this.landingDip;
+      this.landingDip = THREE.MathUtils.lerp(this.landingDip, 0, Math.min(1.0, 14.0 * dt));
+    }
 
     // Dynamic Velocity FoV Punch & Tactical Aim Zoom (Shadow of the Tomb Raider North Star)
     // 66° base FoV opens expansive peripheral vision across Andean valleys and mountain peaks
