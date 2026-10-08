@@ -509,7 +509,7 @@ async function init() {
   const bloomStrength = postNum('bs', 0.35);
   const bloomRadius = postNum('br', 0.4);
   const vignetteStrength = postNum('vs', 0.25);
-  const grainAmount = postNum('gs', 0.035);
+  const grainAmount = postNum('gs', 0.012);
   const selectiveBloomParam = postNum('sel', 1);
 
   if (!skipPost) {
@@ -562,9 +562,10 @@ async function init() {
              const uvNode = uv();
              const texNode = convertToTexture(inputNode);
 
-             // Chromatic Aberration — channel-resampled at the source texture
-             // (HDR; a pure spatial resample, ±0.0015 uv)
-             const offset = vec2(0.0015, 0.0);
+             // Subtle radial chromatic aberration (natural lens barrel falloff: zero at center)
+             const dir = uvNode.sub(0.5);
+             const distSq = dir.dot(dir);
+             const offset = dir.mul(distSq.mul(0.001));
              const r = texNode.sample(uvNode.add(offset)).r;
              const g = texNode.sample(uvNode).g;
              const b = texNode.sample(uvNode.sub(offset)).b;

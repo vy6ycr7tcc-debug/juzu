@@ -46,7 +46,7 @@ function getNoiseMap(): THREE.DataTexture {
 
 function getNormalMap(): THREE.DataTexture {
     if (!textureCache.normal) {
-        textureCache.normal = createNormalTexture(256, 10, 5.0);
+        textureCache.normal = createNormalTexture(256, 10, 1.5);
     }
     return textureCache.normal;
 }
@@ -122,7 +122,7 @@ export function ashlarTrimMaterial(): THREE.MeshStandardMaterial {
     aoMapIntensity: 0.8,        // §4.1 range 0.6–1.0
     roughness: 1.0,
     metalness: 1.0,
-    envMapIntensity: 1.0,
+    envMapIntensity: 0.4,
   });
 }
 
@@ -168,7 +168,7 @@ export async function buildAshlarTrimNodeMaterial(
     const heightScaleNode = float(opts.heightScale ?? 0.03);
 
     const material = new WEBGPU.MeshStandardNodeMaterial();
-    material.envMapIntensity = 1.0;
+    material.envMapIntensity = 0.4;
 
     // Band UV is geometry-side: uv.x already lands inside the band.
     const uv0 = uv();
@@ -270,7 +270,7 @@ export function ashlarLight(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
 }
 
@@ -283,7 +283,7 @@ export function ashlarWeathered(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
 }
 
@@ -292,10 +292,10 @@ export function granite(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
         color: 0x6E6A63,
         roughness: 0.85,
-        metalness: 0.05,
+        metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
 }
 
@@ -308,7 +308,7 @@ export function limestoneSwallowed(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
 }
 
@@ -320,7 +320,7 @@ export function plazaWorn(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
 }
 
@@ -351,7 +351,7 @@ export function humusEarth(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -363,7 +363,7 @@ export function mossPatch(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -375,7 +375,7 @@ export function lichenPatch(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -390,7 +390,7 @@ export function broadleafCard(hex: number = 0xffffff): THREE.MeshStandardMateria
         side: THREE.DoubleSide,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -401,7 +401,7 @@ export function orchidAccent(): THREE.MeshStandardMaterial {
         roughness: 0.6,
         metalness: 0.0,
         side: THREE.DoubleSide,
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -413,7 +413,7 @@ export function terracotta(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -478,7 +478,7 @@ export function woodAged(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -491,7 +491,7 @@ export function treeBark(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -504,7 +504,7 @@ export function woodWet(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.5,
     });
 }
 
@@ -516,7 +516,7 @@ export function thatchIchu(): THREE.MeshStandardMaterial {
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -527,7 +527,7 @@ export function fabricWorn(hex: number): THREE.MeshStandardMaterial {
         roughness: 0.95,
         metalness: 0.0,
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -538,10 +538,10 @@ export function leatherDark(): THREE.MeshStandardMaterial {
         color: 0xFFFFFF,
         map: getImageTexture(ASSET_PATHS.character.leather, { repeatX: 2, repeatY: 2 }),
         roughness: 0.75,
-        metalness: 0.05,
+        metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
 }
 
@@ -657,7 +657,7 @@ export function skinNaira(): THREE.MeshPhysicalMaterial {
         sheenRoughness: 0.5,
         sheenColor: 0xFFD9B0,     // warm peach-fuzz — restrained, §2.1 accent rules
         clearcoat: 0.05,          // sweat sheen (was 0.1 alongside transmission)
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
     if (characterMapsEnabled) {
         mat.normalMap = getSkinDetail().normal;
@@ -684,7 +684,7 @@ export function clothField(): THREE.MeshPhysicalMaterial {
         map: getImageTexture(ASSET_PATHS.character.fabric, { repeatX: 3, repeatY: 3 }),
         roughness: 1.08,          // × weave map (0.80–0.92, clamped ≤1.0)
         metalness: 0.0,
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
     if (characterMapsEnabled) {
         mat.normalMap = getClothDetail().normal;
@@ -703,7 +703,7 @@ export function clothFieldDark(): THREE.MeshPhysicalMaterial {
         map: getImageTexture(ASSET_PATHS.character.canvas, { repeatX: 3, repeatY: 3 }),
         roughness: 1.0,           // muddiest cloth: map × 1.0 clamps at 1.0 in dips
         metalness: 0.0,
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
     if (characterMapsEnabled) {
         mat.normalMap = getClothDetail().normal;
@@ -721,10 +721,10 @@ export function leatherBoot(): THREE.MeshStandardMaterial {
         color: 0x888888,
         map: getImageTexture(ASSET_PATHS.character.leather, { repeatX: 2, repeatY: 2 }),
         roughness: 0.85,          // scuffed boot leather, duller than harness
-        metalness: 0.03,
+        metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.35,
     });
 }
 
@@ -733,10 +733,10 @@ export function hairDark(): THREE.MeshPhysicalMaterial {
     const mat = new THREE.MeshPhysicalMaterial({
         color: 0x0A0A0A,
         roughness: 1.0,           // multiplied by the strand streak map (0.35–0.65)
-        metalness: 0.1,
+        metalness: 0.0,
         clearcoat: 0.25,
         roughnessMap: getHairDetail(),
-        envMapIntensity: 1.0,
+        envMapIntensity: 0.4,
     });
     mat.anisotropy = 0.5;
     // Braid tube UVs run the strand direction along V; texture streaks run
