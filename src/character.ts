@@ -7,6 +7,7 @@ import { getGlobalTerrainHeight } from './terrain.js';
 import { hairDark, leatherDark } from './materials.js';
 import { createMistTexture } from './textures.js';
 import { createClimbingAxe, createRecurveBow, createQuiver } from './equipment.js';
+import { waterDepthAt, waterSurfaceY } from './river.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
 // gates G3/G4 read live locomotion state instead of screenshot guessing.
@@ -20,6 +21,7 @@ declare global {
       x: number;
       z: number;
       isGrounded?: boolean;
+      oxygen?: number;
     };
   }
 }
@@ -32,6 +34,7 @@ export enum MovementState {
   MANTLE = 'MANTLE',
   WALL_SCRAMBLE = 'WALL_SCRAMBLE',
   SWIM = 'SWIM',
+  DIVE = 'DIVE',
   SLIDE = 'SLIDE',
   ROPE_SWING = 'ROPE_SWING',
   CROUCH = 'CROUCH',
@@ -103,6 +106,39 @@ function createMudSplatterTexture(): THREE.CanvasTexture {
     grad.addColorStop(1, 'rgba(70, 45, 25, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 32, 32);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createBubbleTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, 64, 64);
+    // Outer glass bubble rim
+    ctx.beginPath();
+    ctx.arc(32, 32, 28, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(180, 240, 255, 0.85)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Subtle cyan interior fill
+    const grad = ctx.createRadialGradient(32, 32, 10, 32, 32, 28);
+    grad.addColorStop(0, 'rgba(120, 220, 255, 0.05)');
+    grad.addColorStop(0.8, 'rgba(160, 235, 255, 0.25)');
+    grad.addColorStop(1, 'rgba(210, 250, 255, 0.6)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Bright specular glint
+    ctx.beginPath();
+    ctx.arc(22, 22, 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.fill();
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -221,6 +257,15 @@ export class CharacterController {
   private waterDripParticles: THREE.Sprite[] = [];
   private waterDripAccum = 0;
   private waterDripMat: THREE.SpriteMaterial | null = null;
+
+  // 6-DOF Underwater Cenote Diving (Shadow of the Tomb Raider North Star)
+  public oxygen: number = 1.0; // 1.0 (100% full) to 0.0 (empty)
+  public swimPitch: number = 0;
+  public swimRoll: number = 0;
+  public bubbleParticles: THREE.Sprite[] = [];
+  public bubbleTimer: number = 0;
+  public bubbleMat: THREE.SpriteMaterial | null = null;
+  public swimStrokeTimer: number = 0;
 
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
@@ -499,18 +544,24 @@ export class CharacterController {
     return null;
   }
 
-  private detectStateTransitions(nextX: number, _nextZ: number, terrainData: { y: number, normal: THREE.Vector3 }) {
-    // Swimming only applies when down in river water surface level (< 0.5m)
-    const isRiver = this.mesh.position.y < 0.5 && terrainData.y < -3.0 && Math.abs(nextX) < 15;
+  private detectStateTransitions(nextX: number, nextZ: number, terrainData: { y: number, normal: THREE.Vector3 }) {
+    // Dynamic aquatic channel solve from river.ts
+    const waterDepth = waterDepthAt(nextX, nextZ);
+    const surfaceY = waterSurfaceY(nextX, nextZ);
+    const isSwimmableWater = waterDepth > 1.2 && surfaceY !== null;
 
     if (this.state === MovementState.WALK && this.mesh.position.y > 10 && terrainData.normal.y < 0.1 && this.input.isDown('KeyW')) {
       this.state = MovementState.CLIMB;
     }
 
-    if (this.state === MovementState.WALK && isRiver) {
+    if (this.state === MovementState.WALK && isSwimmableWater && surfaceY !== null && this.mesh.position.y < surfaceY + 0.1) {
       this.state = MovementState.SWIM;
-    } else if (this.state === MovementState.SWIM && !isRiver && terrainData.y > -2.0) {
+    } else if ((this.state === MovementState.SWIM || this.state === MovementState.DIVE) && (!isSwimmableWater || (surfaceY !== null && terrainData.y > surfaceY - 0.4))) {
       this.state = MovementState.WALK;
+      this.swimPitch = 0;
+      this.swimRoll = 0;
+      this.mesh.rotation.x = 0;
+      this.mesh.rotation.z = 0;
     }
 
     const slope = 1.0 - terrainData.normal.y;
@@ -911,16 +962,111 @@ export class CharacterController {
 
     const groundH = this.getGroundedHeight(this.mesh.position.x, this.mesh.position.z);
 
+    const surfaceY = waterSurfaceY(this.mesh.position.x, this.mesh.position.z) ?? (groundH + 4.0);
+
     if (this.state === MovementState.SWIM) {
-      const riverLevel = 0.5;
-      const bob = Math.sin(this.time * 2) * 0.1;
-      this.mesh.position.y = riverLevel - 1.5 + bob;
-      this.mesh.position.z -= 2.0 * dt; // River current drift
+      this.oxygen = Math.min(1.0, this.oxygen + dt * 2.0); // Surface breathing recharge
+      const bob = Math.sin(this.time * 2.2) * 0.08;
+      this.mesh.position.y = surfaceY - 0.75 + bob;
+      this.mesh.position.z -= 1.2 * dt; // Gentle river current drift
       if (this.mesh.position.y < groundH) {
         this.mesh.position.y = groundH;
       }
       this.isGrounded = false;
       this.velocityY = 0;
+      this.mesh.rotation.x = -0.75; // Natural forward chest pitch in surface swim
+
+      // Dive underwater input (KeyC)
+      if (this.input.consumeJustPressed('KeyC')) {
+        this.state = MovementState.DIVE;
+        this.velocityY = -2.4;
+      }
+    } else if (this.state === MovementState.DIVE) {
+      // 6-DOF Submerged Cenote Diving Physics (Shadow of the Tomb Raider North Star)
+      this.oxygen = Math.max(0.0, this.oxygen - dt / 32.0); // 32s breath reserve
+      this.isGrounded = false;
+
+      // 3D camera-aligned swimming vector
+      const camDir = new THREE.Vector3();
+      this.camera.getWorldDirection(camDir);
+
+      let forwardInput = 0;
+      if (this.input.isDown('KeyW')) forwardInput += 1;
+      if (this.input.isDown('KeyS')) forwardInput -= 1;
+
+      let verticalInput = 0;
+      if (this.input.isDown('Space')) verticalInput += 1; // Surface
+      if (this.input.isDown('KeyC')) verticalInput -= 1; // Dive deeper
+
+      // Positive neutral buoyancy (gentle upward drift when idle)
+      const buoyancy = 0.45;
+      this.velocityY = THREE.MathUtils.clamp(this.velocityY + (verticalInput * 3.5 + buoyancy) * dt, -4.0, 3.5);
+
+      if (forwardInput !== 0) {
+        const swimSpeed = 3.2;
+        this.mesh.position.addScaledVector(camDir, forwardInput * swimSpeed * dt);
+        const targetPitch = Math.asin(THREE.MathUtils.clamp(camDir.y, -0.9, 0.9));
+        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, targetPitch, 8.0 * dt);
+      } else {
+        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -0.75, 4.0 * dt);
+      }
+
+      this.mesh.position.y += this.velocityY * dt;
+      this.mesh.rotation.x = this.swimPitch;
+
+      // Cenote bottom collider check
+      if (this.mesh.position.y < groundH + 0.35) {
+        this.mesh.position.y = groundH + 0.35;
+        this.velocityY = Math.max(0, this.velocityY);
+      }
+
+      // Break surface and transition to SWIM
+      if (this.mesh.position.y >= surfaceY - 0.75 && (verticalInput > 0 || this.velocityY > 0.2)) {
+        this.state = MovementState.SWIM;
+        this.mesh.position.y = surfaceY - 0.75;
+        this.velocityY = 0;
+        this.swimPitch = 0;
+        this.mesh.rotation.x = -0.75;
+      }
+
+      // Air Bubble Particle Emitter
+      this.bubbleTimer += dt;
+      if (this.bubbleTimer >= 1.1) {
+        this.bubbleTimer = 0;
+        if (!this.bubbleMat) {
+          this.bubbleMat = new THREE.SpriteMaterial({
+            map: createBubbleTexture(),
+            transparent: true,
+            opacity: 0.85,
+            depthWrite: false,
+          });
+        }
+        const burstCount = 2 + Math.floor(Math.random() * 3);
+        for (let b = 0; b < burstCount; b++) {
+          const bubble = new THREE.Sprite(this.bubbleMat);
+          bubble.scale.setScalar(0.06 + Math.random() * 0.05);
+          const mouthOffset = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.2,
+            0.65 + (Math.random() - 0.5) * 0.1,
+            -0.35
+          ).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.mesh.rotation.y);
+          bubble.position.copy(this.mesh.position).add(mouthOffset);
+          this.mesh.parent?.add(bubble);
+          this.bubbleParticles.push(bubble);
+        }
+      }
+
+      // Update bubbles: float upwards and pop at water surface
+      for (let i = this.bubbleParticles.length - 1; i >= 0; i--) {
+        const b = this.bubbleParticles[i];
+        b.position.y += dt * 1.8;
+        b.position.x += Math.sin(this.time * 6 + i) * dt * 0.25;
+        b.scale.addScalar(dt * 0.04);
+        if (b.position.y >= surfaceY || b.scale.x > 0.22) {
+          b.parent?.remove(b);
+          this.bubbleParticles.splice(i, 1);
+        }
+      }
     } else if (this.state === MovementState.CLIMB) {
       this.mesh.position.y += forward * this.maxWalkSpeed * 0.5 * dt;
       this.isGrounded = false;
@@ -1150,6 +1296,8 @@ export class CharacterController {
         this.leftUpLegBone.rotation.set(0.9, 0, -0.2);
         this.rightUpLegBone.rotation.set(0.9, 0, 0.2);
       }
+    } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
+      this.swimStrokeTimer += dt * (this.speed > 0.5 ? 4.5 : 2.2);
     }
 
     let desiredAction = this.actions.idle;
@@ -1159,6 +1307,8 @@ export class CharacterController {
       desiredAction = this.actions.run ?? this.actions.walk ?? this.actions.idle;
     } else if (this.state === MovementState.SLIDE) {
       desiredAction = this.actions.crouch ?? this.actions.idle;
+    } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
+      desiredAction = this.actions.walk ?? this.actions.idle;
     } else if (this.isCrouched && this.actions.crouch) {
       desiredAction = this.actions.crouch;
     } else if (this.speed > 0.1) {
@@ -1186,6 +1336,10 @@ export class CharacterController {
 
     if (this.state === MovementState.SLIDE) {
       this.mesh.rotation.x = -0.35;
+    } else if (this.state === MovementState.SWIM) {
+      this.mesh.rotation.x = -0.75;
+    } else if (this.state === MovementState.DIVE) {
+      this.mesh.rotation.x = this.swimPitch;
     } else if (!this.isRolling) {
       this.mesh.rotation.x = 0;
     }
@@ -1198,6 +1352,7 @@ export class CharacterController {
       x: this.mesh.position.x,
       z: this.mesh.position.z,
       isGrounded: this.isGrounded,
+      oxygen: this.oxygen,
     };
 
     this.updateCamera(dt);

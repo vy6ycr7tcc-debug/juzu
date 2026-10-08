@@ -306,6 +306,7 @@ export function createWaterSurface(
     normalScale: new THREE.Vector2(NORMAL_STRENGTH, NORMAL_STRENGTH),
     depthWrite: false,
     envMapIntensity: 0.55, // balanced sky and ambient mountain reflection
+    side: THREE.DoubleSide,
   });
 
   material.onBeforeCompile = (shader) => {
@@ -468,6 +469,7 @@ async function buildWaterNodeMaterial(
     mat.roughness = spec.roughness;
     mat.metalness = 0.05;
     mat.transparent = true;
+    mat.side = THREE.DoubleSide;
     mat.envMapIntensity = 0.35; // same dark-water read as the WebGL2 path
     // §6.3: transmission 0.6 is WebGPU HIGH only; LOW/MEDIUM ride the
     // opacity fallback exactly like the WebGL2 path.
