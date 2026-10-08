@@ -1944,6 +1944,17 @@ async function init() {
       camera.lookAt(-25.0, groundY + 4.5, posZ - 10.0);
       sottrHUD.setObjective('GEOLOGICAL STRATA', 'Triplanar texture projection and horizontal sedimentary strata banding on steep canyon cliffs');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'stealth_arrow_lure') {
+      // Phase 4: Acoustic Arrow-Lure & Sentry Investigation AI
+      const posX = 32, posZ = 16;
+      character.teleport(posX, posZ, 0.35);
+      character.isCrouched = true;
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.8, groundY + 1.35, posZ - 2.5);
+      camera.lookAt(posX + 5.5, groundY + 1.25, posZ + 7.5);
+      sottrHUD.setObjective('ACOUSTIC LURE', 'Sol Negro sentry lured by acoustic arrow impact clatter on stone ruin');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1955,7 +1966,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2148,6 +2159,8 @@ async function init() {
         sottrHUD.updateStealth(false, new THREE.Vector2(0, 1), 0.1, character.theta);
       } else if (shot === 'camera_stealth_prowl') {
         sottrHUD.updateStealth(true, new THREE.Vector2(-0.4, -0.9), 0.35, character.theta);
+      } else if (shot === 'stealth_arrow_lure') {
+        sottrHUD.updateStealth(true, new THREE.Vector2(0.2, 0.9), 0.45, character.theta);
       }
     }
 
@@ -2211,6 +2224,32 @@ async function init() {
       const groundY = character.mesh.position.y;
       camera.position.set(posX + 3.5, groundY + 1.8, posZ + 3.5);
       camera.lookAt(-25.0, groundY + 4.5, posZ - 10.0);
+      sottrHUD.update(camera, character.mesh.position);
+    }
+    if (shot === 'stealth_arrow_lure') {
+      const posX = 32, posZ = 16;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.8, groundY + 1.35, posZ - 2.5);
+      camera.lookAt(posX + 5.5, groundY + 1.25, posZ + 7.5);
+
+      // Spawn stuck arrow into ground/stone ruins ahead
+      const arrowImpact = new THREE.Vector3(38.5, getGlobalTerrainHeight(38.5, 23.5), 23.5);
+      const arrowDir = new THREE.Vector3(0.65, -0.4, 0.65).normalize();
+      const stuckArrow = character.bowSystem?.spawnArrow(arrowImpact, arrowDir, 0);
+      if (stuckArrow) {
+        stuckArrow.isStuck = true;
+      }
+
+      // Sentry 0 actively investigates the noise origin with caution
+      const sentry = stealthSystem.sentries[0];
+      if (sentry) {
+        sentry.group.position.set(37.0, getGlobalTerrainHeight(37.0, 21.0), 21.0);
+        sentry.investigateSound(arrowImpact);
+        sentry.setAnimation('walk');
+        sentry.facingDir.copy(arrowImpact.clone().sub(sentry.group.position).normalize());
+        sentry.group.rotation.y = Math.atan2(sentry.facingDir.x, sentry.facingDir.z);
+      }
+
       sottrHUD.update(camera, character.mesh.position);
     }
 
