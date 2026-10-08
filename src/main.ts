@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createRenderer, getRenderCaps, QUALITY_TIERS } from './renderer.js';
 import { setupEnvironment, getActiveLightRig } from './environment.js';
 import { createTerrain } from './terrain.js';
-import { createRiver } from './river.js';
+import { createRiver, waterSurfaceY } from './river.js';
 import { createDecor } from './decor.js';
 import { CharacterController, MovementState } from './character.js';
 import { InputManager, isTouchLikeDevice } from './input.js';
@@ -1359,26 +1359,32 @@ async function init() {
       // Phase 3 Underwater Cenote 6-DOF Swimming & Diving (Shadow of the Tomb Raider North Star):
       // Submerged depth in the river canyon (cenote basin y = -4.2m, surface at y = -1.02m), angled diving posture, air bubbles, depth fog
       const posX = 0, posZ = 10;
-      character.mesh.position.set(posX, -4.2, posZ);
+      character.mesh.position.set(posX, -3.8, posZ);
       character.mesh.rotation.y = 0.25;
-      character.mesh.rotation.x = -0.75;
+      character.mesh.rotation.x = -0.45;
       character.state = MovementState.DIVE;
-      character.swimPitch = -0.75;
+      character.swimPitch = -0.45;
       character.bubbleTimer = 1.05;
       character.disableCameraUpdate = true;
-      camera.position.set(posX + 1.5, -3.4, posZ + 3.2);
-      camera.lookAt(posX, -4.2, posZ);
+      camera.position.set(posX + 0.3, -3.2, posZ + 3.2);
+      camera.lookAt(posX, -3.7, posZ - 1.0);
       if (scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.setHex(0x0a2a28);
-        scene.fog.density = 0.085;
+        scene.fog.color.setHex(0x0c2c28);
+        scene.fog.density = 0.075;
       }
     } else if (shot === 'surface_swim') {
       // Phase 3 Surface Breaststroke in River
       const posX = 0, posZ = 10;
-      character.mesh.position.set(posX, -1.77, posZ);
+      const sY = waterSurfaceY(posX, posZ) ?? -1.02;
+      character.mesh.position.set(posX, sY - 1.25, posZ);
       character.mesh.rotation.y = 0.25;
-      character.mesh.rotation.x = -0.75;
+      character.mesh.rotation.x = -0.12;
       character.state = MovementState.SWIM;
+      character.speed = 1.8; // Moving surface breaststroke
+      character.rippleTimer = 0.30; // Primed to emit ripples immediately
+      character.disableCameraUpdate = true;
+      camera.position.set(posX, sY + 0.95, posZ + 2.8);
+      camera.lookAt(posX, sY + 0.25, posZ - 2.5);
     } else if (shot === 'hydraulic_sluice') {
       // Phase 4 Ancient Inca Hydraulic Cistern Puzzle (Shadow of the Tomb Raider North Star):
       // Rotary bronze sluice wheel, lifted carved stone sluice gate, torrent cascade, and buoyant raft bridge
@@ -1590,13 +1596,13 @@ async function init() {
     } else if (shot === 'hydraulic_sluice') {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
-      t = 0.45;
+      t = 0.8;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
     } else if (shot === 'wetness_sheen') {
       t = 0.25;
     } else if (shot === 'surface_swim') {
-      t = 0.15;
+      t = 0.75;
     } else if (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' || shot === 'bow_aim' || shot === 'arrow_flight') {
       t = 0.1;
     } else if (shot === 'cliff_climb' || shot === 'axe_strike' || shot === 'wall_scramble' || shot === 'gear_sockets' || shot === 'andean_storm' || shot === 'lightning_flash') {
@@ -1654,16 +1660,18 @@ async function init() {
       }
       if (shot === 'underwater_dive') {
         character.state = MovementState.DIVE;
-        character.mesh.position.set(0, -4.2, 10);
+        character.mesh.position.set(0, -3.8, 10);
         character.mesh.rotation.y = 0.25;
-        character.swimPitch = -0.75;
-        character.mesh.rotation.x = -0.75;
+        character.swimPitch = -0.45;
+        character.mesh.rotation.x = -0.45;
       }
       if (shot === 'surface_swim') {
         character.state = MovementState.SWIM;
-        character.mesh.position.set(0, -1.77, 10);
+        const sY = waterSurfaceY(0, 10) ?? -1.02;
+        character.mesh.position.set(0, sY - 1.25, 10);
         character.mesh.rotation.y = 0.25;
-        character.mesh.rotation.x = -0.75;
+        character.mesh.rotation.x = -0.12;
+        character.speed = 1.8;
       }
       if (shot === 'hydraulic_sluice') {
         character.mesh.position.set(45 + 0.6, -1.9, -30 + 8.5);
@@ -1928,9 +1936,11 @@ async function init() {
 
         // Underwater optical absorption fog modulation (Phase 3 Cenote Diving)
         if (scene.fog instanceof THREE.FogExp2) {
-          if (camera.position.y < 0.2) {
-            scene.fog.color.lerp(new THREE.Color(0x0a2a28), 0.15);
-            scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.085, 0.15);
+          const camWaterSurface = waterSurfaceY(camera.position.x, camera.position.z);
+          const isCameraUnderwater = camWaterSurface !== null && camera.position.y < camWaterSurface - 0.05;
+          if (isCameraUnderwater) {
+            scene.fog.color.lerp(new THREE.Color(0x0c2c28), 0.20);
+            scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.075, 0.20);
           } else if (defaultFogColor) {
             scene.fog.color.lerp(defaultFogColor, 0.15);
             scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, defaultFogDensity, 0.15);

@@ -19,7 +19,8 @@ async function run() {
 
   for (const mode of modes) {
     for (const scenario of scenarios) {
-      const page = await browser.newPage();
+      const context = await browser.newContext({ serviceWorkers: 'block' });
+      const page = await context.newPage();
 
       if (mode === 'webgl2') {
          await page.addInitScript(`Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });`);
@@ -32,7 +33,7 @@ async function run() {
         ? scenario
         : (scenario.includes('=')
             ? `http://localhost:5173/juzu/?${scenario}`
-            : `http://localhost:5173/juzu/?shot=${scenario}&t=2`);
+            : `http://localhost:5173/juzu/?shot=${scenario}`);
       await page.goto(url);
 
       try {
