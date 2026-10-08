@@ -42,7 +42,7 @@ async function run() {
         await page.waitForTimeout(500);
 
         const safeName = scenario.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const canvas = await page.locator('canvas');
+        const canvas = await page.locator('#app canvas').first();
         await canvas.screenshot({ path: `shot_${safeName}_${mode}.png` });
         console.log(`Saved shot_${safeName}_${mode}.png`);
       } catch (e) {

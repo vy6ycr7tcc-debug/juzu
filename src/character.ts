@@ -395,8 +395,8 @@ export class CharacterController {
               mat.metalnessMap = null; // Strip embedded glossiness/metalness map to eliminate metallic sheen
               mat.roughnessMap = null; // Strip embedded roughness map to ensure uniform natural micro-roughness
               mat.metalness = 0.0; // Strictly non-metallic organic skin and field garments
-              mat.roughness = 0.85; // Natural skin/fabric micro-roughness
-              mat.envMapIntensity = 0.25; // Soft natural ambient reflection (eliminates metallic chrome sheen)
+              mat.roughness = 0.88; // Natural skin/fabric micro-roughness
+              mat.envMapIntensity = 0.10; // Soft natural ambient bounce (eliminates metallic chrome sheen)
               mat.needsUpdate = true;
               this.charMaterials.push(mat);
             }

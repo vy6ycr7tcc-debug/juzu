@@ -9,7 +9,8 @@ import {
   TRIM_BAND_COUNT,
   type TrimSheetMaps,
   ASSET_PATHS,
-  getImageTexture
+  getImageTexture,
+  createFoliageCardTexture
 } from './textures.js';
 import type { MeshStandardNodeMaterial } from 'three/webgpu';
 import type { RenderCaps } from './renderer.js';
@@ -117,12 +118,11 @@ export function ashlarTrimMaterial(): THREE.MeshStandardMaterial {
     map: sheet.albedo,
     normalMap: sheet.normal,
     roughnessMap: sheet.ormh,   // scalar 1.0 → G channel passes through
-    metalnessMap: sheet.ormh,   // B channel is 0 for stone
     aoMap: sheet.ormh,          // baked cavity AO in the joints (§4.3.2)
     aoMapIntensity: 0.8,        // §4.1 range 0.6–1.0
-    roughness: 1.0,
-    metalness: 1.0,
-    envMapIntensity: 0.4,
+    roughness: 0.92,
+    metalness: 0.0,             // Strictly dielectric Andean stone
+    envMapIntensity: 0.25,
   });
 }
 
@@ -247,7 +247,7 @@ export async function buildAshlarTrimNodeMaterial(
     material.colorNode = texture(sheet.albedo, uvPom).rgb.mul(shadow);
     material.normalNode = normalMap(texture(sheet.normal, uvPom));
     material.roughnessNode = texture(sheet.ormh, uvPom).g;
-    material.metalnessNode = texture(sheet.ormh, uvPom).b;
+    material.metalnessNode = float(0.0); // Strictly dielectric stone
     material.aoNode = texture(sheet.ormh, uvPom).r;
 
     return { material, sunDirectionView, pomSteps: steps };
@@ -382,15 +382,17 @@ export function lichenPatch(): THREE.MeshStandardMaterial {
 // Broadleaf card (§2.2 canopy greens #2D4A22 / #3E5E2A) — foliage card read,
 // two-sided because cards are flat planes seen from both sides (V-FOLIAGE style)
 export function broadleafCard(hex: number = 0xffffff): THREE.MeshStandardMaterial {
+    const cardTex = createFoliageCardTexture('broadleaf');
     return new THREE.MeshStandardMaterial({
         color: hex,
-        map: getImageTexture(ASSET_PATHS.environment.foliage, { repeatX: 1, repeatY: 1 }),
-        roughness: 0.8,
+        map: cardTex,
+        alphaTest: 0.5,
+        transparent: false,
+        roughness: 0.88,
         metalness: 0.0,
         side: THREE.DoubleSide,
         normalMap: getNormalMap(),
-        roughnessMap: getNoiseMap(),
-        envMapIntensity: 0.35,
+        envMapIntensity: 0.15,
     });
 }
 

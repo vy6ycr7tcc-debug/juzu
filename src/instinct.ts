@@ -101,7 +101,7 @@ export class SurvivalInstinctSystem {
     if (type === 'mechanism' || type === 'relic' || type === 'hazard') {
       const beaconGeo = new THREE.CylinderGeometry(0.06, 0.35, 3.5, 12, 1, true);
       const beaconMat = new THREE.MeshBasicMaterial({
-        color: type === 'hazard' ? 0xff3b10 : (type === 'relic' ? 0x22eecc : 0xffbb22),
+        color: type === 'hazard' ? 0xff3b10 : (type === 'relic' ? 0xffc844 : 0xffaa22),
         transparent: true,
         opacity: 0.0,
         side: THREE.DoubleSide,
@@ -176,7 +176,7 @@ export class SurvivalInstinctSystem {
     const worldObjPos = new THREE.Vector3();
     const goldColor = new THREE.Color(0xffaa00);
     const hazardColor = new THREE.Color(0xff3b10);
-    const relicColor = new THREE.Color(0x22eecc);
+    const relicColor = new THREE.Color(0xffc844);
     const fadeRatio = Math.min(1.0, this.timer / 1.0); // Smooth fade-out in final 1.0s
     const pulseMod = 0.75 + 0.25 * Math.sin(this.time * 10.0);
 
@@ -189,7 +189,7 @@ export class SurvivalInstinctSystem {
       }
 
       if (item.isPinged) {
-        const baseIntensity = item.type === 'relic' ? 0.45 : (item.type === 'hazard' ? 2.0 : 2.4);
+        const baseIntensity = item.type === 'relic' ? 0.35 : (item.type === 'hazard' ? 1.4 : 1.6);
         const intensity = baseIntensity * pulseMod * fadeRatio;
         const pingColor = item.type === 'hazard' ? hazardColor : (item.type === 'relic' ? relicColor : goldColor);
 
