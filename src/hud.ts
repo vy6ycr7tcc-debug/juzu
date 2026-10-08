@@ -7,6 +7,7 @@
  * 3. Bottom-Right Survival Gear & Ballistic Arrow Ammo Counter
  * 4. Contextual Interaction Prompt Widget
  * 5. Anamorphic 2.39:1 Cinematic Letterbox Bars
+ * 6. Authentic Tomb Raider Expedition Topographic Map with real-time GPS, POIs & Nav Beacon
  */
 import * as THREE from 'three';
 
@@ -15,6 +16,126 @@ export interface ObjectiveData {
   task: string;
   worldTarget?: THREE.Vector3;
 }
+
+export interface MapLandmark {
+  id: string;
+  name: string;
+  category: 'temple' | 'bridge' | 'cistern' | 'climb' | 'dive' | 'relic' | 'camp' | 'poi';
+  pos: THREE.Vector3;
+  icon: string;
+  color: string;
+  summary: string;
+  labelAlign?: 'top' | 'bottom' | 'left' | 'right';
+}
+
+export const MAP_LANDMARKS: MapLandmark[] = [
+  {
+    id: 'coricancha_sanctum',
+    name: 'Solstice Sanctum (Coricancha)',
+    category: 'temple',
+    pos: new THREE.Vector3(35, 12, -72),
+    icon: '🏛️',
+    color: '#ffd777',
+    summary: 'Ancient Inca Sun Temple sanctuary holding the sacred solar relic altar.',
+    labelAlign: 'top',
+  },
+  {
+    id: 'inti_altar',
+    name: 'Sacred Altar of Inti',
+    category: 'relic',
+    pos: new THREE.Vector3(68, 2.5, -57.1),
+    icon: '☀️',
+    color: '#f5c542',
+    summary: 'Chiseled stone altar displaying the golden Inti Solar Effigy.',
+    labelAlign: 'right',
+  },
+  {
+    id: 'inca_crypt',
+    name: 'Crypt Puzzle Corridor',
+    category: 'temple',
+    pos: new THREE.Vector3(35, 2.2, -48),
+    icon: '🏺',
+    color: '#e0a96d',
+    summary: 'Stepped pressure-plate trap corridor with suspended spiked portcullis.',
+    labelAlign: 'bottom',
+  },
+  {
+    id: 'hydraulic_cistern',
+    name: 'Hydraulic Cistern & Sluice Gate',
+    category: 'cistern',
+    pos: new THREE.Vector3(48, -2, -24),
+    icon: '⚙️',
+    color: '#68d8d6',
+    summary: 'Ancient rotary bronze water wheel controlling canyon irrigation sluice gates.',
+    labelAlign: 'right',
+  },
+  {
+    id: 'rope_bridge',
+    name: "Q'eswachaka Suspension Bridge",
+    category: 'bridge',
+    pos: new THREE.Vector3(-14, 20, 0),
+    icon: '🌉',
+    color: '#d8b26e',
+    summary: 'Handwoven grass-rope bridge spanning 100m across the Urubamba canyon.',
+    labelAlign: 'left',
+  },
+  {
+    id: 'cenote_basin',
+    name: 'Cenote Deep Dive Basin',
+    category: 'dive',
+    pos: new THREE.Vector3(-16, -3.8, 16),
+    icon: '🌊',
+    color: '#38b2ac',
+    summary: 'Submerged subterranean river cavern with emerald depths and air pockets.',
+    labelAlign: 'left',
+  },
+  {
+    id: 'craggy_cliff',
+    name: 'Craggy Axe Climbing Wall',
+    category: 'climb',
+    pos: new THREE.Vector3(45, 12, 18),
+    icon: '⛏️',
+    color: '#cbd5e1',
+    summary: 'Vertical porous granite cliff face requiring dual climbing ice picks.',
+    labelAlign: 'right',
+  },
+  {
+    id: 'highlands_camp',
+    name: 'Highlands Base Camp',
+    category: 'camp',
+    pos: new THREE.Vector3(50, 1.2, 50),
+    icon: '⛺',
+    color: '#86efac',
+    summary: 'Sheltered campfire terrace overlooking the canyon and mountain terraces.',
+  },
+  {
+    id: 'cliff_staircase',
+    name: 'Cliff Staircase',
+    category: 'poi',
+    pos: new THREE.Vector3(200, 0, 80),
+    icon: '🧗',
+    color: '#fbcfe8',
+    summary: 'Ancient stepped mountain path carved into the sheer canyon wall.',
+  },
+  {
+    id: 'excavated_ruin',
+    name: 'Excavated Ruin Pit',
+    category: 'poi',
+    pos: new THREE.Vector3(150, 0, -300),
+    icon: '⛏️',
+    color: '#c4b5fd',
+    summary: 'Raw-earth excavation pit crawling with archaeological equipment.',
+  },
+  {
+    id: 'quipu_archive',
+    name: 'Quipu Knot Archive',
+    category: 'poi',
+    pos: new THREE.Vector3(150, 0, -350),
+    icon: '📜',
+    color: '#fed7aa',
+    summary: 'Underground chamber housing ancient knotted Incan quipu records.',
+  },
+];
 
 export class SOTTRHUD {
   private container: HTMLDivElement;
@@ -25,11 +146,31 @@ export class SOTTRHUD {
   private promptContainer: HTMLDivElement;
   private topLetterbox: HTMLDivElement;
   private bottomLetterbox: HTMLDivElement;
+  private mapButton: HTMLButtonElement;
+
+  // Expedition Map Elements
+  public isMapOpen: boolean = false;
+  private mapModal: HTMLDivElement;
+  private mapCanvas: HTMLCanvasElement;
+  private mapCtx: CanvasRenderingContext2D | null = null;
+  private mapElevationEl: HTMLSpanElement;
+  private mapRegionEl: HTMLSpanElement;
+  private mapObjectiveBar: HTMLDivElement;
+  private mapPanX: number = 0;
+  private mapPanZ: number = 0;
+  private mapZoom: number = 1.0;
+  private isMapDragging: boolean = false;
+  private mapDragStartX: number = 0;
+  private mapDragStartY: number = 0;
+  private mapStartPanX: number = 0;
+  private mapStartPanZ: number = 0;
+  private cachedPlayerPos: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
+  private cachedCameraYaw: number = 0;
 
   private currentObjective: ObjectiveData = {
     title: 'SOLSTICE SANCTUM',
     task: 'Uncover the sacred secrets of the Coricancha Sun Temple',
-    worldTarget: new THREE.Vector3(35, 12, -58.5),
+    worldTarget: new THREE.Vector3(35, 12, -72),
   };
 
   private arrowCount: number = 16;
@@ -162,7 +303,644 @@ export class SOTTRHUD {
     this.promptContainer.innerHTML = `<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE ALTAR`;
     this.container.appendChild(this.promptContainer);
 
+    // 6. Top-Right HUD Map Button (clickable on desktop & mobile)
+    this.mapButton = document.createElement('button');
+    this.mapButton.id = 'hud-map-btn';
+    this.mapButton.style.position = 'absolute';
+    this.mapButton.style.top = '24px';
+    this.mapButton.style.right = '32px';
+    this.mapButton.style.pointerEvents = 'auto';
+    this.mapButton.style.background = 'rgba(18, 24, 20, 0.88)';
+    this.mapButton.style.border = '1px solid rgba(212, 175, 88, 0.6)';
+    this.mapButton.style.borderRadius = '6px';
+    this.mapButton.style.padding = '8px 16px';
+    this.mapButton.style.color = '#ffd777';
+    this.mapButton.style.fontSize = '11px';
+    this.mapButton.style.fontWeight = '700';
+    this.mapButton.style.letterSpacing = '1.5px';
+    this.mapButton.style.cursor = 'pointer';
+    this.mapButton.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.6)';
+    this.mapButton.style.transition = 'all 0.2s ease';
+    this.mapButton.innerHTML = `🗺️ MAP <span style="color: rgba(255,255,255,0.7); font-size: 10px; margin-left: 4px;">[M]</span>`;
+    this.mapButton.addEventListener('mouseenter', () => {
+      this.mapButton.style.background = 'rgba(32, 42, 36, 0.95)';
+      this.mapButton.style.borderColor = '#ffd777';
+      this.mapButton.style.transform = 'scale(1.04)';
+    });
+    this.mapButton.addEventListener('mouseleave', () => {
+      this.mapButton.style.background = 'rgba(18, 24, 20, 0.88)';
+      this.mapButton.style.borderColor = 'rgba(212, 175, 88, 0.6)';
+      this.mapButton.style.transform = 'scale(1.0)';
+    });
+    this.mapButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleMap();
+    });
+    this.container.appendChild(this.mapButton);
+
+    // 7. Fullscreen Tomb Raider Expedition Topographic Map Modal
+    this.mapModal = document.createElement('div');
+    this.mapModal.id = 'expedition-map-modal';
+    this.mapModal.style.position = 'fixed';
+    this.mapModal.style.top = '0';
+    this.mapModal.style.left = '0';
+    this.mapModal.style.width = '100vw';
+    this.mapModal.style.height = '100vh';
+    this.mapModal.style.background = 'radial-gradient(ellipse at center, rgba(16, 22, 18, 0.96) 0%, rgba(8, 12, 10, 0.99) 100%)';
+    this.mapModal.style.zIndex = '9500';
+    this.mapModal.style.display = 'none';
+    this.mapModal.style.flexDirection = 'column';
+    this.mapModal.style.boxSizing = 'border-box';
+    this.mapModal.style.padding = '18px 28px';
+    this.mapModal.style.userSelect = 'none';
+    this.mapModal.style.color = '#e8dec5';
+
+    // Map Header Bar
+    const mapHeader = document.createElement('div');
+    mapHeader.style.display = 'flex';
+    mapHeader.style.justifyContent = 'space-between';
+    mapHeader.style.alignItems = 'center';
+    mapHeader.style.paddingBottom = '12px';
+    mapHeader.style.borderBottom = '1px solid rgba(212, 175, 88, 0.35)';
+
+    const titleGroup = document.createElement('div');
+    titleGroup.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px; color: #ffd777;">★</span>
+        <span style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: 2px; text-transform: uppercase;">
+          EXPEDITION TOPOGRAPHIC MAP
+        </span>
+      </div>
+      <div style="font-size: 11px; color: #9ab098; letter-spacing: 1.2px; margin-top: 3px;">
+        SECTOR IV: URUBAMBA RIVER VALLEY • INCA ANDES HIGHLANDS
+      </div>
+    `;
+    mapHeader.appendChild(titleGroup);
+
+    const statsGroup = document.createElement('div');
+    statsGroup.style.display = 'flex';
+    statsGroup.style.gap = '20px';
+    statsGroup.style.fontSize = '12px';
+    statsGroup.style.fontWeight = '600';
+    statsGroup.style.color = '#d4af58';
+
+    this.mapRegionEl = document.createElement('span');
+    this.mapRegionEl.textContent = 'REGION: HIGHLANDS VALLEY';
+    statsGroup.appendChild(this.mapRegionEl);
+
+    this.mapElevationEl = document.createElement('span');
+    this.mapElevationEl.textContent = 'ELEVATION: 2,430m ASL';
+    statsGroup.appendChild(this.mapElevationEl);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ CLOSE [M / ESC]';
+    closeBtn.style.background = 'rgba(212, 175, 88, 0.15)';
+    closeBtn.style.border = '1px solid rgba(212, 175, 88, 0.6)';
+    closeBtn.style.color = '#ffd777';
+    closeBtn.style.padding = '6px 14px';
+    closeBtn.style.borderRadius = '4px';
+    closeBtn.style.fontWeight = '700';
+    closeBtn.style.fontSize = '11px';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.addEventListener('click', () => this.closeMap());
+    statsGroup.appendChild(closeBtn);
+
+    mapHeader.appendChild(statsGroup);
+    this.mapModal.appendChild(mapHeader);
+
+    // Active Objective Banner Strip
+    this.mapObjectiveBar = document.createElement('div');
+    this.mapObjectiveBar.style.padding = '8px 14px';
+    this.mapObjectiveBar.style.margin = '10px 0';
+    this.mapObjectiveBar.style.background = 'rgba(212, 175, 88, 0.12)';
+    this.mapObjectiveBar.style.border = '1px solid rgba(212, 175, 88, 0.3)';
+    this.mapObjectiveBar.style.borderRadius = '4px';
+    this.mapObjectiveBar.style.fontSize = '12px';
+    this.mapObjectiveBar.style.color = '#ffd875';
+    this.mapObjectiveBar.style.display = 'flex';
+    this.mapObjectiveBar.style.alignItems = 'center';
+    this.mapObjectiveBar.style.gap = '10px';
+    this.mapObjectiveBar.innerHTML = `
+      <span style="font-weight: 800;">★ ACTIVE WAYPOINT:</span>
+      <span style="color: #ffffff; font-weight: 600;">${this.currentObjective.title}</span>
+      <span style="color: #9ab098;">— ${this.currentObjective.task}</span>
+    `;
+    this.mapModal.appendChild(this.mapObjectiveBar);
+
+    // Map Canvas Container with Antique Bronze Frame
+    const canvasWrap = document.createElement('div');
+    canvasWrap.style.position = 'relative';
+    canvasWrap.style.flex = '1';
+    canvasWrap.style.width = '100%';
+    canvasWrap.style.minHeight = '320px';
+    canvasWrap.style.background = '#0e1411';
+    canvasWrap.style.border = '2px solid rgba(212, 175, 88, 0.35)';
+    canvasWrap.style.borderRadius = '6px';
+    canvasWrap.style.overflow = 'hidden';
+    canvasWrap.style.boxShadow = 'inset 0 0 40px rgba(0,0,0,0.85), 0 8px 32px rgba(0,0,0,0.7)';
+
+    this.mapCanvas = document.createElement('canvas');
+    this.mapCanvas.style.width = '100%';
+    this.mapCanvas.style.height = '100%';
+    this.mapCanvas.style.display = 'block';
+    this.mapCanvas.style.cursor = 'grab';
+    canvasWrap.appendChild(this.mapCanvas);
+
+    // Canvas Interactive Zoom & Recenter Controls Overlay
+    const mapControls = document.createElement('div');
+    mapControls.style.position = 'absolute';
+    mapControls.style.bottom = '18px';
+    mapControls.style.right = '18px';
+    mapControls.style.display = 'flex';
+    mapControls.style.flexDirection = 'column';
+    mapControls.style.gap = '8px';
+    mapControls.style.zIndex = '5';
+
+    const makeBtn = (text: string, title: string, onClick: () => void) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      b.title = title;
+      b.style.background = 'rgba(18, 24, 20, 0.9)';
+      b.style.border = '1px solid rgba(212, 175, 88, 0.5)';
+      b.style.color = '#ffd777';
+      b.style.width = '36px';
+      b.style.height = '36px';
+      b.style.borderRadius = '4px';
+      b.style.fontSize = '16px';
+      b.style.fontWeight = 'bold';
+      b.style.cursor = 'pointer';
+      b.style.display = 'flex';
+      b.style.alignItems = 'center';
+      b.style.justifyContent = 'center';
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onClick();
+      });
+      return b;
+    };
+
+    mapControls.appendChild(makeBtn('+', 'Zoom In', () => {
+      this.mapZoom = Math.min(3.2, this.mapZoom * 1.25);
+      this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+    }));
+    mapControls.appendChild(makeBtn('−', 'Zoom Out', () => {
+      this.mapZoom = Math.max(0.45, this.mapZoom / 1.25);
+      this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+    }));
+    const centerBtn = document.createElement('button');
+    centerBtn.innerHTML = '⌖';
+    centerBtn.title = 'Recenter on Player (Space)';
+    centerBtn.style.background = 'rgba(18, 24, 20, 0.9)';
+    centerBtn.style.border = '1px solid rgba(212, 175, 88, 0.5)';
+    centerBtn.style.color = '#ffd777';
+    centerBtn.style.width = '36px';
+    centerBtn.style.height = '36px';
+    centerBtn.style.borderRadius = '4px';
+    centerBtn.style.fontSize = '18px';
+    centerBtn.style.cursor = 'pointer';
+    centerBtn.style.display = 'flex';
+    centerBtn.style.alignItems = 'center';
+    centerBtn.style.justifyContent = 'center';
+    centerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.recenterOnPlayer();
+    });
+    mapControls.appendChild(centerBtn);
+    canvasWrap.appendChild(mapControls);
+
+    this.mapModal.appendChild(canvasWrap);
+
+    // Map Footer with Legend & Instructions
+    const mapFooter = document.createElement('div');
+    mapFooter.style.display = 'flex';
+    mapFooter.style.justifyContent = 'space-between';
+    mapFooter.style.alignItems = 'center';
+    mapFooter.style.paddingTop = '12px';
+    mapFooter.style.borderTop = '1px solid rgba(212, 175, 88, 0.25)';
+    mapFooter.style.fontSize = '11px';
+
+    const legendGroup = document.createElement('div');
+    legendGroup.style.display = 'flex';
+    legendGroup.style.gap = '14px';
+    legendGroup.style.color = '#a0b0a2';
+    legendGroup.innerHTML = `
+      <span><b style="color: #ffd777;">🏛️</b> Sun Temple / Sanctum</span>
+      <span><b style="color: #d8b26e;">🌉</b> Rope Bridge</span>
+      <span><b style="color: #68d8d6;">⚙️</b> Sluice Mechanism</span>
+      <span><b style="color: #cbd5e1;">⛏️</b> Climbing Wall</span>
+      <span><b style="color: #f5c542;">☀️</b> Sacred Relic</span>
+      <span><b style="color: #38b2ac;">🌊</b> Cenote Dive</span>
+      <span><b style="color: #ffd777;">●</b> Player GPS</span>
+    `;
+    mapFooter.appendChild(legendGroup);
+
+    const hintsGroup = document.createElement('div');
+    hintsGroup.style.color = '#8a9c88';
+    hintsGroup.style.fontWeight = '600';
+    hintsGroup.innerHTML = `[DRAG] PAN • [SCROLL] ZOOM • [SPACE] RECENTER • [M / ESC] CLOSE`;
+    mapFooter.appendChild(hintsGroup);
+
+    this.mapModal.appendChild(mapFooter);
+
     document.body.appendChild(this.container);
+    document.body.appendChild(this.mapModal);
+
+    // Setup Canvas Drag & Zoom Events
+    this.setupMapInteraction();
+
+    // Global Keyboard Shortcut: [M] toggles map, [ESC] closes map
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyM') {
+        e.preventDefault();
+        this.toggleMap();
+      } else if (e.code === 'Escape' && this.isMapOpen) {
+        e.preventDefault();
+        this.closeMap();
+      } else if (e.code === 'Space' && this.isMapOpen) {
+        e.preventDefault();
+        this.recenterOnPlayer();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (this.isMapOpen) {
+        this.resizeCanvas();
+        this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+      }
+    });
+  }
+
+  private setupMapInteraction() {
+    this.mapCanvas.addEventListener('mousedown', (e) => {
+      this.isMapDragging = true;
+      this.mapCanvas.style.cursor = 'grabbing';
+      this.mapDragStartX = e.clientX;
+      this.mapDragStartY = e.clientY;
+      this.mapStartPanX = this.mapPanX;
+      this.mapStartPanZ = this.mapPanZ;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!this.isMapDragging) return;
+      const dx = e.clientX - this.mapDragStartX;
+      const dy = e.clientY - this.mapDragStartY;
+      const scale = 2.4 * this.mapZoom;
+      this.mapPanX = this.mapStartPanX - dx / scale;
+      this.mapPanZ = this.mapStartPanZ - dy / scale;
+      this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (this.isMapDragging) {
+        this.isMapDragging = false;
+        this.mapCanvas.style.cursor = 'grab';
+      }
+    });
+
+    this.mapCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      this.mapZoom = Math.max(0.45, Math.min(3.2, this.mapZoom * zoomFactor));
+      this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+    }, { passive: false });
+
+    // Touch support for mobile dragging
+    this.mapCanvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        this.isMapDragging = true;
+        this.mapDragStartX = e.touches[0].clientX;
+        this.mapDragStartY = e.touches[0].clientY;
+        this.mapStartPanX = this.mapPanX;
+        this.mapStartPanZ = this.mapPanZ;
+      }
+    }, { passive: true });
+
+    this.mapCanvas.addEventListener('touchmove', (e) => {
+      if (!this.isMapDragging || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - this.mapDragStartX;
+      const dy = e.touches[0].clientY - this.mapDragStartY;
+      const scale = 2.4 * this.mapZoom;
+      this.mapPanX = this.mapStartPanX - dx / scale;
+      this.mapPanZ = this.mapStartPanZ - dy / scale;
+      this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+    }, { passive: true });
+
+    this.mapCanvas.addEventListener('touchend', () => {
+      this.isMapDragging = false;
+    });
+  }
+
+  public toggleMap(playerPos?: THREE.Vector3, cameraYaw?: number) {
+    if (this.isMapOpen) {
+      this.closeMap();
+    } else {
+      this.openMap(playerPos, cameraYaw);
+    }
+  }
+
+  public openMap(playerPos?: THREE.Vector3, cameraYaw?: number) {
+    this.isMapOpen = true;
+    this.mapModal.style.display = 'flex';
+    if (playerPos) {
+      this.cachedPlayerPos.copy(playerPos);
+      this.mapPanX = playerPos.x;
+      this.mapPanZ = playerPos.z;
+    }
+    if (cameraYaw !== undefined) {
+      this.cachedCameraYaw = cameraYaw;
+    }
+    this.resizeCanvas();
+    this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+  }
+
+  public closeMap() {
+    this.isMapOpen = false;
+    this.mapModal.style.display = 'none';
+  }
+
+  public recenterOnPlayer() {
+    this.mapPanX = this.cachedPlayerPos.x;
+    this.mapPanZ = this.cachedPlayerPos.z;
+    this.mapZoom = 1.0;
+    this.drawMap(this.cachedPlayerPos, this.cachedCameraYaw);
+  }
+
+  private resizeCanvas() {
+    const rect = this.mapCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.mapCanvas.width = rect.width * dpr;
+    this.mapCanvas.height = rect.height * dpr;
+    this.mapCtx = this.mapCanvas.getContext('2d');
+    if (this.mapCtx) {
+      this.mapCtx.scale(dpr, dpr);
+    }
+  }
+
+  public drawMap(playerPos: THREE.Vector3, cameraYaw: number) {
+    if (!this.mapCtx || !this.mapCanvas) return;
+    const ctx = this.mapCtx;
+    const rect = this.mapCanvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+    // Clear background: antique deep expedition cartography charcoal
+    ctx.fillStyle = '#101713';
+    ctx.fillRect(0, 0, width, height);
+
+    const cx = width / 2;
+    const cy = height / 2;
+    const scale = 2.4 * this.mapZoom;
+
+    const toScreenX = (wx: number) => cx + (wx - this.mapPanX) * scale;
+    const toScreenY = (wz: number) => cy + (wz - this.mapPanZ) * scale;
+
+    // 1. Draw Topographic Coordinate Grid (50m squares)
+    ctx.strokeStyle = 'rgba(212, 175, 88, 0.08)';
+    ctx.lineWidth = 1;
+    const gridSize = 50;
+    const minGridX = Math.floor((this.mapPanX - cx / scale) / gridSize) * gridSize;
+    const maxGridX = Math.ceil((this.mapPanX + cx / scale) / gridSize) * gridSize;
+    const minGridZ = Math.floor((this.mapPanZ - cy / scale) / gridSize) * gridSize;
+    const maxGridZ = Math.ceil((this.mapPanZ + cy / scale) / gridSize) * gridSize;
+
+    for (let gx = minGridX; gx <= maxGridX; gx += gridSize) {
+      const sx = toScreenX(gx);
+      ctx.beginPath();
+      ctx.moveTo(sx, 0);
+      ctx.lineTo(sx, height);
+      ctx.stroke();
+    }
+    for (let gz = minGridZ; gz <= maxGridZ; gz += gridSize) {
+      const sy = toScreenY(gz);
+      ctx.beginPath();
+      ctx.moveTo(0, sy);
+      ctx.lineTo(width, sy);
+      ctx.stroke();
+    }
+
+    // 2. Topographic Elevation Isobar Contours (Andean Terraces & Mountain Ridges)
+    ctx.strokeStyle = 'rgba(160, 190, 168, 0.14)';
+    ctx.lineWidth = 1.2;
+    for (let r = 40; r <= 320; r += 35) {
+      ctx.beginPath();
+      for (let a = 0; a <= Math.PI * 2; a += 0.12) {
+        const rad = r + Math.sin(a * 4 + r * 0.1) * 10 + Math.cos(a * 2) * 14;
+        const wx = Math.cos(a) * rad * 1.35;
+        const wz = Math.sin(a) * rad;
+        const sx = toScreenX(wx);
+        const sy = toScreenY(wz);
+        if (a === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    // 3. Draw River Urubamba Waterway Ribbon
+    ctx.beginPath();
+    ctx.strokeStyle = '#1a4448';
+    ctx.lineWidth = 22 * scale * 0.35;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let z = -500; z <= 300; z += 25) {
+      const x = Math.sin(z * 0.015) * 14 + Math.cos(z * 0.005) * 8;
+      const sx = toScreenX(x);
+      const sy = toScreenY(z);
+      if (z === -500) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    // River Center Specular Flow Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#38b2ac';
+    ctx.lineWidth = 2.5;
+    for (let z = -500; z <= 300; z += 25) {
+      const x = Math.sin(z * 0.015) * 14 + Math.cos(z * 0.005) * 8;
+      const sx = toScreenX(x);
+      const sy = toScreenY(z);
+      if (z === -500) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    // 4. Draw Waypoint Trail & Pulsing Beacon for Active Objective
+    if (this.currentObjective.worldTarget) {
+      const obj = this.currentObjective.worldTarget;
+      const pX = toScreenX(playerPos.x);
+      const pY = toScreenY(playerPos.z);
+      const tX = toScreenX(obj.x);
+      const tY = toScreenY(obj.z);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([8, 6]);
+      ctx.lineDashOffset = -(performance.now() * 0.025) % 14;
+      ctx.strokeStyle = 'rgba(255, 215, 119, 0.85)';
+      ctx.lineWidth = 2.5;
+      ctx.moveTo(pX, pY);
+      ctx.lineTo(tX, tY);
+      ctx.stroke();
+      ctx.restore();
+
+      // Pulsing Objective Ring at Target
+      const pulse = 1.0 + Math.sin(performance.now() * 0.006) * 0.28;
+      ctx.beginPath();
+      ctx.arc(tX, tY, 18 * pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffd777';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Target Label with distance readout
+      const distM = Math.round(playerPos.distanceTo(obj));
+      ctx.font = '700 12px sans-serif';
+      ctx.fillStyle = '#ffd777';
+      ctx.shadowColor = 'rgba(0,0,0,0.95)';
+      ctx.shadowBlur = 8;
+      ctx.textAlign = 'center';
+      ctx.fillText(`★ ${this.currentObjective.title} (${distM}m)`, tX, tY - 26);
+      ctx.shadowBlur = 0;
+    }
+
+    // 5. Draw Major Landmarks & Discoveries
+    for (const lm of MAP_LANDMARKS) {
+      const sx = toScreenX(lm.pos.x);
+      const sy = toScreenY(lm.pos.z);
+
+      // Icon badge
+      ctx.beginPath();
+      ctx.arc(sx, sy, 15, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(16, 22, 18, 0.94)';
+      ctx.fill();
+      ctx.strokeStyle = lm.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Emoji/Icon
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lm.icon, sx, sy + 1);
+
+      // Landmark Name Label with Directional Alignment
+      ctx.font = '700 11px sans-serif';
+      ctx.fillStyle = '#e8dec5';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+      ctx.shadowBlur = 6;
+      const align = lm.labelAlign || 'bottom';
+      if (align === 'top') {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(lm.name, sx, sy - 18);
+      } else if (align === 'left') {
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lm.name, sx - 20, sy);
+      } else if (align === 'right') {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lm.name, sx + 20, sy);
+      } else {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(lm.name, sx, sy + 20);
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    // 6. Draw Player GPS Pin & 66° Sight Cone
+    const px = toScreenX(playerPos.x);
+    const py = toScreenY(playerPos.z);
+
+    // Sight cone (semi-transparent gold fan)
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    const coneAngle = 0.58; // ~33° half-angle for 66° FoV
+    const mapYaw = cameraYaw - Math.PI / 2;
+    ctx.arc(px, py, 52 * scale * 0.35, mapYaw - coneAngle, mapYaw + coneAngle);
+    ctx.closePath();
+    const coneGrad = ctx.createRadialGradient(px, py, 2, px, py, 52 * scale * 0.35);
+    coneGrad.addColorStop(0, 'rgba(255, 215, 119, 0.50)');
+    coneGrad.addColorStop(1, 'rgba(255, 215, 119, 0.0)');
+    ctx.fillStyle = coneGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // Player Marker Circle
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd777';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Player Title
+    ctx.font = '700 11px sans-serif';
+    ctx.fillStyle = '#ffd777';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 6;
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU (Michelle)', px, py - 14);
+    ctx.shadowBlur = 0;
+
+    // 7. Ornate Golden Compass Rose (Top-Right)
+    const crX = width - 50;
+    const crY = 50;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(crX, crY, 24, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(18, 24, 20, 0.88)';
+    ctx.fill();
+    ctx.strokeStyle = '#d4af58';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // North Needle
+    ctx.beginPath();
+    ctx.moveTo(crX, crY - 20);
+    ctx.lineTo(crX - 6, crY);
+    ctx.lineTo(crX + 6, crY);
+    ctx.closePath();
+    ctx.fillStyle = '#ffd777';
+    ctx.fill();
+
+    // South Needle
+    ctx.beginPath();
+    ctx.moveTo(crX, crY + 20);
+    ctx.lineTo(crX - 6, crY);
+    ctx.lineTo(crX + 6, crY);
+    ctx.closePath();
+    ctx.fillStyle = '#6b7f6a';
+    ctx.fill();
+
+    ctx.font = '800 11px sans-serif';
+    ctx.fillStyle = '#ffd777';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', crX, crY - 25);
+    ctx.restore();
+
+    // 8. Distance Scale Bar (Bottom-Left)
+    const sbX = 35;
+    const sbY = height - 25;
+    const barMeters = 50;
+    const barPx = barMeters * scale;
+    ctx.beginPath();
+    ctx.moveTo(sbX, sbY);
+    ctx.lineTo(sbX + barPx, sbY);
+    ctx.moveTo(sbX, sbY - 5);
+    ctx.lineTo(sbX, sbY + 5);
+    ctx.moveTo(sbX + barPx, sbY - 5);
+    ctx.lineTo(sbX + barPx, sbY + 5);
+    ctx.strokeStyle = '#d4af58';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.font = '700 11px monospace';
+    ctx.fillStyle = '#e8dec5';
+    ctx.textAlign = 'left';
+    ctx.fillText('50 METERS', sbX + barPx + 10, sbY + 4);
   }
 
   private buildCompassTape() {
@@ -217,6 +995,11 @@ export class SOTTRHUD {
         ${task}
       </div>
     `;
+    this.mapObjectiveBar.innerHTML = `
+      <span style="font-weight: 800;">★ ACTIVE WAYPOINT:</span>
+      <span style="color: #ffffff; font-weight: 600;">${title}</span>
+      <span style="color: #9ab098;">— ${task}</span>
+    `;
   }
 
   public setAmmo(current: number, max: number = 16) {
@@ -246,7 +1029,7 @@ export class SOTTRHUD {
     `;
   }
 
-  public update(camera: THREE.Camera) {
+  public update(camera: THREE.Camera, playerPos?: THREE.Vector3) {
     // Calculate camera yaw / azimuth angle in degrees (0 to 360)
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
@@ -258,11 +1041,33 @@ export class SOTTRHUD {
     const offsetPx = (angleDeg * 3.2) % (360 * 3.2);
     // Center at width/2 (210px) minus offset
     this.compassTape.style.transform = `translateX(${210 - offsetPx}px)`;
+
+    if (playerPos) {
+      this.cachedPlayerPos.copy(playerPos);
+      this.cachedCameraYaw = Math.atan2(dir.x, -dir.z);
+
+      if (this.isMapOpen) {
+        // Update altitude & region readout
+        const altM = Math.round(playerPos.y + 2420);
+        this.mapElevationEl.textContent = `ELEVATION: ${altM}m ASL`;
+
+        let regionName = 'URUBAMBA CANYON';
+        if (playerPos.z < -45) regionName = 'SOLSTICE SANCTUM';
+        else if (playerPos.z > 200 || playerPos.y > 35) regionName = 'HIGH SIERRA PASS';
+        else if (playerPos.x > 30) regionName = 'CLOUD FOREST';
+        this.mapRegionEl.textContent = `REGION: ${regionName}`;
+
+        this.drawMap(playerPos, this.cachedCameraYaw);
+      }
+    }
   }
 
   public dispose() {
     if (this.container && this.container.parentElement) {
       this.container.parentElement.removeChild(this.container);
+    }
+    if (this.mapModal && this.mapModal.parentElement) {
+      this.mapModal.parentElement.removeChild(this.mapModal);
     }
   }
 }
