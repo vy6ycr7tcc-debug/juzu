@@ -87,7 +87,7 @@ interface SpeciesPalette {
   id: string;
   kind: FoliageCardKind;
   cardW: number; cardH: number;   // world-space card size (m)
-  planes: 1 | 2 | 3;              // crossed-card count (silhouette depth)
+  planes: 1 | 2 | 3 | 4;          // crossed-card count (silhouette depth)
   y0: number;                     // local height where sway starts (0 = base)
   // Per-grid placement probability. Trees list TWO grids: mid carries the
   // near-field forest read (§1.1.1 anchors at 8–25 m), coarse a sparse
@@ -107,55 +107,55 @@ interface SpeciesPalette {
 const REGION_SPECIES: Record<RegionId, SpeciesPalette[]> = {
   cloud_forest: [
     // §2.2: canopy deep/mid green, broadleaf cards, orchid accents (≤2% frame)
-    { id: 'cf_broadleaf', kind: 'broadleaf', cardW: 5.5, cardH: 4.8, planes: 3, y0: 2.2,
+    { id: 'cf_broadleaf', kind: 'broadleaf', cardW: 5.5, cardH: 4.8, planes: 4, y0: 2.2,
       grids: { mid: 0.55, coarse: 0.1 }, colorA: 0x2c3e22, colorB: 0x32442f,
-      scaleMin: 0.75, scaleMax: 1.35, count: 700, windAmp: 0.15, shadow: true, trunk: true },
+      scaleMin: 0.75, scaleMax: 1.35, count: 750, windAmp: 0.15, shadow: true, trunk: true },
     { id: 'cf_fern', kind: 'fern', cardW: 1.7, cardH: 1.5, planes: 3, y0: 0,
       grids: { mid: 0.5 }, colorA: 0x2c3e22, colorB: 0x32442f,
-      scaleMin: 0.65, scaleMax: 1.3, count: 850, windAmp: 0.15, shadow: false },
+      scaleMin: 0.65, scaleMax: 1.3, count: 1200, windAmp: 0.15, shadow: false },
     { id: 'cf_tuft', kind: 'grass', cardW: 1.0, cardH: 0.85, planes: 2, y0: 0,
       grids: { fine: 0.55 }, colorA: 0x2c3e15, colorB: 0x32442f,
-      scaleMin: 0.7, scaleMax: 1.5, count: 800, windAmp: 0.15, shadow: false },
+      scaleMin: 0.7, scaleMax: 1.5, count: 1400, windAmp: 0.15, shadow: false },
     { id: 'cf_orchid', kind: 'orchid', cardW: 0.55, cardH: 0.5, planes: 2, y0: 0,
       grids: { mid: 0.09 }, colorA: 0xC9A0DC, colorB: 0xB892CC,
-      scaleMin: 0.8, scaleMax: 1.3, count: 300, windAmp: 0.15, shadow: false },
+      scaleMin: 0.8, scaleMax: 1.3, count: 350, windAmp: 0.15, shadow: false },
   ],
   high_sierra: [
     // §2.3: ichu grass lit/shadowed, thin air — treeline + snow line fade-outs
     { id: 'hs_ichu', kind: 'grass', cardW: 1.4, cardH: 1.1, planes: 2, y0: 0,
       grids: { fine: 0.85 }, colorA: 0x9A8B4F, colorB: 0x6B6335,
-      scaleMin: 0.9, scaleMax: 1.8, count: 2100, windAmp: 0.15, shadow: false, snowFade: true },
+      scaleMin: 0.9, scaleMax: 1.8, count: 2600, windAmp: 0.15, shadow: false, snowFade: true },
     { id: 'hs_broadleaf', kind: 'broadleaf', cardW: 4.5, cardH: 4.0, planes: 3, y0: 1.9,
       grids: { mid: 0.06, coarse: 0.02 }, colorA: 0x6B6335, colorB: 0x8A7D4A,
-      scaleMin: 0.6, scaleMax: 1.1, count: 300, windAmp: 0.15, shadow: true, trunk: true, snowFade: true },
+      scaleMin: 0.6, scaleMax: 1.1, count: 350, windAmp: 0.15, shadow: true, trunk: true, snowFade: true },
     { id: 'hs_tuft', kind: 'grass', cardW: 0.9, cardH: 0.75, planes: 2, y0: 0,
       grids: { mid: 0.06 }, colorA: 0x6B6335, colorB: 0x9A8B4F,
-      scaleMin: 0.6, scaleMax: 1.2, count: 250, windAmp: 0.15, shadow: false, snowFade: true },
+      scaleMin: 0.6, scaleMax: 1.2, count: 350, windAmp: 0.15, shadow: false, snowFade: true },
   ],
   jungle_lowlands: [
     // §2.4: canopy dark / understory green — dense, swallowed by vegetation
     { id: 'jl_fern', kind: 'fern', cardW: 1.9, cardH: 1.65, planes: 3, y0: 0,
       grids: { mid: 0.55 }, colorA: 0x2a3e20, colorB: 0x2f4229,
-      scaleMin: 0.7, scaleMax: 1.4, count: 950, windAmp: 0.15, shadow: false },
-    { id: 'jl_broadleaf', kind: 'broadleaf', cardW: 6.0, cardH: 5.2, planes: 3, y0: 2.4,
+      scaleMin: 0.7, scaleMax: 1.4, count: 1350, windAmp: 0.15, shadow: false },
+    { id: 'jl_broadleaf', kind: 'broadleaf', cardW: 6.0, cardH: 5.2, planes: 4, y0: 2.4,
       grids: { mid: 0.5, coarse: 0.12 }, colorA: 0x2a3e20, colorB: 0x2f4229,
       scaleMin: 0.8, scaleMax: 1.5, count: 850, windAmp: 0.15, shadow: true, trunk: true },
     { id: 'jl_tuft', kind: 'grass', cardW: 1.1, cardH: 0.9, planes: 2, y0: 0,
       grids: { fine: 0.55 }, colorA: 0x2f4229, colorB: 0x2a3e20,
-      scaleMin: 0.7, scaleMax: 1.5, count: 850, windAmp: 0.15, shadow: false },
+      scaleMin: 0.7, scaleMax: 1.5, count: 1400, windAmp: 0.15, shadow: false },
   ],
   paititi: [
     // §2.5: encroaching green at the city's edges only — the city itself is
     // maintained stone (paititiEdgeFalloff scales all three probabilities).
     { id: 'pa_tuft', kind: 'grass', cardW: 1.0, cardH: 0.85, planes: 2, y0: 0,
       grids: { fine: 0.25 }, colorA: 0x2c3e15, colorB: 0x32442f,
-      scaleMin: 0.7, scaleMax: 1.4, count: 500, windAmp: 0.15, shadow: false },
+      scaleMin: 0.7, scaleMax: 1.4, count: 800, windAmp: 0.15, shadow: false },
     { id: 'pa_fern', kind: 'fern', cardW: 1.6, cardH: 1.4, planes: 3, y0: 0,
       grids: { mid: 0.12 }, colorA: 0x2c3e15, colorB: 0x32442f,
-      scaleMin: 0.7, scaleMax: 1.3, count: 450, windAmp: 0.15, shadow: false },
-    { id: 'pa_broadleaf', kind: 'broadleaf', cardW: 5.0, cardH: 4.4, planes: 3, y0: 2.0,
+      scaleMin: 0.7, scaleMax: 1.3, count: 700, windAmp: 0.15, shadow: false },
+    { id: 'pa_broadleaf', kind: 'broadleaf', cardW: 5.0, cardH: 4.4, planes: 4, y0: 2.0,
       grids: { mid: 0.06, coarse: 0.02 }, colorA: 0x2c3e15, colorB: 0x32442f,
-      scaleMin: 0.7, scaleMax: 1.2, count: 250, windAmp: 0.15, shadow: true, trunk: true },
+      scaleMin: 0.7, scaleMax: 1.2, count: 300, windAmp: 0.15, shadow: true, trunk: true },
   ],
 };
 
@@ -164,7 +164,7 @@ const REGION_SPECIES: Record<RegionId, SpeciesPalette[]> = {
 // Crossed alpha-tested cards: N planes rotated about Y, merged into one
 // geometry. Plane size (cardW × cardH), base at y=0 (planted), optionally
 // lifted by `y0` (tree canopies start at trunk-top height).
-function crossedCardGeometry(cardW: number, cardH: number, planes: 1 | 2 | 3, y0: number): THREE.BufferGeometry {
+function crossedCardGeometry(cardW: number, cardH: number, planes: 1 | 2 | 3 | 4, y0: number): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   for (let i = 0; i < planes; i++) {
     const p = new THREE.PlaneGeometry(cardW, cardH);
@@ -178,30 +178,41 @@ function crossedCardGeometry(cardW: number, cardH: number, planes: 1 | 2 | 3, y0
   return merged;
 }
 
-// Irregular boulder: icosphere with deterministic position-hashed radial
-// displacement (duplicated verts displace identically — hash is by direction —
-// so no cracks), welded for smooth normals. Replaces the placeholder
-// DodecahedronGeometry (§0: reads as low-poly at any distance under 60 m).
+// Irregular boulder: 162-vertex icosphere with multi-scale noise displacement
+// and geological base flattening for natural terrain contact.
 function displacedRockGeometry(): THREE.BufferGeometry {
-  const ico = new THREE.IcosahedronGeometry(1, 1);
+  const ico = new THREE.IcosahedronGeometry(1, 2);
   const welded = mergeVertices(ico);
   ico.dispose();
   const pos = welded.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
-    const h = hash2(v.x * 3.7 + v.y * 7.9, v.z * 5.3 - v.y * 2.1, 17);
-    const r = 1 + (h - 0.5) * 0.55;
-    pos.setXYZ(i, v.x * r, v.y * r * 0.8, v.z * r);
+    const h1 = hash2(v.x * 2.5 + v.y * 3.8, v.z * 3.1 - v.y * 1.5, 17);
+    const h2 = hash2(v.x * 6.2 - v.z * 5.1, v.y * 7.4 + v.x * 2.3, 43);
+    const disp = 1.0 + (h1 - 0.5) * 0.42 + (h2 - 0.5) * 0.22;
+    // Base flattening at underside for stable contact
+    const yMod = v.y < 0 ? 0.65 : 0.85;
+    pos.setXYZ(i, v.x * disp, v.y * disp * yMod, v.z * disp);
   }
   welded.computeVertexNormals();
   return welded;
 }
 
-// Instanced trunk: 7-sided tapered cylinder, base embedded 0.25 m (§1.3).
+// Instanced trunk: 10-sided tapered cylinder with root flare at ground contact.
 function trunkGeometry(): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(0.18, 0.42, 3.4, 7);
-  g.translate(0, 1.45, 0);
+  const g = new THREE.CylinderGeometry(0.22, 0.48, 3.6, 10, 4);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y < -1.0) {
+      const flare = 1.0 + Math.pow((-1.0 - y) / 0.8, 2) * 0.45;
+      pos.setX(i, pos.getX(i) * flare);
+      pos.setZ(i, pos.getZ(i) * flare);
+    }
+  }
+  g.computeVertexNormals();
+  g.translate(0, 1.55, 0);
   return g;
 }
 
@@ -388,15 +399,15 @@ export class DecorManager {
     // old 2000-per-mesh capacity processed ~336k parked vertices per frame.
     this.rocks = [
       {
-        mesh: this.makeScatterMesh(rockGeo, granite(), Math.round(800 * countScale)),
-        count: Math.round(800 * countScale), salt: 901, cursor: 0,
-        prob: { cloud_forest: 0.05, high_sierra: 0.6, jungle_lowlands: 0.03, paititi: 0.2 },
+        mesh: this.makeScatterMesh(rockGeo, granite(), Math.round(1000 * countScale)),
+        count: Math.round(1000 * countScale), salt: 901, cursor: 0,
+        prob: { cloud_forest: 0.08, high_sierra: 0.65, jungle_lowlands: 0.05, paititi: 0.22 },
         riverGap: 12,
       },
       {
-        mesh: this.makeScatterMesh(rockGeo, limestoneSwallowed(), Math.round(800 * countScale)),
-        count: Math.round(800 * countScale), salt: 908, cursor: 0,
-        prob: { cloud_forest: 0.2, high_sierra: 0.03, jungle_lowlands: 0.3, paititi: 0.06 },
+        mesh: this.makeScatterMesh(rockGeo, limestoneSwallowed(), Math.round(1000 * countScale)),
+        count: Math.round(1000 * countScale), salt: 908, cursor: 0,
+        prob: { cloud_forest: 0.25, high_sierra: 0.04, jungle_lowlands: 0.35, paititi: 0.08 },
         riverGap: 12,
       },
     ];

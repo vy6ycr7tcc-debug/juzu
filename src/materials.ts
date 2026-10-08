@@ -287,28 +287,29 @@ export function ashlarWeathered(): THREE.MeshStandardMaterial {
     });
 }
 
-// Granite (High Sierra cliff faces, outcrops)
+// Granite (High Sierra cliff faces, outcrops, boulders)
 export function granite(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x6E6A63,
-        roughness: 0.85,
+        color: 0xDDD8CE,
+        map: getImageTexture(ASSET_PATHS.environment.stonework, { repeatX: 3, repeatY: 3 }),
+        roughness: 0.88,
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 0.4,
+        envMapIntensity: 0.45,
     });
 }
 
 // Limestone swallowed (Jungle lowlands ruined stone, heavy moss)
 export function limestoneSwallowed(): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-        color: 0x758062,
+        color: 0xA2B092,
         map: getImageTexture(ASSET_PATHS.environment.stonework, { repeatX: 4, repeatY: 4 }),
         roughness: 0.9,
         metalness: 0.0,
         normalMap: getNormalMap(),
         roughnessMap: getNoiseMap(),
-        envMapIntensity: 0.4,
+        envMapIntensity: 0.45,
     });
 }
 

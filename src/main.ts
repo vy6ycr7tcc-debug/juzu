@@ -1683,6 +1683,30 @@ async function init() {
       sottrHUD.openJournal();
       sottrHUD.setPrompt(null);
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'realism_valley_open_world') {
+      // Photorealistic Andean Highland Valley Vista & Distant Geological Ridges
+      const posX = 45, posZ = 120;
+      character.teleport(posX, posZ, 0);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 2.8, groundY + 1.8, posZ + 4.2);
+      camera.lookAt(posX + 1.2, groundY + 1.3, posZ - 60.0);
+    } else if (shot === 'realism_river_gorge') {
+      // Photorealistic Glacial River Rapids, Sedimentary Strata Cliffs & Riverbank Dressing
+      const posX = 22, posZ = 45;
+      character.teleport(posX, posZ, -Math.PI * 0.45);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 3.2, groundY + 1.6, posZ + 3.8);
+      camera.lookAt(0, groundY - 1.2, posZ - 25.0);
+    } else if (shot === 'realism_character_and_nature') {
+      // Photorealistic Protagonist, Photographic Forest Floor PBR, Rocks & Volumetric Foliage
+      const posX = 42, posZ = 18;
+      character.teleport(posX, posZ, 0.35);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
+      camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1694,7 +1718,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -1820,6 +1844,30 @@ async function init() {
         character.mesh.position.set(45 + 0.5, -1.9, -30 + 5.5);
         character.mesh.rotation.y = Math.PI;
       }
+      if (shot === 'realism_valley_open_world') {
+        const posX = 45, posZ = 120;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = 0;
+        const groundY = character.mesh.position.y;
+        camera.position.set(posX - 2.8, groundY + 1.8, posZ + 4.2);
+        camera.lookAt(posX + 1.2, groundY + 1.3, posZ - 60.0);
+      }
+      if (shot === 'realism_river_gorge') {
+        const posX = 22, posZ = 45;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = -Math.PI * 0.45;
+        const groundY = character.mesh.position.y;
+        camera.position.set(posX + 3.2, groundY + 1.6, posZ + 3.8);
+        camera.lookAt(0, groundY - 1.2, posZ - 25.0);
+      }
+      if (shot === 'realism_character_and_nature') {
+        const posX = 42, posZ = 18;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = 0.35;
+        const groundY = character.mesh.position.y;
+        camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
+        camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+      }
       if (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap') {
         character.setTorch(true);
         character.mesh.position.set(50, character.getGroundedHeight(50, 50), 50);
@@ -1837,6 +1885,24 @@ async function init() {
       npcManager.update(dt);
     }
 
+    if (shot === 'realism_valley_open_world') {
+      const posX = 45, posZ = 120;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 2.8, groundY + 1.8, posZ + 4.2);
+      camera.lookAt(posX + 1.2, groundY + 1.3, posZ - 60.0);
+    }
+    if (shot === 'realism_river_gorge') {
+      const posX = 22, posZ = 45;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 3.2, groundY + 1.6, posZ + 3.8);
+      camera.lookAt(0, groundY - 1.2, posZ - 25.0);
+    }
+    if (shot === 'realism_character_and_nature') {
+      const posX = 42, posZ = 18;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
+      camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+    }
     if (shot === 'story_dialogue_tomas') {
       const tomasPos = new THREE.Vector3(-100, getGlobalTerrainHeight(-100, -500), -500);
       const playerPos = new THREE.Vector3(-97.5, getGlobalTerrainHeight(-97.5, -497.5), -497.5);

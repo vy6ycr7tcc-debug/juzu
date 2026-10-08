@@ -215,17 +215,13 @@ export class NPCManager {
     const type = npc.config.modelType;
 
     if (type === 'commander' || type === 'soldier') {
-      // Use Soldier rig for Vargas & Sol Negro mercenaries
+      // Use Soldier rig for Vargas & Sol Negro mercenaries (base height 1.832m)
       if (this.soldierGltf) {
         const cloned = SkeletonUtils.clone(this.soldierGltf.scene);
-        const box = new THREE.Box3().setFromObject(cloned);
-        const size = box.getSize(new THREE.Vector3());
         const targetHeight = type === 'commander' ? 1.84 : 1.78;
-        const scale = targetHeight / (size.y || 1);
+        const scale = targetHeight / 1.832;
         cloned.scale.setScalar(scale);
-
-        const alignedBox = new THREE.Box3().setFromObject(cloned);
-        cloned.position.y = -alignedBox.min.y;
+        cloned.position.y = 0;
 
         // Custom tactical military materials (charcoal/slate/olive)
         const darkTacticalMat = new THREE.MeshStandardMaterial({
@@ -268,17 +264,12 @@ export class NPCManager {
         return;
       }
     } else if (type === 'elder') {
-      // Tayta Tomas — Quechua Elder with traditional woven poncho and staff
+      // Tayta Tomas — Quechua Elder with traditional woven poncho and staff (base height 1.664m)
       if (this.michelleGltf && this.soldierGltf) {
         const cloned = SkeletonUtils.clone(this.michelleGltf.scene);
-        const box = new THREE.Box3().setFromObject(cloned);
-        const size = box.getSize(new THREE.Vector3());
-        const targetHeight = 1.68;
-        const scale = targetHeight / (size.y || 1);
+        const scale = 1.68 / 1.664;
         cloned.scale.setScalar(scale);
-
-        const alignedBox = new THREE.Box3().setFromObject(cloned);
-        cloned.position.y = -alignedBox.min.y;
+        cloned.position.y = 0;
 
         // Rich Andean terracotta/crimson traditional poncho
         const ponchoMat = new THREE.MeshStandardMaterial({
@@ -325,14 +316,9 @@ export class NPCManager {
       const sourceGltf = this.xbotGltf || this.soldierGltf;
       if (sourceGltf) {
         const cloned = SkeletonUtils.clone(sourceGltf.scene);
-        const box = new THREE.Box3().setFromObject(cloned);
-        const size = box.getSize(new THREE.Vector3());
-        const targetHeight = 1.76;
-        const scale = targetHeight / (size.y || 1);
+        const scale = 1.0;
         cloned.scale.setScalar(scale);
-
-        const alignedBox = new THREE.Box3().setFromObject(cloned);
-        cloned.position.y = -alignedBox.min.y;
+        cloned.position.y = 0;
 
         const khakiMat = new THREE.MeshStandardMaterial({
           color: 0xc4b38d, // Academic field khaki

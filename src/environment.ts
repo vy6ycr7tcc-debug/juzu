@@ -52,10 +52,10 @@ function getSkyUniforms(sky: THREE.Mesh): SkyUniforms {
 
 export const TOD_GRADES: Record<'day'|'dawn'|'noon'|'dusk'|'night', LightRigConfig> = {
   day: {
-    sunColor: 0xFFF4E5, sunIntensity: 3.4, sunElevationDeg: 25, sunAzimuthDeg: 135,
-    hemiSky: 0xBDD3F0, hemiGround: 0x5A5A48, hemiIntensity: 0.55,
-    fillIntensity: 0.35, exposure: 1.05,
-    fogColor: 0xA6BED2, fogDensity: 0.0014, envIntensity: 0.35
+    sunColor: 0xFFF6E8, sunIntensity: 4.8, sunElevationDeg: 28, sunAzimuthDeg: 135,
+    hemiSky: 0x90B8E0, hemiGround: 0x585244, hemiIntensity: 0.65,
+    fillIntensity: 0.35, exposure: 1.10,
+    fogColor: 0x88B0CC, fogDensity: 0.00085, envIntensity: 0.45
   },
   dawn: {
     sunColor: 0xFFA500, sunIntensity: 2.2, sunElevationDeg: 6, sunAzimuthDeg: 90,
@@ -125,7 +125,7 @@ export function setupEnvironment(scene: THREE.Scene, quality: RendererQuality, r
     } else if (gradeKey === 'night') {
       fogColor.setHex(0x182430);
     } else {
-      fogColor.setHex(0xA8B8B0); // Mist blue-grey base
+      fogColor.setHex(0x95B2C5); // Natural Andean sky blue haze
     }
   } else if (regionId === 'jungle_lowlands') {
     if (gradeKey === 'dawn' || gradeKey === 'dusk') {
@@ -133,7 +133,7 @@ export function setupEnvironment(scene: THREE.Scene, quality: RendererQuality, r
     } else {
       fogColor.setHex(0x14261E); // Swallowed ruins/dark water baseline
     }
-    fogDensity *= 1.5;
+    fogDensity *= 1.25;
   } else if (regionId === 'high_sierra') {
     fogDensity *= 0.5; // clear
   }
