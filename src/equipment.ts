@@ -154,6 +154,7 @@ export function createRecurveBow(): THREE.Group {
   // Bowstring connecting tips
   const stringGeo = new THREE.CylinderGeometry(0.002, 0.002, totalLength * 0.96, 6);
   const stringMesh = new THREE.Mesh(stringGeo, stringMat);
+  stringMesh.name = 'BowString'; // hidden while drawn — replaced by the V-string in the aim pose
   stringMesh.position.set(0, 0, -0.01);
   group.add(stringMesh);
 

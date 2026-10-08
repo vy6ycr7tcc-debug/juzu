@@ -10,6 +10,10 @@ export class InputManager {
   public tap: boolean = false;
   public hold: boolean = false;
 
+  public mouseButtons: Record<number, boolean> = {};
+  public mouseButtonsJustPressed: Record<number, boolean> = {};
+  public mouseButtonsJustReleased: Record<number, boolean> = {};
+
   private isDragging = false;
   private previousMousePosition = { x: 0, y: 0 };
 
@@ -27,9 +31,20 @@ export class InputManager {
 
     window.addEventListener('mousedown', (e) => {
       this.isDragging = true;
+      this.mouseButtons[e.button] = true;
+      this.mouseButtonsJustPressed[e.button] = true;
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     });
-    window.addEventListener('mouseup', () => this.isDragging = false);
+    window.addEventListener('mouseup', (e) => {
+      this.isDragging = false;
+      this.mouseButtons[e.button] = false;
+      this.mouseButtonsJustReleased[e.button] = true;
+      delete this.mouseButtonsJustPressed[e.button];
+    });
+    window.addEventListener('contextmenu', (e) => {
+      // Suppress browser context menu so Right Click can be used for survival bow aiming
+      e.preventDefault();
+    });
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement) {
         this.cameraDelta.x += e.movementX;
@@ -47,6 +62,9 @@ export class InputManager {
       if (document.hidden) {
         this.keys = {};
         this.justPressed = {};
+        this.mouseButtons = {};
+        this.mouseButtonsJustPressed = {};
+        this.mouseButtonsJustReleased = {};
       }
     });
   }
@@ -58,6 +76,26 @@ export class InputManager {
   consumeJustPressed(code: string): boolean {
     if (this.justPressed[code]) {
       delete this.justPressed[code];
+      return true;
+    }
+    return false;
+  }
+
+  isMouseButtonDown(button: number): boolean {
+    return !!this.mouseButtons[button];
+  }
+
+  consumeMouseButtonJustPressed(button: number): boolean {
+    if (this.mouseButtonsJustPressed[button]) {
+      delete this.mouseButtonsJustPressed[button];
+      return true;
+    }
+    return false;
+  }
+
+  consumeMouseButtonJustReleased(button: number): boolean {
+    if (this.mouseButtonsJustReleased[button]) {
+      delete this.mouseButtonsJustReleased[button];
       return true;
     }
     return false;
