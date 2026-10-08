@@ -76,7 +76,7 @@ const _climbDir = new THREE.Vector3();
  * translation / scale tracks encode the SOURCE skeleton's bone lengths and are
  * dropped (rotations-only retarget — the standard Mixamo practice).
  */
-function retargetMixamoClip(clip: THREE.AnimationClip, srcScene: THREE.Object3D, dstModel: THREE.Object3D): THREE.AnimationClip | null {
+export function retargetMixamoClip(clip: THREE.AnimationClip, srcScene: THREE.Object3D, dstModel: THREE.Object3D): THREE.AnimationClip | null {
   const srcHips = srcScene.getObjectByName(HIPS);
   const dstHips = dstModel.getObjectByName(HIPS);
   if (!srcHips || !dstHips || !srcHips.parent || !dstHips.parent) return null;

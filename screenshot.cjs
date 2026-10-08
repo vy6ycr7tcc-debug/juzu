@@ -46,7 +46,7 @@ async function run() {
         await page.waitForTimeout(500);
 
         const safeName = scenario.replace(/[^a-zA-Z0-9_-]/g, '_');
-        if (scenario.includes('map') || scenario.includes('hud') || scenario.includes('open_world')) {
+        if (scenario.includes('map') || scenario.includes('hud') || scenario.includes('open_world') || scenario.includes('dialogue') || scenario.includes('journal') || scenario.includes('confrontation') || scenario.includes('story')) {
           await page.screenshot({ path: `shot_${safeName}_${mode}.png` });
         } else {
           const canvas = await page.locator('#app canvas').first();
