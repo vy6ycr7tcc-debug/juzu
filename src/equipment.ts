@@ -238,3 +238,95 @@ export function createQuiver(): THREE.Group {
 
   return group;
 }
+
+/**
+ * Creates the survival pine torch with weathered shaft, fibrous twine wrapping,
+ * glowing ember core, teardrop flame, and warm amber point light source.
+ */
+export function createPineTorch(): {
+  group: THREE.Group;
+  light: THREE.PointLight;
+  flameMesh: THREE.Mesh;
+  tipPosition: THREE.Vector3;
+} {
+  const group = new THREE.Group();
+  group.name = 'PineTorch';
+
+  // Materials
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x3d2b1f,
+    roughness: 0.88,
+    metalness: 0.05,
+  });
+
+  const twineMat = new THREE.MeshStandardMaterial({
+    color: 0x5a4835,
+    roughness: 0.95,
+    metalness: 0.0,
+  });
+
+  const emberMat = new THREE.MeshStandardMaterial({
+    color: 0x221105,
+    emissive: new THREE.Color(0xff4400),
+    emissiveIntensity: 1.8,
+    roughness: 0.9,
+  });
+
+  const flameMat = new THREE.MeshBasicMaterial({
+    color: 0xffaa33,
+    transparent: true,
+    opacity: 0.85,
+  });
+
+  // 1. Weathered Pine Branch Shaft (0.55m long)
+  const shaftGeo = new THREE.CylinderGeometry(0.016, 0.022, 0.55, 10);
+  const shaft = new THREE.Mesh(shaftGeo, woodMat);
+  shaft.position.y = -0.2;
+  shaft.castShadow = true;
+  group.add(shaft);
+
+  // 2. Bound Twine & Resin Head (top 0.14m)
+  const headGeo = new THREE.CylinderGeometry(0.038, 0.028, 0.14, 10);
+  const head = new THREE.Mesh(headGeo, twineMat);
+  head.position.y = 0.08;
+  head.castShadow = true;
+  group.add(head);
+
+  // Cross-wound rope ties around the resin head
+  const ringGeo = new THREE.TorusGeometry(0.036, 0.006, 6, 12);
+  for (let r = 0; r < 4; r++) {
+    const ring = new THREE.Mesh(ringGeo, woodMat);
+    ring.position.y = 0.04 + r * 0.03;
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+  }
+
+  // 3. Glowing Embers Core
+  const emberGeo = new THREE.SphereGeometry(0.032, 8, 8);
+  const ember = new THREE.Mesh(emberGeo, emberMat);
+  ember.position.y = 0.15;
+  group.add(ember);
+
+  // 4. Teardrop Flame Core Mesh
+  const flameGeo = new THREE.ConeGeometry(0.042, 0.12, 8);
+  const flameMesh = new THREE.Mesh(flameGeo, flameMat);
+  flameMesh.position.y = 0.22;
+  group.add(flameMesh);
+
+  // 5. Point Light (Warm Amber 2200K firelight with soft falloff)
+  const light = new THREE.PointLight(0xff8833, 2.6, 14.0, 1.8);
+  light.position.y = 0.24;
+  light.castShadow = true;
+  light.shadow.bias = -0.002;
+  group.add(light);
+
+  const tipPosition = new THREE.Vector3(0, 0.24, 0);
+
+  return {
+    group,
+    light,
+    flameMesh,
+    tipPosition,
+  };
+}
+
