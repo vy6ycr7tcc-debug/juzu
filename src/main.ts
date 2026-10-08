@@ -1372,16 +1372,46 @@ async function init() {
       camera.position.set(cisternOrigin.x + 1.8, cisternOrigin.y + 1.6, cisternOrigin.z + 8.5);
       camera.lookAt(cisternOrigin.x - 1.2, cisternOrigin.y + 0.6, cisternOrigin.z + 1.8);
       character.triggerArchaeologistInstinct();
+    } else if (shot === 'bow_aim') {
+      // Phase 7 Survival Recurve Bow Aiming & Reticle (Shadow of the Tomb Raider North Star)
+      const posX = 50, posZ = 50;
+      character.teleport(posX, posZ, 0.18);
+      character.setAim(true, 0.85); // 85% draw tension
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      // Close three-quarters rear OTS perspective highlighting drawn recurve bow, nocked arrow, and tension
+      camera.position.set(posX + 0.55, groundY + 1.42, posZ + 1.45);
+      camera.lookAt(posX - 0.15, groundY + 1.35, posZ - 3.2);
+    } else if (shot === 'arrow_flight') {
+      // Phase 7 Ballistic Arrow Flight & Target Penetration (Shadow of the Tomb Raider North Star)
+      const posX = 50, posZ = 50;
+      character.teleport(posX, posZ, 0.18);
+      character.setAim(true, 1.0);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      // Spawn stuck arrow down-range embedded in slope
+      const launchDir = new THREE.Vector3(0.08, -0.04, -0.99).normalize();
+      const stuckPos = new THREE.Vector3(posX + 0.30, groundY + 0.15, posZ - 2.8);
+      stuckPos.y = getGlobalTerrainHeight(stuckPos.x, stuckPos.z) + 0.12;
+      const stuck = character.bowSystem?.spawnArrow(stuckPos, launchDir, 0);
+      if (stuck) stuck.isStuck = true;
+
+      // Medium OTS angle showing archer's drawn follow-through and the stuck projectile down-range
+      camera.position.set(posX + 0.75, groundY + 1.4, posZ + 0.9);
+      camera.lookAt(posX + 0.25, groundY + 0.95, posZ - 2.6);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))))));
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
       if (shot === 'wetness_sheen') character.wetness = 0.95;
+      if (shot === 'bow_aim' || shot === 'arrow_flight') {
+        character.setAim(true, shot === 'bow_aim' ? 0.85 : 1.0);
+      }
       if (shot === 'underwater_dive') {
         character.state = MovementState.DIVE;
         character.mesh.position.set(0, -4.2, 10);
@@ -1413,6 +1443,14 @@ async function init() {
       character.update(dt);
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
+    }
+
+    if (shot === 'arrow_flight') {
+      const posX = 50, posZ = 50;
+      const groundY = character.mesh.position.y;
+      const launchDir = new THREE.Vector3(0.08, -0.04, -0.99).normalize();
+      const inFlightPos = new THREE.Vector3(posX + 0.35, groundY + 1.15, posZ - 1.2);
+      character.bowSystem?.spawnArrow(inFlightPos, launchDir, 35);
     }
 
     // Sun/shadow rig follows the shot's viewpoint (§3.2)
@@ -1700,6 +1738,7 @@ async function init() {
         isTorchEquipped: character.isTorchEquipped,
         shoulderSide: character.shoulderSide,
       };
+      (window as any).__char = character;
       // Phase 8 shadow probe: evaluated AFTER the render so shadowMapAllocated
       // reflects whether the shadow pass actually ran (LightShadow.map is
       // allocated lazily on first shadow render).

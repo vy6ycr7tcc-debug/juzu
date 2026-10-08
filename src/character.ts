@@ -9,6 +9,7 @@ import { createMistTexture } from './textures.js';
 import { createClimbingAxe, createRecurveBow, createQuiver, createPineTorch } from './equipment.js';
 import { waterDepthAt, waterSurfaceY } from './river.js';
 import { SurvivalInstinctSystem } from './instinct.js';
+import { BowSystem } from './bow.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
 // gates G3/G4 read live locomotion state instead of screenshot guessing.
@@ -43,6 +44,22 @@ export enum MovementState {
 }
 
 const HIPS = 'mixamorigHips';
+
+// Archery IK scratch (module-level: zero per-frame allocation while aiming)
+const _UP = new THREE.Vector3(0, 1, 0);
+const _Y = new THREE.Vector3(0, 1, 0);
+const _ikPos = new THREE.Vector3(), _ikDir = new THREE.Vector3(), _ikCur = new THREE.Vector3();
+const _ikS = new THREE.Vector3(), _ikE = new THREE.Vector3(), _ikH = new THREE.Vector3();
+const _ikToT = new THREE.Vector3(), _ikPerp = new THREE.Vector3(), _ikElbow = new THREE.Vector3(), _ikEndT = new THREE.Vector3();
+const _ikQa = new THREE.Quaternion(), _ikQb = new THREE.Quaternion(), _ikQc = new THREE.Quaternion();
+const _aim = new THREE.Vector3(), _right = new THREE.Vector3();
+const _sL = new THREE.Vector3(), _bowWrist = new THREE.Vector3(), _poleL = new THREE.Vector3(), _poleR = new THREE.Vector3();
+const _headPos = new THREE.Vector3(), _lWrist = new THREE.Vector3(), _anchor = new THREE.Vector3();
+const _relaxed = new THREE.Vector3(), _drawWrist = new THREE.Vector3();
+const _grip = new THREE.Vector3(), _nock = new THREE.Vector3(), _fwd = new THREE.Vector3();
+const _xAx = new THREE.Vector3(), _yAx = new THREE.Vector3(), _zAx = new THREE.Vector3();
+const _tmpA = new THREE.Vector3(), _tmpB = new THREE.Vector3(), _tmpC = new THREE.Vector3();
+const _bowM = new THREE.Matrix4(), _bowLocal = new THREE.Matrix4();
 
 /**
  * Retarget a Mixamo clip authored on one export onto another export that
@@ -275,10 +292,25 @@ export class CharacterController {
   private torchEmberMat: THREE.SpriteMaterial | null = null;
   private torchEmberTimer: number = 0;
   private leftHandBone: THREE.Object3D | null = null;
+  private rightHandBone: THREE.Object3D | null = null;
 
   // Cinematic Camera Dynamics (Shoulder-Swap, Sprint Shake & FoV Punch)
   public shoulderSide: number = 1.0; // +1.0 = right shoulder, -1.0 = left shoulder
   private currentShoulderOffset: number = 0.38;
+
+  // Survival Recurve Bow & Ballistic Arrow System (Shadow of the Tomb Raider North Star)
+  public bowSystem: BowSystem | null = null;
+  public spineBow: THREE.Group | null = null;
+  public handBow: THREE.Group | null = null;
+  public nockedArrow: THREE.Group | null = null;
+  private drawnString: THREE.Mesh[] = [];
+  private spine1Bone: THREE.Object3D | null = null;
+  private spine2Bone: THREE.Object3D | null = null;
+  private neckBone: THREE.Object3D | null = null;
+  private headBone: THREE.Object3D | null = null;
+  public isAiming: boolean = false;
+  public forceAim: boolean = false;
+  public aimDrawTension: number = 0;
 
   // Archaeological Survival Instincts System (Shadow of the Tomb Raider North Star)
   public instinctSystem: SurvivalInstinctSystem;
@@ -287,6 +319,7 @@ export class CharacterController {
     this.camera = camera;
     this.input = input;
     this.instinctSystem = new SurvivalInstinctSystem(scene);
+    this.bowSystem = new BowSystem(scene);
 
     // Protagonist root group — positioned in world coordinates
     this.mesh = new THREE.Group();
@@ -373,6 +406,7 @@ export class CharacterController {
           bow.rotation.set(0.2, 0.1, 0.75); // diagonal sling angle
           bow.scale.setScalar(92.0); // 100x scale
           spine2Bone.add(bow);
+          this.spineBow = bow;
 
           // 3. Arrow Quiver on right shoulder back
           const quiver = createQuiver();
@@ -403,7 +437,41 @@ export class CharacterController {
           torch.group.visible = this.isTorchEquipped;
           this.leftHandBone.add(torch.group);
           this.torchData = torch;
+
+          // Equipped survival recurve bow for active aiming. Parented to the
+          // character root and placed every frame by applyBowAimPose() from the
+          // IK-solved grip (left hand) and nock (right hand) — the hand bone's
+          // roll is not trustworthy enough to hang a 1 m bow off.
+          const handBow = createRecurveBow();
+          handBow.visible = false;
+          const bracedString = handBow.getObjectByName('BowString');
+          if (bracedString) bracedString.visible = false;
+
+          // Drawn V-string: two segments from the limb tips to the nock point
+          const drawnStringMat = new THREE.MeshStandardMaterial({ color: 0xd8d4cb, roughness: 0.6, metalness: 0.0 });
+          const drawnStringGeo = new THREE.CylinderGeometry(0.0018, 0.0018, 1, 5);
+          this.drawnString = [new THREE.Mesh(drawnStringGeo, drawnStringMat), new THREE.Mesh(drawnStringGeo, drawnStringMat)];
+          for (const seg of this.drawnString) handBow.add(seg);
+
+          // Nocked feathered arrow resting on the shelf (placed by applyBowAimPose)
+          if (this.bowSystem) {
+            const arrow = this.bowSystem.createArrowMesh();
+            // Arrowhead toward bow -Z (target side), nock toward +Z (string side)
+            arrow.rotation.set(0, Math.PI, 0);
+            handBow.add(arrow);
+            this.nockedArrow = arrow;
+          }
+
+          this.mesh.add(handBow);
+          this.handBow = handBow;
         }
+
+        this.rightHandBone = (model.getObjectByName('mixamorigRightHand') ?? model.getObjectByName('mixamorig:RightHand')) ?? null;
+        const findBone = (n: string) => (model.getObjectByName(`mixamorig${n}`) ?? model.getObjectByName(`mixamorig:${n}`)) ?? null;
+        this.spine1Bone = findBone('Spine1');
+        this.spine2Bone = findBone('Spine2');
+        this.neckBone = findBone('Neck');
+        this.headBone = findBone('Head');
 
         // AnimationMixer with RETARGETED locomotion clips. The soldier/xbot
         // exports share Michelle's 65 mixamorig bone names but NOT her
@@ -459,6 +527,39 @@ export class CharacterController {
 
   public toggleTorch() {
     this.setTorch(!this.isTorchEquipped);
+  }
+
+  public releaseArrow() {
+    if (!this.bowSystem) return;
+
+    // Launch origin: bow rest position in world coordinates (or shoulder height)
+    const origin = this.handBow
+      ? this.handBow.getWorldPosition(new THREE.Vector3())
+      : this.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+
+    // Launch direction: along camera optical vector
+    const launchDir = new THREE.Vector3();
+    this.camera.getWorldDirection(launchDir);
+
+    // Initial ballistic velocity: 22m/s (quick snap) to 42m/s (full draw)
+    const speed = 22 + 20 * this.aimDrawTension;
+    this.bowSystem.spawnArrow(origin, launchDir, speed);
+
+    // Reset draw tension and briefly hide nocked arrow
+    this.aimDrawTension = 0;
+    if (this.nockedArrow) this.nockedArrow.visible = false;
+  }
+
+  public setAim(aiming: boolean, tension: number = 0) {
+    this.forceAim = aiming;
+    this.isAiming = aiming;
+    this.aimDrawTension = tension;
+    if (this.spineBow) this.spineBow.visible = !aiming;
+    if (this.handBow) this.handBow.visible = aiming;
+    if (this.nockedArrow) {
+      this.nockedArrow.visible = aiming;
+    }
+    this.bowSystem?.setAimHUD(aiming, tension);
   }
 
   public getTerrainHeightAndNormal(x: number, z: number): { y: number, normal: THREE.Vector3 } {
@@ -648,6 +749,46 @@ export class CharacterController {
     // Over-the-shoulder camera swap (KeyV)
     if (this.input.consumeJustPressed('KeyV')) {
       this.shoulderSide *= -1.0;
+    }
+
+    // Survival Recurve Bow Aiming & Release (Shadow of the Tomb Raider North Star)
+    // Hold RMB or KeyF to aim; release LMB or Enter to fire arrow
+    const aimRequested = (this.forceAim || this.input.isMouseButtonDown(2) || this.input.isDown('KeyF')) &&
+      this.state !== MovementState.SWIM &&
+      this.state !== MovementState.DIVE &&
+      this.state !== MovementState.SLIDE &&
+      this.state !== MovementState.MANTLE &&
+      this.state !== MovementState.WALL_SCRAMBLE;
+
+    if (aimRequested) {
+      if (!this.isAiming) {
+        this.isAiming = true;
+        this.aimDrawTension = 0;
+      }
+      this.aimDrawTension = Math.min(1.0, this.aimDrawTension + dt * 2.2);
+
+      // Lock adventurer facing to camera azimuth while aiming
+      this.mesh.rotation.y = this.theta;
+
+      if (this.spineBow) this.spineBow.visible = false;
+      if (this.handBow) this.handBow.visible = true;
+      if (this.nockedArrow) {
+        this.nockedArrow.visible = true;
+      }
+
+      this.bowSystem?.setAimHUD(true, this.aimDrawTension);
+
+      // Fire arrow on Left Mouse Click or Enter
+      if (this.input.consumeMouseButtonJustPressed(0) || this.input.consumeJustPressed('Enter')) {
+        this.releaseArrow();
+      }
+    } else if (this.isAiming) {
+      this.isAiming = false;
+      this.aimDrawTension = 0;
+      if (this.spineBow) this.spineBow.visible = true;
+      if (this.handBow) this.handBow.visible = false;
+      if (this.nockedArrow) this.nockedArrow.visible = false;
+      this.bowSystem?.setAimHUD(false);
     }
 
     // 3. Movement Direction Input
@@ -1227,6 +1368,7 @@ export class CharacterController {
     this.updateMudParticles(dt);
     this.updateTorch(dt);
     this.instinctSystem.update(dt);
+    this.bowSystem?.update(dt, physics);
     this.updateAnimationAndCamera(dt);
   }
 
@@ -1368,6 +1510,128 @@ export class CharacterController {
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Archery aim pose (world-space IK). All scratch is module-level (no per-frame
+  // allocation — standing performance directives).
+  // --------------------------------------------------------------------------
+
+  /** Rotate `bone` (minimal arc, preserving the animation's twist) so its child points at `target`. */
+  private aimBoneAt(bone: THREE.Object3D, child: THREE.Object3D, target: THREE.Vector3) {
+    const pos = bone.getWorldPosition(_ikPos);
+    const dir = _ikDir.subVectors(target, pos);
+    if (dir.lengthSq() < 1e-10) return;
+    dir.normalize();
+    bone.parent!.getWorldQuaternion(_ikQa).invert();
+    dir.applyQuaternion(_ikQa); // desired child direction in parent space
+    const cur = _ikCur.copy(child.position).normalize().applyQuaternion(bone.quaternion);
+    _ikQb.setFromUnitVectors(cur, dir);
+    bone.quaternion.premultiply(_ikQb);
+    bone.updateMatrixWorld(true);
+  }
+
+  /** Classic two-bone IK: law-of-cosines elbow placed toward `pole`. */
+  private solveTwoBone(upper: THREE.Object3D, lower: THREE.Object3D, end: THREE.Object3D, target: THREE.Vector3, pole: THREE.Vector3) {
+    const S = upper.getWorldPosition(_ikS);
+    const a = lower.getWorldPosition(_ikE).distanceTo(S);
+    const b = end.getWorldPosition(_ikH).distanceTo(_ikE);
+    const toT = _ikToT.subVectors(target, S);
+    const d = THREE.MathUtils.clamp(toT.length(), 1e-4, (a + b) * 0.999);
+    toT.normalize();
+    const cosA = THREE.MathUtils.clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1);
+    const sinA = Math.sqrt(1 - cosA * cosA);
+    const perp = _ikPerp.copy(pole).addScaledVector(toT, -pole.dot(toT));
+    if (perp.lengthSq() < 1e-8) perp.set(0, -1, 0);
+    perp.normalize();
+    const elbow = _ikElbow.copy(S).addScaledVector(toT, cosA * a).addScaledVector(perp, sinA * a);
+    const endTarget = _ikEndT.copy(S).addScaledVector(toT, d);
+    this.aimBoneAt(upper, lower, elbow);
+    this.aimBoneAt(lower, end, endTarget);
+  }
+
+  /** Rotate a bone about a WORLD axis (used for the side-on torso turn and head counter-turn). */
+  private rotateBoneWorld(bone: THREE.Object3D, axis: THREE.Vector3, angle: number) {
+    const p = bone.parent!.getWorldQuaternion(_ikQa);
+    _ikQb.setFromAxisAngle(axis, angle);
+    // L' = P⁻¹ · Q · P · L
+    const delta = _ikQc.copy(p).invert().multiply(_ikQb).multiply(p);
+    bone.quaternion.premultiply(delta);
+    bone.updateMatrixWorld(true);
+  }
+
+  private applyBowAimPose() {
+    const la = this.leftArmBone!, lfa = this.leftForeArmBone, lh = this.leftHandBone;
+    const ra = this.rightArmBone!, rfa = this.rightForeArmBone, rh = this.rightHandBone;
+    if (!lfa || !lh || !rfa || !rh) return;
+
+    this.mesh.updateMatrixWorld(true);
+    const aim = this.camera.getWorldDirection(_aim);
+    const right = _right.crossVectors(aim, _UP).normalize();
+
+    // 1. Side-on archer stance: torso turns ~40° clockwise (from above) so the
+    //    bow shoulder leads toward the target, like Lara's draw in SOTTR.
+    if (this.spine1Bone) this.rotateBoneWorld(this.spine1Bone, _UP, -0.30);
+    if (this.spine2Bone) this.rotateBoneWorld(this.spine2Bone, _UP, -0.30);
+    // Head counter-turns to keep the eyes on the line of the arrow.
+    if (this.neckBone) this.rotateBoneWorld(this.neckBone, _UP, 0.30);
+    if (this.headBone) this.rotateBoneWorld(this.headBone, _UP, 0.22);
+
+    // 2. Bow arm: nearly straight along the aim line from the left shoulder,
+    //    elbow rotated down/out (the classic archer's elbow).
+    const sL = la.getWorldPosition(_sL);
+    const reachL = lfa.getWorldPosition(_tmpA).distanceTo(sL) + lh.getWorldPosition(_tmpB).distanceTo(_tmpA);
+    const bowWrist = _bowWrist.copy(sL).addScaledVector(aim, reachL * 0.97);
+    const poleL = _poleL.set(0, -1, 0).addScaledVector(right, -0.6);
+    this.solveTwoBone(la, lfa, lh, bowWrist, poleL);
+
+    // 3. Draw hand: from the bow toward the cheek anchor as tension builds.
+    const headPos = (this.headBone ?? this.neckBone ?? ra).getWorldPosition(_headPos);
+    const lWrist = lh.getWorldPosition(_lWrist);
+    const anchor = _anchor.copy(headPos).addScaledVector(right, 0.09).addScaledVector(_UP, -0.06);
+    const relaxed = _relaxed.copy(lWrist).addScaledVector(aim, -0.30);
+    const drawWrist = _drawWrist.copy(relaxed).lerp(anchor, THREE.MathUtils.clamp(this.aimDrawTension, 0, 1));
+    // Draw elbow sits high and behind, in line with the arrow
+    const poleR = _poleR.copy(right).addScaledVector(aim, -1.0).addScaledVector(_UP, 0.35);
+    this.solveTwoBone(ra, rfa, rh, drawWrist, poleR);
+
+    // 4. Bow + arrow + V-string placed between the solved hands.
+    if (!this.handBow) return;
+    const lElbow = lfa.getWorldPosition(_tmpA);
+    const grip = _grip.copy(lh.getWorldPosition(_lWrist)).addScaledVector(_tmpB.subVectors(_lWrist, lElbow).normalize(), 0.075);
+    const rElbow = rfa.getWorldPosition(_tmpA);
+    const nock = _nock.copy(rh.getWorldPosition(_tmpC)).addScaledVector(_tmpB.subVectors(_tmpC, rElbow).normalize(), 0.06);
+
+    const f = _fwd.subVectors(grip, nock);
+    const drawLen = f.length();
+    if (drawLen < 1e-4) f.copy(aim); else f.divideScalar(drawLen);
+    const zAxis = _zAx.copy(f).negate();                    // bow +Z = string/archer side
+    const yAxis = _yAx.copy(_UP).addScaledVector(zAxis, -_UP.dot(zAxis)).normalize();
+    yAxis.applyAxisAngle(f, -0.12);                          // slight canted grip
+    const xAxis = _xAx.crossVectors(yAxis, zAxis).normalize();
+    _bowM.makeBasis(xAxis, yAxis, zAxis);
+    // Grip (bow-local (0,0,-0.14)) sits in the left palm
+    _bowM.setPosition(_tmpA.copy(grip).addScaledVector(zAxis, 0.14));
+    _bowLocal.copy(this.mesh.matrixWorld).invert().multiply(_bowM);
+    _bowLocal.decompose(this.handBow.position, this.handBow.quaternion, this.handBow.scale);
+
+    // Nock point in bow-local space: on the arrow line, drawLen behind the grip
+    const nockZ = -0.14 + drawLen;
+    if (this.nockedArrow) {
+      // Arrow centre is 0.36 m ahead of its nock; rests on the shelf left of the grip
+      this.nockedArrow.position.set(-0.016, 0, nockZ - 0.36);
+    }
+    // V-string: limb tips (0, ±0.525, 0.06) to the nock
+    for (let i = 0; i < this.drawnString.length; i++) {
+      const seg = this.drawnString[i];
+      const tip = _tmpA.set(0, i === 0 ? 0.525 : -0.525, 0.06);
+      const n = _tmpB.set(0, 0, nockZ);
+      const dir = _tmpC.subVectors(n, tip);
+      const len = dir.length();
+      seg.position.copy(tip).addScaledVector(dir, 0.5);
+      seg.quaternion.setFromUnitVectors(_Y, dir.divideScalar(len));
+      seg.scale.set(1, len, 1);
+    }
+  }
+
   private updateAnimationAndCamera(dt: number) {
     // Skeletal animation updates
     if (this.mixer) {
@@ -1414,7 +1678,12 @@ export class CharacterController {
       this.swimStrokeTimer += dt * (this.speed > 0.5 ? 4.5 : 2.2);
     }
 
-    if (this.isTorchEquipped && this.leftArmBone && this.state !== MovementState.LEDGE_HANG && this.state !== MovementState.MANTLE && this.state !== MovementState.WALL_SCRAMBLE && this.state !== MovementState.SLIDE && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE) {
+    // Survival Recurve Bow Aiming Posture (Shadow of the Tomb Raider North Star)
+    // Solved in world space (two-bone IK) — Euler guesses in Mixamo bone-local
+    // frames do not converge (bone axes differ per rig and per animation frame).
+    if (this.isAiming && this.leftArmBone && this.rightArmBone) {
+      this.applyBowAimPose();
+    } else if (this.isTorchEquipped && this.leftArmBone && this.state !== MovementState.LEDGE_HANG && this.state !== MovementState.MANTLE && this.state !== MovementState.WALL_SCRAMBLE && this.state !== MovementState.SLIDE && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE) {
       // Hold left arm raised forward and steady to cast torchlight into the dark
       this.leftArmBone.rotation.set(-0.65, 0.35, 0.45);
       if (this.leftForeArmBone) {
@@ -1493,26 +1762,30 @@ export class CharacterController {
     const camRight = new THREE.Vector3(cosTheta, 0, -sinTheta).normalize();
 
     // 2. Over-the-shoulder offset:
-    // Smooth lerp towards target shoulder offset (+0.38m for right shoulder, -0.38m for left shoulder)
-    const targetShoulderOffset = 0.38 * this.shoulderSide;
-    this.currentShoulderOffset += (targetShoulderOffset - this.currentShoulderOffset) * Math.min(1.0, 10.0 * dt);
+    // Smooth lerp towards target shoulder offset (+0.38m for right shoulder, -0.38m for left shoulder, or tight 0.44m when aiming)
+    const targetShoulderOffset = this.isAiming ? 0.44 : (0.38 * this.shoulderSide);
+    this.currentShoulderOffset += (targetShoulderOffset - this.currentShoulderOffset) * Math.min(1.0, 12.0 * dt);
     const shoulderOffset = camRight.clone().multiplyScalar(this.currentShoulderOffset);
-    this.target.copy(this.mesh.position).add(new THREE.Vector3(0, 1.35, 0)).add(shoulderOffset);
+    const targetHeight = this.isAiming ? 1.42 : 1.35;
+    this.target.copy(this.mesh.position).add(new THREE.Vector3(0, targetHeight, 0)).add(shoulderOffset);
 
-    // Dynamic Velocity FoV Punch (Shadow of the Tomb Raider North Star)
+    // Dynamic Velocity FoV Punch & Tactical Aim Zoom (Shadow of the Tomb Raider North Star)
     const baseFov = 60.0;
     const runRatio = Math.max(0, Math.min(1.0, this.speed / this.maxRunSpeed));
-    const targetFov = (this.state === MovementState.DIVE || this.state === MovementState.SWIM)
-      ? 62.0
-      : (baseFov + runRatio * 6.5);
-    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 8.0 * dt);
+    const targetFov = this.isAiming
+      ? 42.0 // Tight tactical aim zoom
+      : ((this.state === MovementState.DIVE || this.state === MovementState.SWIM)
+        ? 62.0
+        : (baseFov + runRatio * 6.5));
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 10.0 * dt);
     this.camera.updateProjectionMatrix();
 
-    // 3. Desired camera position at full radius
+    // 3. Desired camera position at target radius
+    const currentRadius = this.isAiming ? 1.85 : this.radius;
     const desiredOffset = new THREE.Vector3(
-      this.radius * sinPhi * sinTheta,
-      this.radius * cosPhi,
-      this.radius * sinPhi * cosTheta
+      currentRadius * sinPhi * sinTheta,
+      currentRadius * cosPhi,
+      currentRadius * sinPhi * cosTheta
     );
 
     // 4. Spring-arm collision avoidance:
