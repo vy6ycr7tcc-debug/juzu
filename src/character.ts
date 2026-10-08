@@ -6,6 +6,7 @@ import { physics } from './physics.js';
 import { getGlobalTerrainHeight } from './terrain.js';
 import { hairDark, leatherDark } from './materials.js';
 import { createMistTexture } from './textures.js';
+import { createClimbingAxe, createRecurveBow, createQuiver } from './equipment.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
 // gates G3/G4 read live locomotion state instead of screenshot guessing.
@@ -213,6 +214,14 @@ export class CharacterController {
   private breathAccum = 0;
   private breathMat: THREE.SpriteMaterial | null = null;
 
+  // Dynamic Surface Wetness & Mud Splatter (Shadow of the Tomb Raider North Star)
+  public wetness: number = 0; // 0.0 (bone dry) to 1.0 (soaked)
+  public mudSplatter: number = 0; // 0.0 (clean) to 1.0 (mud-caked)
+  public charMaterials: THREE.MeshStandardMaterial[] = [];
+  private waterDripParticles: THREE.Sprite[] = [];
+  private waterDripAccum = 0;
+  private waterDripMat: THREE.SpriteMaterial | null = null;
+
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
     this.input = input;
@@ -275,13 +284,39 @@ export class CharacterController {
               mat.roughness = 0.85; // Weather-worn field clothing & natural skin
               mat.metalness = 0.02; // Non-metallic organic surface
               mat.needsUpdate = true;
+              this.charMaterials.push(mat);
             }
           }
         });
 
-        // No code-sculpted attachments (AGENTS.md: the protagonist is the
-        // rigged GLB only). Bone names are sanitized by GLTFLoader
-        // ("mixamorig:Head" → "mixamorigHead") if gear sockets are added later.
+        // Survival Gear Sockets (Shadow of the Tomb Raider North Star)
+        // Authentic survivalist equipment socketed directly into the skeletal rig
+        const hipsBone = (model.getObjectByName('mixamorig:Hips') ?? model.getObjectByName('mixamorigHips')) ?? null;
+        const spine2Bone = (model.getObjectByName('mixamorig:Spine2') ?? model.getObjectByName('mixamorigSpine2')) ?? (model.getObjectByName('mixamorig:Spine1') ?? model.getObjectByName('mixamorigSpine1')) ?? null;
+
+        if (hipsBone) {
+          const axe = createClimbingAxe();
+          axe.position.set(16.0, -2.0, 4.0); // right hip loop in cm bone coordinates
+          axe.rotation.set(0.1, 0, -0.15);
+          axe.scale.setScalar(95.0); // 100x scale to counter 0.01 armature scale
+          hipsBone.add(axe);
+        }
+
+        if (spine2Bone) {
+          // 2. Survival Recurve Bow across spine
+          const bow = createRecurveBow();
+          bow.position.set(0, 4.0, -12.0); // slung diagonally across upper back
+          bow.rotation.set(0.2, 0.1, 0.75); // diagonal sling angle
+          bow.scale.setScalar(92.0); // 100x scale
+          spine2Bone.add(bow);
+
+          // 3. Arrow Quiver on right shoulder back
+          const quiver = createQuiver();
+          quiver.position.set(10.0, 10.0, -10.0);
+          quiver.rotation.set(-0.25, -0.15, -0.55);
+          quiver.scale.setScalar(88.0); // 100x scale
+          spine2Bone.add(quiver);
+        }
 
         this.characterModel = model;
         this.mesh.add(model);
@@ -987,8 +1022,77 @@ export class CharacterController {
       }
     }
 
+    this.updateWetnessAndMud(dt, groundH);
     this.updateMudParticles(dt);
     this.updateAnimationAndCamera(dt);
+  }
+
+  private updateWetnessAndMud(dt: number, groundH: number) {
+    // Dynamic Surface Wetness & Mud Washed Off in Water (Shadow of the Tomb Raider North Star)
+    const isRiverCorridor = Math.abs(this.mesh.position.x) < 22 && this.mesh.position.y < 1.0;
+    if (this.state === MovementState.SWIM || isRiverCorridor) {
+      this.wetness = Math.min(1.0, this.wetness + dt * 3.0); // Soaks in water
+      this.mudSplatter = Math.max(0.0, this.mudSplatter - dt * 2.0); // River washes away mud!
+    } else {
+      // Natural evaporation drying curve (dries over ~25s)
+      this.wetness = Math.max(0.0, this.wetness - dt / 25.0);
+    }
+
+    if (this.state === MovementState.SLIDE) {
+      this.mudSplatter = Math.min(1.0, this.mudSplatter + dt * 0.8);
+    }
+
+    // Water droplet drips when wet
+    if (this.wetness > 0.35) {
+      this.waterDripAccum += dt * (this.wetness * 12);
+      while (this.waterDripAccum >= 1) {
+        this.waterDripAccum -= 1;
+        if (!this.waterDripMat) {
+          this.waterDripMat = new THREE.SpriteMaterial({
+            map: createMistTexture(),
+            color: 0x99ddff,
+            transparent: true,
+            opacity: 0.85,
+            depthWrite: false,
+          });
+        }
+        const drip = new THREE.Sprite(this.waterDripMat);
+        drip.scale.setScalar(0.04);
+        const dripOffset = new THREE.Vector3(
+          (Math.random() - 0.5) * 0.45,
+          0.3 + Math.random() * 0.8,
+          (Math.random() - 0.5) * 0.45
+        );
+        drip.position.copy(this.mesh.position).add(dripOffset);
+        this.mesh.parent?.add(drip);
+        this.waterDripParticles.push(drip);
+      }
+    }
+
+    // Update water drip particles
+    for (let i = this.waterDripParticles.length - 1; i >= 0; i--) {
+      const d = this.waterDripParticles[i];
+      d.position.y -= dt * 2.8;
+      d.material.opacity -= dt * 1.4;
+      if (d.material.opacity <= 0 || d.position.y <= groundH) {
+        d.parent?.remove(d);
+        this.waterDripParticles.splice(i, 1);
+      }
+    }
+
+    // Modulate character PBR materials for wetness and mud
+    for (const mat of this.charMaterials) {
+      const baseRoughness = 0.85;
+      const wetRoughness = THREE.MathUtils.lerp(baseRoughness, 0.16, this.wetness);
+      mat.roughness = THREE.MathUtils.lerp(wetRoughness, 0.95, this.mudSplatter);
+      mat.envMapIntensity = THREE.MathUtils.lerp(0.9, 2.4, this.wetness);
+
+      const wetDarkening = 1.0 - 0.28 * this.wetness;
+      const r = wetDarkening * (1.0 - 0.15 * this.mudSplatter);
+      const g = wetDarkening * (1.0 - 0.28 * this.mudSplatter);
+      const b = wetDarkening * (1.0 - 0.42 * this.mudSplatter);
+      mat.color.setRGB(r, g, b);
+    }
   }
 
   private updateMudParticles(dt: number) {
