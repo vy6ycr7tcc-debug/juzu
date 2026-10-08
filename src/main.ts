@@ -29,6 +29,7 @@ import { getKTX2Loader } from './assets.js';
 import { createIncaRopeBridge } from './bridge.js';
 import { createHydraulicCistern } from './puzzles/hydraulics.js';
 import { createCraggyCliffWall, climbingSystem } from './climbing.js';
+import { WeatherSystem, type WeatherState } from './weather.js';
 
 // Setup for global hook
 declare global {
@@ -324,6 +325,12 @@ async function init() {
     rotationY: Math.PI * 0.75,
   });
   scene.add(gorgeCliff.group);
+  // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
+  const weather = new WeatherSystem(scene);
+  const weatherParam = urlParams.get('weather') as WeatherState | null;
+  if (weatherParam) {
+    weather.setWeather(weatherParam, true);
+  }
   // §7.2: decor takes RenderCaps (the old callsite passed nothing — tier
   // counts/shadow rules never applied and the WebGPU wind branch was dead).
   const decor = createDecor(scene, renderCaps);
@@ -1430,16 +1437,46 @@ async function init() {
         camera.position.copy(character.mesh.position).add(camOffset);
         camera.lookAt(character.mesh.position.x + wall.tangent.x * 0.15, character.mesh.position.y + 1.25, character.mesh.position.z + wall.tangent.z * 0.15);
       }
+    } else if (shot === 'andean_storm') {
+      // Phase 9 Andean Downpour & Rolling Cloudscapes (Shadow of the Tomb Raider North Star)
+      const posX = 45, posZ = 10;
+      character.teleport(posX, posZ, 0.4);
+      character.disableCameraUpdate = true;
+      weather.setWeather('STORM', true);
+
+      // Elevated camera framing Michelle overlooking the misty canyon gorge with rain streaks and drifting cloud banks
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 4.5, groundY + 2.8, posZ + 6.5);
+      camera.lookAt(posX + 5.0, groundY + 1.2, posZ - 12.0);
+    } else if (shot === 'lightning_flash') {
+      // Phase 9 Mountain Lightning Flash & Chiaroscuro Illumination (Shadow of the Tomb Raider North Star)
+      const posX = 45, posZ = 10;
+      character.teleport(posX, posZ, Math.PI - 0.2);
+      character.disableCameraUpdate = true;
+      weather.setWeather('STORM', true);
+      weather.triggerLightning(0.35);
+
+      // Medium frontal OTS framing Michelle and crags dramatically lit by lightning flash
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.2, groundY + 1.45, posZ + 2.2);
+      camera.lookAt(posX + 0.1, groundY + 1.15, posZ);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = (shot === 'cliff_climb' || shot === 'axe_strike') ? 0.05 : (shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))))))));
+    const t = (shot === 'andean_storm' || shot === 'lightning_flash') ? 0.05 : ((shot === 'cliff_climb' || shot === 'axe_strike') ? 0.05 : (shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))))))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
       if (shot === 'wetness_sheen') character.wetness = 0.95;
+      if (shot === 'andean_storm' || shot === 'lightning_flash') {
+        weather.setWeather('STORM', true);
+        if (shot === 'lightning_flash') {
+          weather.lightningFlash = 1.0;
+          if (weather.lightningLight) weather.lightningLight.intensity = 5.5;
+        }
+      }
       if (shot === 'cliff_climb' || shot === 'axe_strike') {
         const wall = gorgeCliff.wall;
         const contact = wall.center.clone().add(new THREE.Vector3(0, 1.2, 0));
@@ -1480,7 +1517,9 @@ async function init() {
         character.state = MovementState.WALK;
       }
       physics.update(dt);
+      character.currentRainIntensity = weather.rainIntensity;
       character.update(dt);
+      weather.update(dt, camera, character.mesh.position);
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
     }
@@ -1540,6 +1579,7 @@ async function init() {
       if (rg) activeRegionId = rg;
       updateAtmosphere(camera.position, tStr ? parseFloat(tStr) : 0, activeRegionId, todParam);
     }
+    weather.update(0.016, camera, character.mesh.position);
 
     // Shot-time chunk streaming (p4): the origin-centered chunk disc is
     // circle-culled (corners beyond chunk radius 4 unload), leaving fog-void
@@ -1666,6 +1706,8 @@ async function init() {
           hydraulicCistern.interact();
         }
         decor.update(camera);
+        weather.update(dt, camera, character.mesh.position);
+        character.currentRainIntensity = weather.rainIntensity;
         getActiveLightRig()?.update(character.mesh.position, camera);
 
         // V-ATMOS: one gated atmosphere step (region id first — the old order
@@ -1735,6 +1777,7 @@ async function init() {
     // p5: re-apply the water flow clock AFTER first-render compilation, same
     // reasoning as decor above.
     river.update(tStr ? parseFloat(tStr) : 0);
+    weather.update(0.016, camera, character.mesh.position);
     // Render once and signal ready
     if (!skipPost) {
         prepBloomFrame();
