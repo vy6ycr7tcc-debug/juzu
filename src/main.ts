@@ -28,6 +28,7 @@ import { ashlarTrimMaterial, ashlarWeathered, buildAshlarTrimNodeMaterial, mapGe
 import { getKTX2Loader } from './assets.js';
 import { createIncaRopeBridge } from './bridge.js';
 import { createHydraulicCistern } from './puzzles/hydraulics.js';
+import { createCraggyCliffWall, climbingSystem } from './climbing.js';
 
 // Setup for global hook
 declare global {
@@ -313,6 +314,16 @@ async function init() {
   const hydraulicCistern = createHydraulicCistern(scene, physics, {
     origin: new THREE.Vector3(45, -2.0, -30),
   });
+  // Craggy Porous Cliff Face for Axe Climbing (Shadow of the Tomb Raider North Star)
+  const gorgeCliff = createCraggyCliffWall({
+    id: 'gorge_climb_wall',
+    width: 9.0,
+    height: 10.0,
+    depth: 2.8,
+    position: new THREE.Vector3(22, 5.0, -42),
+    rotationY: Math.PI * 0.75,
+  });
+  scene.add(gorgeCliff.group);
   // §7.2: decor takes RenderCaps (the old callsite passed nothing — tier
   // counts/shadow rules never applied and the WebGPU wind branch was dead).
   const decor = createDecor(scene, renderCaps);
@@ -1399,16 +1410,45 @@ async function init() {
       // Medium OTS angle showing archer's drawn follow-through and the stuck projectile down-range
       camera.position.set(posX + 0.75, groundY + 1.4, posZ + 0.9);
       camera.lookAt(posX + 0.25, groundY + 0.95, posZ - 2.6);
+    } else if (shot === 'cliff_climb' || shot === 'axe_strike') {
+      // Phase 8 Craggy Porous Cliff Climbing Axe Traversal (Shadow of the Tomb Raider North Star)
+      const wall = gorgeCliff.wall;
+      const contact = wall.center.clone().add(new THREE.Vector3(0, 1.2, 0));
+      character.startWallClimb(wall, contact, wall.normal);
+      character.climbCycle = shot === 'axe_strike' ? 0.75 : 0.45;
+      character.disableCameraUpdate = true;
+
+      // Position camera to frame Michelle suspended on the vertical craggy cliff face
+      if (shot === 'cliff_climb') {
+        // Dramatic medium three-quarters angle highlighting dual picks embedded in stone, body suspension, and rock texture
+        const camOffset = wall.normal.clone().multiplyScalar(2.25).addScaledVector(wall.tangent, 0.85).add(new THREE.Vector3(0, 0.85, 0));
+        camera.position.copy(character.mesh.position).add(camOffset);
+        camera.lookAt(character.mesh.position.x, character.mesh.position.y + 0.95, character.mesh.position.z);
+      } else {
+        // Close action capture focusing on the pick strike impact and flying rock chips
+        const camOffset = wall.normal.clone().multiplyScalar(1.35).addScaledVector(wall.tangent, 0.50).add(new THREE.Vector3(0, 1.15, 0));
+        camera.position.copy(character.mesh.position).add(camOffset);
+        camera.lookAt(character.mesh.position.x + wall.tangent.x * 0.15, character.mesh.position.y + 1.25, character.mesh.position.z + wall.tangent.z * 0.15);
+      }
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))))))));
+    const t = (shot === 'cliff_climb' || shot === 'axe_strike') ? 0.05 : (shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
       if (shot === 'wetness_sheen') character.wetness = 0.95;
+      if (shot === 'cliff_climb' || shot === 'axe_strike') {
+        const wall = gorgeCliff.wall;
+        const contact = wall.center.clone().add(new THREE.Vector3(0, 1.2, 0));
+        character.mesh.position.copy(contact).addScaledVector(wall.normal, 0.32);
+        character.mesh.rotation.y = Math.atan2(-wall.normal.x, -wall.normal.z);
+        character.state = MovementState.CLIMB;
+        character.activeClimbWall = wall;
+        character.climbCycle = shot === 'axe_strike' ? 0.75 : 0.45;
+      }
       if (shot === 'bow_aim' || shot === 'arrow_flight') {
         character.setAim(true, shot === 'bow_aim' ? 0.85 : 1.0);
       }
@@ -1443,6 +1483,28 @@ async function init() {
       character.update(dt);
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
+    }
+
+    if (shot === 'cliff_climb' || shot === 'axe_strike') {
+      const wall = gorgeCliff.wall;
+      if (shot === 'cliff_climb') {
+        const camOffset = wall.normal.clone().multiplyScalar(2.1).addScaledVector(wall.tangent, 0.75).add(new THREE.Vector3(0, 0.85, 0));
+        camera.position.copy(character.mesh.position).add(camOffset);
+        camera.lookAt(character.mesh.position.x, character.mesh.position.y + 0.95, character.mesh.position.z);
+      } else {
+        const camOffset = wall.normal.clone().multiplyScalar(1.30).addScaledVector(wall.tangent, 0.50).add(new THREE.Vector3(0, 1.15, 0));
+        camera.position.copy(character.mesh.position).add(camOffset);
+        camera.lookAt(character.mesh.position.x + wall.tangent.x * 0.15, character.mesh.position.y + 1.25, character.mesh.position.z + wall.tangent.z * 0.15);
+      }
+    }
+
+    if (shot === 'axe_strike') {
+      const wall = gorgeCliff.wall;
+      const strikePoint = character.mesh.position.clone()
+        .addScaledVector(wall.normal, -0.28)
+        .addScaledVector(new THREE.Vector3(0, 1, 0), 1.35);
+      climbingSystem.emitRockStrike(strikePoint, wall.normal);
+      climbingSystem.update(0.08);
     }
 
     if (shot === 'arrow_flight') {
