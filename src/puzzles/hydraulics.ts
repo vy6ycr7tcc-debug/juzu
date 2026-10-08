@@ -14,6 +14,8 @@ import { createMistTexture } from '../textures.js';
 
 export interface HydraulicCistern {
   group: THREE.Group;
+  wheelGroup: THREE.Group;
+  gateMesh: THREE.Mesh;
   update: (dt: number, playerPos: THREE.Vector3) => void;
   interact: () => boolean;
   canInteract: (playerPos: THREE.Vector3) => boolean;
@@ -491,6 +493,8 @@ export function createHydraulicCistern(
 
   return {
     group: puzzleGroup,
+    wheelGroup,
+    gateMesh,
     update,
     interact,
     canInteract,
