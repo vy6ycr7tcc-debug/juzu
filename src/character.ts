@@ -10,6 +10,7 @@ import { createClimbingAxe, createRecurveBow, createQuiver, createPineTorch } fr
 import { waterDepthAt, waterSurfaceY } from './river.js';
 import { SurvivalInstinctSystem } from './instinct.js';
 import { BowSystem } from './bow.js';
+import { climbingSystem, ClimbableWall } from './climbing.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
 // gates G3/G4 read live locomotion state instead of screenshot guessing.
@@ -60,6 +61,8 @@ const _grip = new THREE.Vector3(), _nock = new THREE.Vector3(), _fwd = new THREE
 const _xAx = new THREE.Vector3(), _yAx = new THREE.Vector3(), _zAx = new THREE.Vector3();
 const _tmpA = new THREE.Vector3(), _tmpB = new THREE.Vector3(), _tmpC = new THREE.Vector3();
 const _bowM = new THREE.Matrix4(), _bowLocal = new THREE.Matrix4();
+const _leftHandPos = new THREE.Vector3(), _rightHandPos = new THREE.Vector3();
+const _climbDir = new THREE.Vector3();
 
 /**
  * Retarget a Mixamo clip authored on one export onto another export that
@@ -216,6 +219,13 @@ export class CharacterController {
   public mantleStartPosition: THREE.Vector3 = new THREE.Vector3();
   public ledgeCooldown: number = 0;
 
+  // Craggy Cliff Climbing Axe Traversal (Shadow of the Tomb Raider North Star)
+  public activeClimbWall: ClimbableWall | null = null;
+  public climbCycle: number = 0;
+  public hipAxe: THREE.Group | null = null;
+  public leftHandAxe: THREE.Group | null = null;
+  public rightHandAxe: THREE.Group | null = null;
+
   // Cached Mixamo bones for upper-body IK and ledge-hang arm postures
   private leftArmBone: THREE.Object3D | null = null;
   private rightArmBone: THREE.Object3D | null = null;
@@ -320,6 +330,7 @@ export class CharacterController {
     this.input = input;
     this.instinctSystem = new SurvivalInstinctSystem(scene);
     this.bowSystem = new BowSystem(scene);
+    scene.add(climbingSystem.particlesGroup);
 
     // Protagonist root group — positioned in world coordinates
     this.mesh = new THREE.Group();
@@ -397,6 +408,7 @@ export class CharacterController {
           axe.rotation.set(0.1, 0, -0.15);
           axe.scale.setScalar(95.0); // 100x scale to counter 0.01 armature scale
           hipsBone.add(axe);
+          this.hipAxe = axe;
         }
 
         if (spine2Bone) {
@@ -465,6 +477,16 @@ export class CharacterController {
           this.mesh.add(handBow);
           this.handBow = handBow;
         }
+
+        // Dual climbing axes for vertical cliff scaling (Shadow of the Tomb Raider North Star)
+        // Parented to this.mesh (meter scale 1.0) and positioned analytically to follow hand bones
+        this.leftHandAxe = createClimbingAxe();
+        this.leftHandAxe.visible = false;
+        this.mesh.add(this.leftHandAxe);
+
+        this.rightHandAxe = createClimbingAxe();
+        this.rightHandAxe.visible = false;
+        this.mesh.add(this.rightHandAxe);
 
         this.rightHandBone = (model.getObjectByName('mixamorigRightHand') ?? model.getObjectByName('mixamorig:RightHand')) ?? null;
         const findBone = (n: string) => (model.getObjectByName(`mixamorig${n}`) ?? model.getObjectByName(`mixamorig:${n}`)) ?? null;
@@ -590,6 +612,48 @@ export class CharacterController {
   }
 
   /**
+   * Enters the craggy cliff wall climbing state (Shadow of the Tomb Raider North Star).
+   * Snaps adventurer flush against rock surface, equips dual climbing axes, and triggers rock strike burst.
+   */
+  public startWallClimb(wall: ClimbableWall, contactPoint: THREE.Vector3, wallNormal: THREE.Vector3) {
+    this.state = MovementState.CLIMB;
+    this.activeClimbWall = wall;
+    this.isGrounded = false;
+    this.velocityY = 0;
+    this.speed = 0;
+
+    // Stand-off distance from cliff face: 0.32m keeps chest and boots properly braced
+    this.mesh.position.copy(contactPoint).addScaledVector(wallNormal, 0.32);
+
+    // Turn character to face directly flush against the cliff face
+    this.mesh.rotation.y = Math.atan2(-wallNormal.x, -wallNormal.z);
+
+    // Equip dual climbing axes in hands, hide hip axe
+    if (this.hipAxe) this.hipAxe.visible = false;
+    if (this.leftHandAxe) this.leftHandAxe.visible = true;
+    if (this.rightHandAxe) this.rightHandAxe.visible = true;
+
+    // Stow torch or bow if active
+    if (this.torchData) this.torchData.group.visible = false;
+    if (this.handBow) this.handBow.visible = false;
+    this.isAiming = false;
+
+    // Emit initial strike particles
+    climbingSystem.emitRockStrike(contactPoint, wallNormal);
+    this.climbCycle = 0;
+  }
+
+  public stopWallClimb() {
+    this.activeClimbWall = null;
+    if (this.hipAxe) this.hipAxe.visible = true;
+    if (this.leftHandAxe) this.leftHandAxe.visible = false;
+    if (this.rightHandAxe) this.rightHandAxe.visible = false;
+    if (this.torchData && this.isTorchEquipped) {
+      this.torchData.group.visible = true;
+    }
+  }
+
+  /**
    * Dual-probe ledge sensor (Shadow of the Tomb Raider North Star):
    * Casts a horizontal ray forward from chest level to detect a vertical wall/cliff,
    * then casts a vertical downward ray from above the detected wall to find the exact top surface lip.
@@ -692,8 +756,13 @@ export class CharacterController {
     const surfaceY = waterSurfaceY(nextX, nextZ);
     const isSwimmableWater = waterDepth > 1.2 && surfaceY !== null;
 
-    if (this.state === MovementState.WALK && this.mesh.position.y > 10 && terrainData.normal.y < 0.1 && this.input.isDown('KeyW')) {
-      this.state = MovementState.CLIMB;
+    if (this.state === MovementState.WALK) {
+      _climbDir.set(-Math.sin(this.mesh.rotation.y), 0, -Math.cos(this.mesh.rotation.y)).normalize();
+      const climbHit = climbingSystem.checkClimbableWall(this.mesh.position, _climbDir, 1.25);
+      if (climbHit && (this.input.isDown('KeyW') || this.input.isDown('Space') || this.input.isDown('KeyE'))) {
+        this.startWallClimb(climbHit.wall, climbHit.contactPoint, climbHit.wallNormal);
+        return;
+      }
     }
 
     if (this.state === MovementState.WALK && isSwimmableWater && surfaceY !== null && this.mesh.position.y < surfaceY + 0.1) {
@@ -1260,9 +1329,95 @@ export class CharacterController {
         }
       }
     } else if (this.state === MovementState.CLIMB) {
-      this.mesh.position.y += forward * this.maxWalkSpeed * 0.5 * dt;
+      if (this.activeClimbWall) {
+        const wall = this.activeClimbWall;
+        const forwardInput = (this.input.isDown('KeyW') ? 1 : 0) - (this.input.isDown('KeyS') ? 1 : 0);
+        const lateralInput = (this.input.isDown('KeyD') ? 1 : 0) - (this.input.isDown('KeyA') ? 1 : 0);
+
+        const climbSpeedV = 1.8;
+        const climbSpeedH = 1.5;
+
+        // 1. Move vertically (W/S)
+        this.mesh.position.y += forwardInput * climbSpeedV * dt;
+
+        // 2. Move laterally along wall tangent (A/D)
+        this.mesh.position.addScaledVector(wall.tangent, lateralInput * climbSpeedH * dt);
+
+        // 3. Keep clamped to wall face depth and lateral bounds
+        const halfW = wall.width * 0.5 - 0.35;
+        const toChar = this.mesh.position.clone().sub(wall.center);
+        const latDist = toChar.dot(wall.tangent);
+        const clampedLat = THREE.MathUtils.clamp(latDist, -halfW, halfW);
+
+        const currentClimbY = this.mesh.position.y;
+        // Re-project position onto wall surface with 0.32m stand-off
+        this.mesh.position.copy(wall.center)
+          .addScaledVector(wall.tangent, clampedLat)
+          .addScaledVector(wall.normal, 0.32);
+        this.mesh.position.y = THREE.MathUtils.clamp(currentClimbY, wall.bottomY + 0.5, wall.topY + 0.1);
+
+        // Keep character facing directly into the wall
+        this.mesh.rotation.y = Math.atan2(-wall.normal.x, -wall.normal.z);
+
+        // Advance climb cycle for alternating pick strikes and foot movements
+        const isMoving = Math.abs(forwardInput) > 0.01 || Math.abs(lateralInput) > 0.01;
+        if (isMoving) {
+          const prevCycle = this.climbCycle;
+          this.climbCycle += dt * 3.5;
+
+          // If crossing cycle boundary (alternating pick strike), emit rock crumb burst!
+          if (Math.floor(this.climbCycle) !== Math.floor(prevCycle)) {
+            const pickPos = this.mesh.position.clone()
+              .addScaledVector(wall.normal, -0.28)
+              .addScaledVector(new THREE.Vector3(0, 1, 0), 1.25);
+            const isRight = Math.floor(this.climbCycle) % 2 === 0;
+            pickPos.addScaledVector(wall.tangent, isRight ? 0.22 : -0.22);
+            climbingSystem.emitRockStrike(pickPos, wall.normal);
+          }
+        }
+
+        // 4. Check Top Lip Mantle:
+        if (this.mesh.position.y >= wall.topY - 0.25 && (forwardInput > 0 || this.input.consumeJustPressed('Space'))) {
+          this.state = MovementState.MANTLE;
+          this.mantleTimer = 0;
+          this.mantleStartPosition.copy(this.mesh.position);
+          this.ledgeInfo = {
+            ledgeY: wall.topY,
+            wallNormal: wall.normal.clone(),
+            hangPosition: this.mesh.position.clone(),
+            mantleTargetPosition: wall.mantlePosition.clone(),
+          };
+          this.stopWallClimb();
+          this.updateAnimationAndCamera(dt);
+          return;
+        }
+
+        // 5. Wall Leap / Eject:
+        if (this.input.consumeJustPressed('Space')) {
+          const wallNorm = wall.normal.clone();
+          this.stopWallClimb();
+          this.state = MovementState.WALK;
+          this.isGrounded = false;
+          this.velocityY = 5.2; // upward leap
+          this.speed = 4.0;
+          this.mesh.position.addScaledVector(wallNorm, 0.45);
+          return;
+        }
+
+        // 6. Drop / Release:
+        if (this.input.consumeJustPressed('KeyC') || this.input.consumeJustPressed('ShiftLeft')) {
+          const wallNorm = wall.normal.clone();
+          this.stopWallClimb();
+          this.state = MovementState.WALK;
+          this.isGrounded = false;
+          this.velocityY = -0.5;
+          this.mesh.position.addScaledVector(wallNorm, 0.35);
+          return;
+        }
+      }
       this.isGrounded = false;
       this.velocityY = 0;
+      this.speed = 0;
     } else {
       // Grounded vs Airborne physics
       if (!this.isGrounded) {
@@ -1274,6 +1429,16 @@ export class CharacterController {
           this.velocityY = 0;
           this.isGrounded = true;
         } else if (this.velocityY <= 3.5 && this.ledgeCooldown <= 0) {
+          // Mid-air craggy cliff climb grab check (strike axes into rock)
+          _climbDir.set(-Math.sin(this.mesh.rotation.y), 0, -Math.cos(this.mesh.rotation.y)).normalize();
+          const airDir = moveDir.lengthSq() > 0.001 ? moveDir : _climbDir;
+          const airClimbHit = climbingSystem.checkClimbableWall(this.mesh.position, airDir, 1.35);
+          if (airClimbHit) {
+            this.startWallClimb(airClimbHit.wall, airClimbHit.contactPoint, airClimbHit.wallNormal);
+            this.updateAnimationAndCamera(dt);
+            return;
+          }
+
           // Mid-air ledge grab check (catch ledge rim)
           const airborneLedge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
           if (airborneLedge) {
@@ -1369,6 +1534,7 @@ export class CharacterController {
     this.updateTorch(dt);
     this.instinctSystem.update(dt);
     this.bowSystem?.update(dt, physics);
+    climbingSystem.update(dt);
     this.updateAnimationAndCamera(dt);
   }
 
@@ -1676,14 +1842,60 @@ export class CharacterController {
       }
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
       this.swimStrokeTimer += dt * (this.speed > 0.5 ? 4.5 : 2.2);
+    } else if (this.state === MovementState.CLIMB) {
+      // Shadow of the Tomb Raider North Star: Climbing Axe Wall Traversal Pose
+      const cycle = this.climbCycle * Math.PI;
+      const leftReach = Math.sin(cycle);
+      const rightReach = -leftReach;
+
+      if (this.leftArmBone && this.rightArmBone) {
+        const leftArmLift = -1.25 - leftReach * 0.22;
+        const rightArmLift = -1.25 - rightReach * 0.22;
+        this.leftArmBone.rotation.set(leftArmLift, 0.18, 0.22);
+        this.rightArmBone.rotation.set(rightArmLift, -0.18, -0.22);
+
+        if (this.leftForeArmBone) {
+          this.leftForeArmBone.rotation.set(0.55 + leftReach * 0.12, 0, 0);
+        }
+        if (this.rightForeArmBone) {
+          this.rightForeArmBone.rotation.set(0.55 + rightReach * 0.12, 0, 0);
+        }
+      }
+
+      // Legs: bent at knees, bracing against vertical stone face
+      if (this.leftUpLegBone && this.rightUpLegBone) {
+        const leftLegKick = Math.sin(cycle + Math.PI * 0.5) * 0.16;
+        this.leftUpLegBone.rotation.set(0.65 + leftLegKick, 0, -0.15);
+        this.rightUpLegBone.rotation.set(0.65 - leftLegKick, 0, 0.15);
+
+        if (this.leftLegBone) {
+          this.leftLegBone.rotation.set(-0.75 - leftLegKick * 0.4, 0, 0);
+        }
+        if (this.rightLegBone) {
+          this.rightLegBone.rotation.set(-0.75 + leftLegKick * 0.4, 0, 0);
+        }
+      }
+
+      // Dynamic positioning of dual climbing axes in hands
+      if (this.leftHandBone && this.leftHandAxe && this.rightHandBone && this.rightHandAxe) {
+        this.leftHandBone.getWorldPosition(_leftHandPos);
+        this.mesh.worldToLocal(_leftHandPos);
+        this.leftHandAxe.position.set(_leftHandPos.x, _leftHandPos.y + 0.20, _leftHandPos.z);
+        this.leftHandAxe.rotation.set(-0.25, Math.PI * 0.5, -0.06);
+
+        this.rightHandBone.getWorldPosition(_rightHandPos);
+        this.mesh.worldToLocal(_rightHandPos);
+        this.rightHandAxe.position.set(_rightHandPos.x, _rightHandPos.y + 0.20, _rightHandPos.z);
+        this.rightHandAxe.rotation.set(-0.25, Math.PI * 0.5, 0.06);
+      }
     }
 
     // Survival Recurve Bow Aiming Posture (Shadow of the Tomb Raider North Star)
     // Solved in world space (two-bone IK) — Euler guesses in Mixamo bone-local
     // frames do not converge (bone axes differ per rig and per animation frame).
-    if (this.isAiming && this.leftArmBone && this.rightArmBone) {
+    if (this.isAiming && this.leftArmBone && this.rightArmBone && this.state !== MovementState.CLIMB) {
       this.applyBowAimPose();
-    } else if (this.isTorchEquipped && this.leftArmBone && this.state !== MovementState.LEDGE_HANG && this.state !== MovementState.MANTLE && this.state !== MovementState.WALL_SCRAMBLE && this.state !== MovementState.SLIDE && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE) {
+    } else if (this.isTorchEquipped && this.leftArmBone && this.state !== MovementState.LEDGE_HANG && this.state !== MovementState.MANTLE && this.state !== MovementState.WALL_SCRAMBLE && this.state !== MovementState.SLIDE && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE && this.state !== MovementState.CLIMB) {
       // Hold left arm raised forward and steady to cast torchlight into the dark
       this.leftArmBone.rotation.set(-0.65, 0.35, 0.45);
       if (this.leftForeArmBone) {
@@ -1691,8 +1903,19 @@ export class CharacterController {
       }
     }
 
+    // Equipment visibility state sync
+    if (this.state === MovementState.CLIMB) {
+      if (this.hipAxe) this.hipAxe.visible = false;
+      if (this.leftHandAxe) this.leftHandAxe.visible = true;
+      if (this.rightHandAxe) this.rightHandAxe.visible = true;
+    } else {
+      if (this.hipAxe) this.hipAxe.visible = true;
+      if (this.leftHandAxe) this.leftHandAxe.visible = false;
+      if (this.rightHandAxe) this.rightHandAxe.visible = false;
+    }
+
     let desiredAction = this.actions.idle;
-    if (this.state === MovementState.LEDGE_HANG || this.state === MovementState.MANTLE) {
+    if (this.state === MovementState.LEDGE_HANG || this.state === MovementState.MANTLE || this.state === MovementState.CLIMB) {
       desiredAction = this.actions.idle;
     } else if (this.state === MovementState.WALL_SCRAMBLE) {
       desiredAction = this.actions.run ?? this.actions.walk ?? this.actions.idle;
@@ -1781,7 +2004,7 @@ export class CharacterController {
     this.camera.updateProjectionMatrix();
 
     // 3. Desired camera position at target radius
-    const currentRadius = this.isAiming ? 1.85 : this.radius;
+    const currentRadius = this.isAiming ? 1.85 : (this.state === MovementState.CLIMB ? 3.1 : this.radius);
     const desiredOffset = new THREE.Vector3(
       currentRadius * sinPhi * sinTheta,
       currentRadius * cosPhi,
