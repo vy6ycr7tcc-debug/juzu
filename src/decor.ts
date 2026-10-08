@@ -216,17 +216,27 @@ function injectWindGLSL(
 ): void {
   shader.uniforms.uTime = { value: 0 };
   shader.uniforms.uWindAmp = { value: windAmp };
+  shader.uniforms.uPlayerPos = { value: new THREE.Vector3(0, -999, 0) };
   shader.vertexShader =
-    'uniform float uTime;\nuniform float uWindAmp;\nattribute float aHash;\n' +
+    'uniform float uTime;\nuniform float uWindAmp;\nuniform vec3 uPlayerPos;\nattribute float aHash;\n' +
     shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace(
     '#include <begin_vertex>',
     `#include <begin_vertex>
-    // §5.2 T5: offset.x += sin(time*1.3 + worldPos.x*0.5 + hash) * amp * heightFactor
+    // SOTTR Foliage Dynamics: dual-axis wind flutter + interactive radial shrub displacement
     #ifdef USE_INSTANCING
       vec4 windWPos = instanceMatrix * vec4(position, 1.0);
       float windHF = clamp((position.y - (${y0.toFixed(4)})) * (${hnorm.toFixed(6)}), 0.0, 1.0);
-      transformed.x += sin(uTime * 1.3 + windWPos.x * 0.5 + aHash) * uWindAmp * windHF;
+
+      // Interactive physical shrub parting away from player contact
+      vec2 toPlayer = windWPos.xz - uPlayerPos.xz;
+      float playerDist = length(toPlayer);
+      float pushStrength = (1.0 - smoothstep(0.0, 1.45, playerDist)) * 0.48 * windHF;
+      vec2 pushDir = playerDist > 0.02 ? (toPlayer / playerDist) : vec2(0.0, 1.0);
+
+      // 2-axis organic wind sway + player push
+      transformed.x += sin(uTime * 1.35 + windWPos.x * 0.48 + aHash) * uWindAmp * windHF + pushDir.x * pushStrength;
+      transformed.z += cos(uTime * 1.15 + windWPos.z * 0.52 + aHash) * (uWindAmp * 0.42) * windHF + pushDir.y * pushStrength;
     #endif
     `
   );
@@ -279,6 +289,7 @@ export class DecorManager {
   private windGlslMats: THREE.Material[] = [];        // WebGL2: uTime holders
   private tslTimeUniforms: Array<{ value: number }> = []; // WebGPU: uniform(0) nodes
   private scanCam = new THREE.Vector3(1e9, 0, 1e9);
+  private playerPos = new THREE.Vector3(0, -999, 0);
   private regionBias: Record<RegionId, number> = {
     cloud_forest: 1, high_sierra: 1, jungle_lowlands: 1, paititi: 1,
   };
@@ -484,16 +495,23 @@ export class DecorManager {
     this.regionBias[regionId] = Math.min(3, Math.max(0, density));
   }
 
-  // Wind clock + camera-following placement. `timeSeconds` lets shot mode
-  // (?shot=, §8) freeze/advance wind deterministically for the motion gate
-  // ("foliage shows wind displacement between two t= captures").
-  update(camera: THREE.Camera, timeSeconds?: number): void {
+  // Wind clock + camera-following placement + interactive shrub displacement.
+  // `timeSeconds` lets shot mode (?shot=, §8) freeze/advance wind deterministically.
+  // `playerPos` feeds physical shrub parting displacement when Michelle walks through undergrowth.
+  update(camera: THREE.Camera, timeSeconds?: number, playerPos?: THREE.Vector3): void {
     const t = timeSeconds !== undefined ? timeSeconds : performance.now() / 1000;
+    if (playerPos) this.playerPos.copy(playerPos);
+
     for (const m of this.windGlslMats) {
       const sh = m.userData.shader as
-        | { uniforms: { uTime: { value: number } } }
+        | { uniforms: { uTime: { value: number }; uPlayerPos?: { value: THREE.Vector3 } } }
         | undefined;
-      if (sh) sh.uniforms.uTime.value = t;
+      if (sh) {
+        sh.uniforms.uTime.value = t;
+        if (sh.uniforms.uPlayerPos) {
+          sh.uniforms.uPlayerPos.value.copy(this.playerPos);
+        }
+      }
     }
     for (const u of this.tslTimeUniforms) u.value = t;
 
