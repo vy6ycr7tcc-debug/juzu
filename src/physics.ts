@@ -16,6 +16,7 @@ const P12_SEED_ROCKSLIDE = 0x510E5;
 
 export class PhysicsSystem {
   world: RAPIER.World | null = null;
+  characterController: RAPIER.KinematicCharacterController | null = null;
   private isFallback = false;
 
   // Storage for physics-driven meshes. mass/halfY/buoyK feed the Phase 12
@@ -32,7 +33,15 @@ export class PhysicsSystem {
       const gravity = { x: 0.0, y: -9.81, z: 0.0 };
       this.world = new RAPIER.World(gravity);
       this.ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
-      console.log('Rapier WASM initialized successfully.');
+
+      // AAA Kinematic Character Controller: authentic wall-sliding, 50° slope limit, and autostepping
+      this.characterController = this.world.createCharacterController(0.02);
+      this.characterController.setSlideEnabled(true);
+      this.characterController.setMaxSlopeClimbAngle(50 * Math.PI / 180);
+      this.characterController.setMinSlopeSlideAngle(52 * Math.PI / 180);
+      this.characterController.enableAutostep(0.35, 0.2, true);
+
+      console.log('Rapier WASM initialized successfully with KinematicCharacterController.');
     } catch (e) {
       console.warn('Rapier WASM failed to load, falling back to dummy physics', e);
       this.isFallback = true;
@@ -215,6 +224,70 @@ export class PhysicsSystem {
     if (this.isFallback || !this.world) return;
     this.world.removeCollider(data.collider, false);
     this.world.removeRigidBody(data.body);
+  }
+
+  /**
+   * Bakes world-space vertices of static architecture/props into Rapier trimesh colliders.
+   */
+  registerStaticObstacle(object: THREE.Object3D) {
+    if (this.isFallback || !this.world || !this.getRapier()) return;
+    const R = this.getRapier()!;
+    const world = this.world;
+
+    object.updateWorldMatrix(true, true);
+
+    object.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.geometry || mesh.userData.hasRapierCollider || mesh.userData.skipPhysics) return;
+
+        const geo = mesh.geometry;
+        const posAttr = geo.attributes.position;
+        if (!posAttr || posAttr.count < 3) return;
+
+        const vertices = new Float32Array(posAttr.count * 3);
+        const v = new THREE.Vector3();
+        for (let i = 0; i < posAttr.count; i++) {
+          v.fromBufferAttribute(posAttr, i);
+          v.applyMatrix4(mesh.matrixWorld);
+          vertices[i * 3] = v.x;
+          vertices[i * 3 + 1] = v.y;
+          vertices[i * 3 + 2] = v.z;
+        }
+
+        let indices: Uint32Array;
+        if (geo.index) {
+          indices = new Uint32Array(geo.index.array);
+        } else {
+          indices = new Uint32Array(posAttr.count);
+          for (let i = 0; i < posAttr.count; i++) indices[i] = i;
+        }
+
+        try {
+          const bodyDesc = R.RigidBodyDesc.fixed();
+          const body = world.createRigidBody(bodyDesc);
+          const colDesc = R.ColliderDesc.trimesh(vertices, indices);
+          world.createCollider(colDesc, body);
+          mesh.userData.hasRapierCollider = true;
+        } catch (err) {
+          console.warn('Failed to create static trimesh collider:', mesh.name, err);
+        }
+      }
+    });
+  }
+
+  /**
+   * Traverses the entire scene graph and creates Rapier static colliders for all objects
+   * marked with userData.collidable = true (stone architecture, temples, platforms).
+   */
+  registerCollidersFromScene(scene: THREE.Scene) {
+    if (this.isFallback || !this.world) return;
+    scene.updateWorldMatrix(true, true);
+    scene.traverse((obj) => {
+      if (obj.userData && obj.userData.collidable === true) {
+        this.registerStaticObstacle(obj);
+      }
+    });
   }
 
   createRopeBridge(scene: THREE.Scene, start: THREE.Vector3, end: THREE.Vector3) {
