@@ -280,6 +280,7 @@ export class CharacterController {
 
   // Dynamic Surface Wetness & Mud Splatter (Shadow of the Tomb Raider North Star)
   public wetness: number = 0; // 0.0 (bone dry) to 1.0 (soaked)
+  public currentRainIntensity: number = 0; // Weather rain coupling
   public mudSplatter: number = 0; // 0.0 (clean) to 1.0 (mud-caked)
   public charMaterials: THREE.MeshStandardMaterial[] = [];
   private waterDripParticles: THREE.Sprite[] = [];
@@ -1541,9 +1542,12 @@ export class CharacterController {
   private updateWetnessAndMud(dt: number, groundH: number) {
     // Dynamic Surface Wetness & Mud Washed Off in Water (Shadow of the Tomb Raider North Star)
     const isRiverCorridor = Math.abs(this.mesh.position.x) < 22 && this.mesh.position.y < 1.0;
-    if (this.state === MovementState.SWIM || isRiverCorridor) {
-      this.wetness = Math.min(1.0, this.wetness + dt * 3.0); // Soaks in water
-      this.mudSplatter = Math.max(0.0, this.mudSplatter - dt * 2.0); // River washes away mud!
+    if (this.state === MovementState.SWIM || isRiverCorridor || this.currentRainIntensity > 0.08) {
+      const soakRate = this.currentRainIntensity > 0.08 ? (this.currentRainIntensity * 1.6) : 3.0;
+      this.wetness = Math.min(1.0, this.wetness + dt * soakRate);
+      if (this.currentRainIntensity > 0.3) {
+        this.mudSplatter = Math.max(0.0, this.mudSplatter - dt * this.currentRainIntensity * 0.45);
+      }
     } else {
       // Natural evaporation drying curve (dries over ~25s)
       this.wetness = Math.max(0.0, this.wetness - dt / 25.0);
