@@ -1489,12 +1489,48 @@ async function init() {
       // Medium OTS angle showing the acoustic sonar wave illuminating the concealed pressure plate and spiked portcullis in warning crimson-amber
       camera.position.set(cryptOrigin.x + 1.8, groundY + 1.75, cryptOrigin.z + 6.5);
       camera.lookAt(cryptOrigin.x - 0.1, groundY + 1.1, cryptOrigin.z + 1.0);
+    } else if (shot === 'foliage_parting') {
+      // Phase 11 SOTTR Foliage Dynamics: Interactive Physical Shrub Displacement
+      const posX = 45, posZ = 18;
+      character.teleport(posX, posZ, 0.25);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+
+      // Low-angle three-quarters rear camera framing Michelle stepping through dense ground ferns with fronds physically parting
+      camera.position.set(posX - 1.35, groundY + 1.15, posZ + 1.85);
+      camera.lookAt(posX + 0.15, groundY + 0.85, posZ - 0.45);
+    } else if (shot === 'jungle_canopy') {
+      // Phase 11 SOTTR Dense Andean Flora Canopy & Multi-Axis Wind Dynamics
+      const posX = 45, posZ = 18;
+      character.teleport(posX, posZ, 0.4);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+
+      // Medium upward angle framing Michelle immersed in the dense broadleaf trees and ferns
+      camera.position.set(posX - 3.2, groundY + 1.25, posZ + 4.2);
+      camera.lookAt(posX + 0.6, groundY + 2.85, posZ - 1.2);
     } else {
       character.teleport(0, 0, 0);
     }
 
-    // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') ? 0.35 : ((shot === 'andean_storm' || shot === 'lightning_flash') ? 0.05 : ((shot === 'cliff_climb' || shot === 'axe_strike') ? 0.05 : (shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))))))))));
+    let t = 2.0;
+    if (tStr) {
+      t = Math.max(0.1, parseFloat(tStr));
+    } else if (shot === 'hydraulic_sluice') {
+      t = 4.5;
+    } else if (shot === 'underwater_dive') {
+      t = 0.45;
+    } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
+      t = 0.35;
+    } else if (shot === 'wetness_sheen') {
+      t = 0.25;
+    } else if (shot === 'surface_swim') {
+      t = 0.15;
+    } else if (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' || shot === 'bow_aim' || shot === 'arrow_flight') {
+      t = 0.1;
+    } else if (shot === 'cliff_climb' || shot === 'axe_strike' || shot === 'wall_scramble' || shot === 'gear_sockets' || shot === 'andean_storm' || shot === 'lightning_flash') {
+      t = 0.05;
+    }
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
@@ -1505,6 +1541,11 @@ async function init() {
           weather.lightningFlash = 1.0;
           if (weather.lightningLight) weather.lightningLight.intensity = 5.5;
         }
+      }
+      if (shot === 'foliage_parting' || shot === 'jungle_canopy') {
+        const posX = 45, posZ = 18;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = shot === 'foliage_parting' ? 0.25 : 0.4;
       }
       if (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
         const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
@@ -1596,7 +1637,7 @@ async function init() {
     // far rendered the instances as an origin pile (all identity matrices).
     // Place foliage around the shot camera; ?t= drives the T5 wind clock so
     // two captures at different t show the §8.3 motion-ready displacement.
-    decor.update(camera, tStr ? parseFloat(tStr) : 0);
+    decor.update(camera, tStr ? parseFloat(tStr) : 0, character.mesh.position);
     // p5: same discipline for the water flow clock — ?t= drives the scroll
     // uniforms so two captures at different t show §8.3 water motion.
     river.update(tStr ? parseFloat(tStr) : 0);
@@ -1741,7 +1782,7 @@ async function init() {
         if (input.consumeJustPressed('KeyE') && hydraulicCistern.canInteract(character.mesh.position)) {
           hydraulicCistern.interact();
         }
-        decor.update(camera);
+        decor.update(camera, undefined, character.mesh.position);
         weather.update(dt, camera, character.mesh.position);
         character.currentRainIntensity = weather.rainIntensity;
         getActiveLightRig()?.update(character.mesh.position, camera);
@@ -1809,7 +1850,7 @@ async function init() {
     // first render compiled the foliage shaders, so its uTime write hit a
     // not-yet-existing uniform object (the t0/t2 A/B pair diffed to exactly
     // zero — p4 gate audit caught it). Uniforms exist after render #1.
-    decor.update(camera, tStr ? parseFloat(tStr) : 0);
+    decor.update(camera, tStr ? parseFloat(tStr) : 0, character.mesh.position);
     // p5: re-apply the water flow clock AFTER first-render compilation, same
     // reasoning as decor above.
     river.update(tStr ? parseFloat(tStr) : 0);
