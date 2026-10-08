@@ -38,6 +38,7 @@ import { DialogueSystem } from './story/dialogueSystem.js';
 import { NPCManager } from './story/characters.js';
 import { StoryManager } from './story/storyManager.js';
 import { StealthSystem } from './combat/stealth.js';
+import { BasecampManager } from './basecamp.js';
 
 // Setup for global hook
 declare global {
@@ -342,6 +343,8 @@ async function init() {
   // Sacred Relic Examination & Inspection Mode (Shadow of the Tomb Raider North Star)
   const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
   const relicSystem = createSacredRelicSystem(scene, new THREE.Vector3(35, cryptFloorY, -58.5));
+  // Andean Basecamp Progression & Campfire Rest (Shadow of the Tomb Raider North Star)
+  const basecamp = new BasecampManager(scene);
   // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
   const weather = new WeatherSystem(scene);
   const weatherParam = urlParams.get('weather') as WeatherState | null;
@@ -428,6 +431,7 @@ async function init() {
   character.instinctSystem.registerInteractable(cryptTrap.pressurePlate, 'hazard');
   character.instinctSystem.registerInteractable(cryptTrap.portcullisSlab, 'hazard');
   character.instinctSystem.registerInteractable(relicSystem.relicGroup, 'relic');
+  character.instinctSystem.registerInteractable(basecamp.group, 'poi');
 
   // Hide character during title screen so protagonist does not clip into title menu
   if (!urlParams.has('shot')) {
@@ -1955,6 +1959,17 @@ async function init() {
       camera.lookAt(posX + 5.5, groundY + 1.25, posZ + 7.5);
       sottrHUD.setObjective('ACOUSTIC LURE', 'Sol Negro sentry lured by acoustic arrow impact clatter on stone ruin');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'basecamp_campfire_rest') {
+      // Phase 5: Andean Basecamp Rest, Skill Progression & Quipu Crafting
+      const posX = 50, posZ = 50;
+      const groundY = getGlobalTerrainHeight(posX, posZ);
+      character.teleport(posX + 0.95, posZ + 0.35, Math.PI * 0.35);
+      character.isCrouched = true;
+      character.disableCameraUpdate = true;
+      camera.position.set(posX - 1.45, groundY + 0.85, posZ - 1.25);
+      camera.lookAt(posX + 0.85, groundY + 0.65, posZ + 0.35);
+      sottrHUD.setObjective('HIGHLANDS BASECAMP', 'Resting fireside. Skills, quipu crafting, and checkpoint saved.');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1966,7 +1981,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2150,6 +2165,7 @@ async function init() {
       hydraulicCistern.update(dt, character.mesh.position);
       cryptTrap.update(dt, character.mesh.position);
       relicSystem.update(dt, character.mesh.position);
+      basecamp.update(dt, camera);
       npcManager.update(dt);
       stealthSystem.update(dt, character, camera, audioDirector);
       if (shot === 'stealth_patrol') {
@@ -2250,6 +2266,14 @@ async function init() {
         sentry.group.rotation.y = Math.atan2(sentry.facingDir.x, sentry.facingDir.z);
       }
 
+      sottrHUD.update(camera, character.mesh.position);
+    }
+    if (shot === 'basecamp_campfire_rest') {
+      const posX = 50, posZ = 50;
+      const groundY = getGlobalTerrainHeight(posX, posZ);
+      character.mesh.rotation.y = Math.PI * 0.35;
+      camera.position.set(posX - 1.45, groundY + 0.85, posZ - 1.25);
+      camera.lookAt(posX + 0.85, groundY + 0.65, posZ + 0.35);
       sottrHUD.update(camera, character.mesh.position);
     }
 
@@ -2433,6 +2457,7 @@ async function init() {
         hydraulicCistern.update(dt, character.mesh.position);
         cryptTrap.update(dt, character.mesh.position);
         relicSystem.update(dt, character.mesh.position);
+        basecamp.update(dt, camera);
         npcManager.update(dt);
         stealthSystem.update(dt, character, camera, audioDirector);
         sottrHUD.updateStealth(
@@ -2450,6 +2475,8 @@ async function init() {
             audioDirector.play('cloth', { position: character.mesh.position, volume: 0.7 });
           } else if (nearbyNPC) {
             storyManager.triggerInteraction(nearbyNPC);
+          } else if (basecamp.canInteract(character.mesh.position)) {
+            basecamp.toggleRest(character, camera, saveAPI, audioDirector, sottrHUD);
           } else if (hydraulicCistern.canInteract(character.mesh.position)) {
             hydraulicCistern.interact();
           } else if (relicSystem.canInteract(character.mesh.position)) {
@@ -2468,6 +2495,8 @@ async function init() {
           sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> SEARCH MERCENARY');
         } else if (nearbyNPC) {
           sottrHUD.setPrompt(nearbyNPC.config.prompt);
+        } else if (basecamp.canInteract(character.mesh.position)) {
+          sottrHUD.setPrompt(basecamp.isResting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STAND UP' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> REST AT BASE CAMP');
         } else if (relicSystem.canInteract(character.mesh.position)) {
           sottrHUD.setPrompt(relicSystem.isInspecting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STOW RELIC' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE SACRED RELIC');
         } else if (hydraulicCistern.canInteract(character.mesh.position)) {
