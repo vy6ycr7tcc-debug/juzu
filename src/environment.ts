@@ -52,10 +52,10 @@ function getSkyUniforms(sky: THREE.Mesh): SkyUniforms {
 
 export const TOD_GRADES: Record<'day'|'dawn'|'noon'|'dusk'|'night', LightRigConfig> = {
   day: {
-    sunColor: 0xFFF4E5, sunIntensity: 4.5, sunElevationDeg: 25, sunAzimuthDeg: 135,
-    hemiSky: 0xBDD3F0, hemiGround: 0x5A5A48, hemiIntensity: 0.5,
-    fillIntensity: 0.35, exposure: 1.1,
-    fogColor: 0xA6BED2, fogDensity: 0.0015, envIntensity: 0.55
+    sunColor: 0xFFF4E5, sunIntensity: 3.4, sunElevationDeg: 25, sunAzimuthDeg: 135,
+    hemiSky: 0xBDD3F0, hemiGround: 0x5A5A48, hemiIntensity: 0.55,
+    fillIntensity: 0.35, exposure: 1.05,
+    fogColor: 0xA6BED2, fogDensity: 0.0014, envIntensity: 0.35
   },
   dawn: {
     sunColor: 0xFFA500, sunIntensity: 2.2, sunElevationDeg: 6, sunAzimuthDeg: 90,

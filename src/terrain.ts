@@ -61,13 +61,11 @@ export class TerrainManager {
     this.maxAnisotropy = caps?.maxAnisotropy ?? 4;
     this.lowTier = caps?.tier === 'LOW';
 
-    // Environment Asset Pack: real PBR mossy cloud-forest floor map
+    // Neutral procedural PBR micro-detail texture (0.92-1.0) preserving true biome albedos
     const texSize = 256;
-    const detailMap = getImageTexture(ASSET_PATHS.environment.forestFloor, {
-      repeatX: 20,
-      repeatY: 20,
-      anisotropy: this.maxAnisotropy
-    });
+    const detailMap = createTerrainDetailTexture(texSize);
+    detailMap.repeat.set(16, 16);
+    detailMap.anisotropy = this.maxAnisotropy;
 
     const roughnessMap = createTerrainRoughnessTexture(texSize);
     roughnessMap.repeat.set(5, 5);
@@ -87,17 +85,17 @@ export class TerrainManager {
       t.anisotropy = this.maxAnisotropy; // T8: 8 WebGPU / 4 WebGL2
     }
 
-    this.material = new THREE.MeshPhysicalMaterial({
+    this.material = new THREE.MeshStandardMaterial({
       vertexColors: true,
       map: detailMap,
-      roughness: 0.92,
+      roughness: 0.96,
       roughnessMap: roughnessMap,
       metalness: 0.0, // Andean earth, soil, and rock are 100% dielectric
       normalMap: normalMap,
-      normalScale: new THREE.Vector2(0.85, 0.85), // Soft natural rock/soil relief without metallic glint
+      normalScale: new THREE.Vector2(0.35, 0.35), // Soft natural rock/soil relief without metallic glint
       aoMap: aoMap,
       aoMapIntensity: 0.8,
-      envMapIntensity: 0.35 // Natural ground ambient
+      envMapIntensity: 0.15 // Natural ground ambient, never chrome reflection
     });
   }
 
@@ -173,38 +171,32 @@ export class TerrainManager {
 
     geometry.computeVertexNormals();
 
-    // Biome color script (§2.2–§2.5). All palettes hoisted — the previous
-    // code allocated 6+ Colors per vertex. Weights blend smoothly across
-    // 60 m transition bands instead of the old hard biome switches, which
-    // drew visible color seams across the terrain.
-    // P-CANON-2: albedos regraded to the owner-canon measured bands
-    // (docs/art-canon/canon-palette.json — luma: humus 27–39, foliage 55–62,
-    // moss ≈55, granite ≈60). Sierra row untouched (no canon tileable; own
-    // audit later). WET riverbank darkening target already in canon range.
+    // Calibrated Andean PBR biome albedos (Visual Bible §2.2-§2.5):
+    // Real dielectric soil, vegetation, and rock reflectance without zero-diffuse specular artifacts.
     const CF = {
-      rock: new THREE.Color(0x3d3c37),   // wet stone — dark granite band (canon stonework)
-      soilA: new THREE.Color(0x26200f),  // humus/earth — canon humus 0x191e08 ↔ litter 0x31261f blend (L≈32)
-      soilB: new THREE.Color(0x303f24)   // canopy green tint — foliage band (L≈58)
+      rock: new THREE.Color(0x5A574E),   // wet stone — dark granite
+      soilA: new THREE.Color(0x4A3C23),  // humus/earth — rich moist loam
+      soilB: new THREE.Color(0x3D5428)   // canopy green tint — moss/foliage
     };
     const HS = {
       rock: new THREE.Color(0x6E6A63),   // granite
       lichen: new THREE.Color(0x7A8A5A), // lichen patches (§2.3 dressing vocab)
       soilA: new THREE.Color(0x9A8B4F),  // ichu grass lit
       soilB: new THREE.Color(0x6B6335),  // ichu shadowed
-      snow: new THREE.Color(0xF2F5F7),   // snowfields (roughness handled by material)
-      snowShadow: new THREE.Color(0xC9D6E2) // never pure grey in shadow
+      snow: new THREE.Color(0xE0E6EB),   // snowfields (high mountain peaks only)
+      snowShadow: new THREE.Color(0xAABCCC) // soft shadowed snow
     };
     const JL = {
-      rock: new THREE.Color(0x3d3c37),   // swallowed limestone — granite band (was L≈152)
-      moss: new THREE.Color(0x2c3e15),   // heavy moss reclamation — canon moss anchor (was L≈107)
-      soil: new THREE.Color(0x2a2313)    // mud — same floor-albedo family as cf soilA (L≈35)
+      rock: new THREE.Color(0x45433C),   // swallowed limestone
+      moss: new THREE.Color(0x3E5624),   // heavy moss reclamation
+      soil: new THREE.Color(0x382C18)    // rich mud/loam
     };
     const PA = {
-      rockA: new THREE.Color(0x403c37),  // plaza stone — granite band upper (was L≈145)
-      rockB: new THREE.Color(0x34322e),  // ashlar shadow — darker than rockA (was L≈158)
-      soil: new THREE.Color(0x2c3e15)    // encroaching green — canon moss anchor (was L≈78)
+      rockA: new THREE.Color(0x6E685B),  // plaza stone
+      rockB: new THREE.Color(0x524D42),  // ashlar shadow
+      soil: new THREE.Color(0x3A5228)    // encroaching green
     };
-    const WET = new THREE.Color(0x2E2A24); // riverbank darkening target
+    const WET = new THREE.Color(0x363028); // riverbank darkening target
     const color = new THREE.Color();
     const tmpA = new THREE.Color();
     const tmpB = new THREE.Color();
@@ -262,9 +254,9 @@ export class TerrainManager {
       }
 
       // Sierra snow line: elevation-driven with patchy hash edges, grass
-      // and rock faces too steep hold-out (§2.3 snowfields).
+      // and rock faces too steep hold-out (§2.3 snowfields). Strictly high alpine peaks.
       if (wHs > 0.25) {
-        const snowW = smoothstepf(78, 100, y + r2 * 14) * (1 - smoothstepf(0.35, 0.55, slope));
+        const snowW = smoothstepf(165, 205, y + r2 * 14) * (1 - smoothstepf(0.35, 0.55, slope));
         if (snowW > 0) {
           tmpA.copy(HS.snow).lerp(HS.snowShadow, r1 * 0.6);
           color.lerp(tmpA, snowW);

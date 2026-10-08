@@ -701,7 +701,7 @@ export function createTerrainRoughnessTexture(size: number = 256): THREE.DataTex
                 Math.sin(u * Math.PI * 2 * 2 + Math.sin(v * Math.PI * 2 * 3 + 0.8) * 1.5) * 0.5 +
                 Math.sin((u * 1.3 + v * 0.7) * Math.PI * 2 * 4 + 2.3) * 0.3 +
                 Math.sin(u * Math.PI * 2 * 7 - v * Math.PI * 2 * 5 + 0.4) * 0.15;
-            const val = Math.floor(Math.min(1, Math.max(0, 0.85 + tone * 0.13)) * 255);
+            const val = Math.floor(Math.min(1, Math.max(0, 0.92 + tone * 0.07)) * 255);
             const idx = (y * actualSize + x) * 4;
             data[idx] = val; data[idx + 1] = val; data[idx + 2] = val; data[idx + 3] = 255;
         }
@@ -788,47 +788,73 @@ function foliageCardCanvas(kind: FoliageCardKind, size: number): HTMLCanvasEleme
     ctx.clearRect(0, 0, S, S);
 
     if (kind === 'broadleaf') {
-        // Canopy mass: jittered ring of leaves around an off-center heart.
-        // Luminance falls toward the clump center/base — a baked depth cue
-        // that keeps layered cards from reading as one flat pom-pom.
-        const cx = S * 0.5, cy = S * 0.4;
-        const R = S * 0.3;
-        for (let i = 0; i < 22; i++) {
-            const a = (i / 22) * Math.PI * 2 + rng() * 0.55;
-            const r = R * (0.35 + rng() * 0.6);
-            const lx = cx + Math.cos(a) * r * 1.15;
-            const ly = cy + Math.sin(a) * r * 0.85;
-            const L = S * (0.13 + rng() * 0.09);
-            // outer + higher leaves catch light; inner + lower go darker
-            const depth = r / R;
-            const lum = 0.62 + depth * 0.3 + (cy - ly) / S * 0.25 + rng() * 0.08;
-            cardLeaf(ctx, rng, lx, ly, a + Math.PI / 2 + (rng() - 0.5) * 0.9, L, L * 0.42,
-                cardShade(rng, Math.min(0.94, Math.max(0.5, lum)), 0.02));
-        }
-        for (let i = 0; i < 7; i++) {
-            const lx = S * (0.18 + rng() * 0.64);
-            const ly = S * (0.62 + rng() * 0.2);
-            const L = S * (0.12 + rng() * 0.07);
-            cardLeaf(ctx, rng, lx, ly, Math.PI + (rng() - 0.5) * 1.6, L, L * 0.4, cardShade(rng, 0.6, 0.14));
-        }
-        // Trunk-facing stem wedge (dark — attaches to the instanced trunk).
-        ctx.fillStyle = cardShade(rng, 0.45, 0.1);
-        ctx.beginPath();
-        ctx.moveTo(S * 0.44, S);
-        ctx.lineTo(S * 0.56, S);
-        ctx.lineTo(S * 0.5, cy + S * 0.08);
-        ctx.closePath();
-        ctx.fill();
-        // Light gaps between leaf layers (alpha holes → depth when layered).
-        ctx.globalCompositeOperation = 'destination-out';
-        for (let i = 0; i < 10; i++) {
-            const a = rng() * Math.PI * 2;
-            const r = R * rng() * 0.85;
+        // Natural Andean canopy foliage cluster (Polylepis / Quina cloud forest tree):
+        // Slender organic branching structure supporting dense sprays of small ovate leaves.
+        const bx = S * 0.5, by = S * 0.98;
+
+        // 1. Natural woody branch framework radiating into upper canopy
+        ctx.strokeStyle = cardShade(rng, 0.38, 0.12);
+        ctx.lineWidth = S * 0.014;
+        ctx.lineCap = 'round';
+
+        const branchEnds: Array<{ x: number; y: number; dir: number }> = [];
+        const mainBranches = [
+            { angle: -Math.PI / 2, len: S * 0.62 },
+            { angle: -Math.PI / 2 - 0.45, len: S * 0.52 },
+            { angle: -Math.PI / 2 + 0.45, len: S * 0.52 },
+            { angle: -Math.PI / 2 - 0.82, len: S * 0.42 },
+            { angle: -Math.PI / 2 + 0.82, len: S * 0.42 },
+        ];
+
+        for (const b of mainBranches) {
+            const bAngle = b.angle + (rng() - 0.5) * 0.16;
+            const bLen = b.len * (0.88 + rng() * 0.24);
+            const mx = bx + Math.cos(bAngle) * bLen * 0.5 + (rng() - 0.5) * S * 0.04;
+            const my = by + Math.sin(bAngle) * bLen * 0.5;
+            const ex = bx + Math.cos(bAngle) * bLen;
+            const ey = by + Math.sin(bAngle) * bLen;
+
+            ctx.lineWidth = S * 0.012;
             ctx.beginPath();
-            ctx.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, S * 0.015, S * 0.05, a, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(bx, by);
+            ctx.quadraticCurveTo(mx, my, ex, ey);
+            ctx.stroke();
+
+            branchEnds.push({ x: ex, y: ey, dir: bAngle });
+
+            // Sub-branches
+            for (let sub = -1; sub <= 1; sub += 2) {
+                const subAngle = bAngle + sub * (0.42 + rng() * 0.22);
+                const subLen = bLen * (0.38 + rng() * 0.22);
+                const sx = mx + Math.cos(subAngle) * subLen;
+                const sy = my + Math.sin(subAngle) * subLen;
+                ctx.lineWidth = S * 0.007;
+                ctx.beginPath();
+                ctx.moveTo(mx, my);
+                ctx.lineTo(sx, sy);
+                ctx.stroke();
+                branchEnds.push({ x: sx, y: sy, dir: subAngle });
+            }
         }
-        ctx.globalCompositeOperation = 'source-over';
+
+        // 2. Dense leaf clusters arrayed along the branch network
+        // Inner leaves darker (ambient occlusion), outer/top leaves caught in sunlight
+        for (const node of branchEnds) {
+            const clusterLeaves = 14 + Math.floor(rng() * 8);
+            for (let i = 0; i < clusterLeaves; i++) {
+                const offsetR = S * (0.02 + rng() * 0.13);
+                const offsetA = rng() * Math.PI * 2;
+                const lx = node.x + Math.cos(offsetA) * offsetR;
+                const ly = node.y + Math.sin(offsetA) * offsetR;
+                const leafA = node.dir + (rng() - 0.5) * 1.5;
+                const leafL = S * (0.045 + rng() * 0.035);
+                const leafW = leafL * (0.40 + rng() * 0.12);
+
+                const heightFactor = Math.max(0, Math.min(1, (by - ly) / (S * 0.85)));
+                const lum = 0.52 + heightFactor * 0.32 + (rng() - 0.5) * 0.14;
+                cardLeaf(ctx, rng, lx, ly, leafA, leafL, leafW, cardShade(rng, Math.max(0.42, Math.min(0.95, lum)), 0.04));
+            }
+        }
     } else if (kind === 'grass') {
         // Ichu tussock: many thin bowed blades from one base — tighter fan
         // than a starburst, lengths staggered inner-short/outer-long so the
