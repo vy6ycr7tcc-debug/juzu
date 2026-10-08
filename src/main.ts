@@ -295,6 +295,8 @@ async function init() {
   const todParam = urlParams.get('tod');
 
   setupEnvironment(scene, quality, renderer, todParam);
+  const defaultFogColor = (scene.fog as THREE.FogExp2)?.color ? (scene.fog as THREE.FogExp2).color.clone() : new THREE.Color(0xA6BED2);
+  const defaultFogDensity = (scene.fog as THREE.FogExp2)?.density ?? 0.0015;
   const terrainManager = createTerrain(scene, renderCaps);
   // §7.2: river takes RenderCaps (the old callsite passed nothing — the
   // WebGPU transmission branch never ran and tier rules never applied).
@@ -1296,16 +1298,56 @@ async function init() {
       const gy = character.mesh.position.y;
       camera.position.set(posX - 0.65, gy + 1.35, posZ + 1.7);
       camera.lookAt(posX, gy + 1.05, posZ);
+    } else if (shot === 'underwater_dive') {
+      // Phase 3 Underwater Cenote 6-DOF Swimming & Diving (Shadow of the Tomb Raider North Star):
+      // Submerged depth in the river canyon (cenote basin y = -4.2m, surface at y = -1.02m), angled diving posture, air bubbles, depth fog
+      const posX = 0, posZ = 10;
+      character.mesh.position.set(posX, -4.2, posZ);
+      character.mesh.rotation.y = 0.25;
+      character.mesh.rotation.x = -0.75;
+      character.state = MovementState.DIVE;
+      character.swimPitch = -0.75;
+      character.bubbleTimer = 1.05;
+      character.disableCameraUpdate = true;
+      camera.position.set(posX + 1.5, -3.4, posZ + 3.2);
+      camera.lookAt(posX, -4.2, posZ);
+      if (scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.setHex(0x0a2a28);
+        scene.fog.density = 0.085;
+      }
+    } else if (shot === 'surface_swim') {
+      // Phase 3 Surface Breaststroke in River
+      const posX = 0, posZ = 10;
+      character.mesh.position.set(posX, -1.77, posZ);
+      character.mesh.rotation.y = 0.25;
+      character.mesh.rotation.x = -0.75;
+      character.state = MovementState.SWIM;
+      character.disableCameraUpdate = true;
+      camera.position.set(posX + 1.6, 0.35, posZ + 3.2);
+      camera.lookAt(posX, -1.6, posZ);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))));
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
       if (shot === 'wetness_sheen') character.wetness = 0.95;
+      if (shot === 'underwater_dive') {
+        character.state = MovementState.DIVE;
+        character.mesh.position.set(0, -4.2, 10);
+        character.mesh.rotation.y = 0.25;
+        character.swimPitch = -0.75;
+        character.mesh.rotation.x = -0.75;
+      }
+      if (shot === 'surface_swim') {
+        character.state = MovementState.SWIM;
+        character.mesh.position.set(0, -1.77, 10);
+        character.mesh.rotation.y = 0.25;
+        character.mesh.rotation.x = -0.75;
+      }
       physics.update(dt);
       character.update(dt);
       river.update(i * dt);
@@ -1464,6 +1506,17 @@ async function init() {
         // updated particles before computing it, so the gate could not exist).
         const activeRegionId = regionManager.currentRegionId;
         updateAtmosphere(camera.position, time, activeRegionId, todParam);
+
+        // Underwater optical absorption fog modulation (Phase 3 Cenote Diving)
+        if (scene.fog instanceof THREE.FogExp2) {
+          if (camera.position.y < 0.2) {
+            scene.fog.color.lerp(new THREE.Color(0x0a2a28), 0.15);
+            scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.085, 0.15);
+          } else if (defaultFogColor) {
+            scene.fog.color.lerp(defaultFogColor, 0.15);
+            scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, defaultFogDensity, 0.15);
+          }
+        }
 
         // Check distance to rockslide trigger zone (approx x: 100, z: 0)
         if (!hasTriggeredRockslide) {
