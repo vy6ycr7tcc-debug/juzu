@@ -90,18 +90,14 @@ export class TerrainManager {
     this.material = new THREE.MeshPhysicalMaterial({
       vertexColors: true,
       map: detailMap,
-      // §4.1 weathered stone band × map 0.72–0.98 → composite ~0.66–0.90:
-      // dry ground matte, wet blotches glint without mirror whiteout.
       roughness: 0.92,
       roughnessMap: roughnessMap,
-      metalness: 0.05,
+      metalness: 0.0, // Andean earth, soil, and rock are 100% dielectric
       normalMap: normalMap,
-      // §4.1 normal intensity 2.0–8.0 by scale — generator 3.0 ×
-      // material 1.8; terrain relief must read without per-texel sparkle.
-      normalScale: new THREE.Vector2(1.8, 1.8),
+      normalScale: new THREE.Vector2(0.85, 0.85), // Soft natural rock/soil relief without metallic glint
       aoMap: aoMap,
-      aoMapIntensity: 0.8,       // §4.1 0.6–1.0
-      envMapIntensity: 1.0
+      aoMapIntensity: 0.8,
+      envMapIntensity: 0.35 // Natural ground ambient
     });
   }
 

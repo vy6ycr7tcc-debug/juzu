@@ -326,13 +326,13 @@ export class CharacterController {
         this.modelBaseY = -alignedBox.min.y;
         model.position.y = this.modelBaseY;
 
-        // Load authentic Andean archaeologist albedo texture
+        // Load authentic Tomb Raider adventurer texture atlas (olive cargo pants, dark leather, field gear)
         const texLoader = new THREE.TextureLoader();
         const customAlbedo = texLoader.load(`${import.meta.env.BASE_URL}assets/character-textures/naira_adventurer_albedo.png`);
         customAlbedo.colorSpace = THREE.SRGBColorSpace;
         customAlbedo.flipY = false;
 
-        // Ensure proper PBR material configuration: skin & clothing realism (not shiny plastic/metal)
+        // Ensure authentic PBR realism on rigged character (strictly non-metallic skin & field clothing)
         model.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
@@ -342,9 +342,11 @@ export class CharacterController {
             if (mesh.material) {
               const mat = mesh.material as THREE.MeshStandardMaterial;
               mat.map = customAlbedo;
-              mat.envMapIntensity = 0.9;
-              mat.roughness = 0.85; // Weather-worn field clothing & natural skin
-              mat.metalness = 0.02; // Non-metallic organic surface
+              mat.metalnessMap = null; // Strip embedded glossiness/metalness map to eliminate metallic sheen
+              mat.roughnessMap = null; // Strip embedded roughness map to ensure uniform natural micro-roughness
+              mat.metalness = 0.0; // Strictly non-metallic organic skin and field garments
+              mat.roughness = 0.85; // Natural skin/fabric micro-roughness
+              mat.envMapIntensity = 0.25; // Soft natural ambient reflection (eliminates metallic chrome sheen)
               mat.needsUpdate = true;
               this.charMaterials.push(mat);
             }
@@ -1284,14 +1286,15 @@ export class CharacterController {
     // Modulate character PBR materials for wetness and mud
     for (const mat of this.charMaterials) {
       const baseRoughness = 0.85;
-      const wetRoughness = THREE.MathUtils.lerp(baseRoughness, 0.16, this.wetness);
-      mat.roughness = THREE.MathUtils.lerp(wetRoughness, 0.95, this.mudSplatter);
-      mat.envMapIntensity = THREE.MathUtils.lerp(0.9, 2.4, this.wetness);
+      const wetRoughness = THREE.MathUtils.lerp(baseRoughness, 0.52, this.wetness);
+      mat.roughness = THREE.MathUtils.lerp(wetRoughness, 0.92, this.mudSplatter);
+      mat.envMapIntensity = THREE.MathUtils.lerp(0.25, 0.45, this.wetness);
+      mat.metalness = 0.0; // Strictly non-metallic organic skin and field garments
 
-      const wetDarkening = 1.0 - 0.28 * this.wetness;
-      const r = wetDarkening * (1.0 - 0.15 * this.mudSplatter);
-      const g = wetDarkening * (1.0 - 0.28 * this.mudSplatter);
-      const b = wetDarkening * (1.0 - 0.42 * this.mudSplatter);
+      const wetDarkening = 1.0 - 0.22 * this.wetness;
+      const r = wetDarkening * (1.0 - 0.12 * this.mudSplatter);
+      const g = wetDarkening * (1.0 - 0.22 * this.mudSplatter);
+      const b = wetDarkening * (1.0 - 0.35 * this.mudSplatter);
       mat.color.setRGB(r, g, b);
     }
   }

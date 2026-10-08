@@ -79,7 +79,7 @@ export const CinematicShader = {
         // vignette 0.55 was tuned pre-tonemap and measured too heavy in display
         // space — p9 sweep retuned 0.55 → 0.25 (§5.4 amendment).
         "vignetteStrength": { value: 0.25 },
-        "grainAmount": { value: 0.035 }
+        "grainAmount": { value: 0.012 }
     },
     vertexShader: `
         varying vec2 vUv;
@@ -108,18 +108,20 @@ export const CinematicShader = {
         void main() {
             vec2 uv = vUv;
 
-            // Chromatic Aberration
-            vec2 offset = vec2(amount, 0.0);
+            // Subtle radial chromatic aberration (natural lens barrel falloff: zero at center)
+            vec2 dir = uv - 0.5;
+            float distSq = dot(dir, dir);
+            vec2 offset = dir * (distSq * 0.001);
             float r = texture2D(tDiffuse, uv + offset).r;
             float g = texture2D(tDiffuse, uv).g;
             float b = texture2D(tDiffuse, uv - offset).b;
             vec3 col = vec3(r, g, b);
 
             // Vignette
-            float factor = clamp(1.0 - length(uv - 0.5) * vignetteStrength, 0.0, 1.0);
+            float factor = clamp(1.0 - length(dir) * vignetteStrength, 0.0, 1.0);
             col *= factor;
 
-            // Film Grain
+            // Film Grain (subtle natural film texture)
             float noise = (random(uv + mod(time, 10.0)) - 0.5) * grainAmount;
             col += noise;
 
