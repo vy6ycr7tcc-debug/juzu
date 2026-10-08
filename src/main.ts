@@ -1707,6 +1707,27 @@ async function init() {
       const groundY = character.mesh.position.y;
       camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
       camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+    } else if (shot === 'physics_locomotion') {
+      // Dynamic Locomotion on Slope with Athletic Turn Banking
+      const posX = 38, posZ = 24;
+      character.teleport(posX, posZ, 0.45);
+      character.speed = 5.2; // full sprint speed
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 2.2, groundY + 1.45, posZ + 3.2);
+      camera.lookAt(posX + 0.3, groundY + 1.15, posZ - 0.6);
+    } else if (shot === 'physics_jump') {
+      // Airborne Jump Dynamics with Asymmetric Gravity Arc
+      const posX = 38, posZ = 24;
+      character.teleport(posX, posZ, 0.45);
+      character.speed = 4.8;
+      character.isGrounded = false;
+      character.velocityY = 3.6;
+      character.mesh.position.y += 0.85; // airborne jump apex
+      character.disableCameraUpdate = true;
+      const groundY = getGlobalTerrainHeight(posX, posZ);
+      camera.position.set(posX - 2.4, groundY + 1.6, posZ + 3.4);
+      camera.lookAt(posX, groundY + 1.25, posZ);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1718,7 +1739,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -1867,6 +1888,26 @@ async function init() {
         const groundY = character.mesh.position.y;
         camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
         camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+      }
+      if (shot === 'physics_locomotion') {
+        const posX = 38, posZ = 24;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.speed = 5.2;
+        character.mesh.rotation.y = 0.45;
+        const groundY = character.mesh.position.y;
+        camera.position.set(posX - 2.2, groundY + 1.45, posZ + 3.2);
+        camera.lookAt(posX + 0.3, groundY + 1.15, posZ - 0.6);
+      }
+      if (shot === 'physics_jump') {
+        const posX = 38, posZ = 24;
+        const groundY = character.getGroundedHeight(posX, posZ);
+        character.mesh.position.set(posX, groundY + 0.85, posZ);
+        character.speed = 4.8;
+        character.isGrounded = false;
+        character.velocityY = 3.6;
+        character.mesh.rotation.y = 0.45;
+        camera.position.set(posX - 2.4, groundY + 1.6, posZ + 3.4);
+        camera.lookAt(posX, groundY + 1.25, posZ);
       }
       if (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap') {
         character.setTorch(true);
