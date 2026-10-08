@@ -98,7 +98,7 @@ export class TerrainManager {
     aoMap.channel = 0;
     aoMap.anisotropy = this.maxAnisotropy;
 
-    this.material = new THREE.MeshStandardMaterial({
+    const stdMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
       map: groundAlbedo,
       roughness: 0.90,
@@ -110,6 +110,155 @@ export class TerrainManager {
       aoMapIntensity: 0.85,
       envMapIntensity: 0.25 // Natural ground ambient
     });
+
+    // WebGL2 Fallback Path: ShaderChunk onBeforeCompile for Triplanar Texture Projection & Sedimentary Strata
+    stdMat.onBeforeCompile = (shader) => {
+      shader.uniforms.triplanarScale = { value: 0.12 };
+      shader.uniforms.strataFrequency = { value: 0.35 };
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vWorldPos;
+        varying vec3 vWorldNorm;`
+      );
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vWorldNorm = normalize((modelMatrix * vec4(normal, 0.0)).xyz);`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vWorldPos;
+        varying vec3 vWorldNorm;
+        uniform float triplanarScale;
+        uniform float strataFrequency;`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        `
+        #ifdef USE_MAP
+          // Slope-based triplanar blend weights (4th-power distribution for sharp cliff-to-plateau transitions)
+          vec3 blendWeight = pow(abs(vWorldNorm), vec3(4.0));
+          blendWeight /= (blendWeight.x + blendWeight.y + blendWeight.z);
+
+          // World-space planar UV projections (eliminates vertical texture stretching on cliffs)
+          vec2 uvX = vWorldPos.zy * triplanarScale;
+          vec2 uvY = vWorldPos.xz * triplanarScale;
+          vec2 uvZ = vWorldPos.xy * triplanarScale;
+
+          vec4 colX = texture2D(map, uvX);
+          vec4 colY = texture2D(map, uvY);
+          vec4 colZ = texture2D(map, uvZ);
+
+          vec4 triplanarColor = colX * blendWeight.x + colY * blendWeight.y + colZ * blendWeight.z;
+
+          // Geological horizontal sedimentary strata on steep canyon walls
+          float cliffSlope = clamp(1.0 - abs(vWorldNorm.y), 0.0, 1.0);
+          float strataNoise = sin(vWorldPos.y * strataFrequency + sin(vWorldPos.x * 0.03 + vWorldPos.z * 0.03) * 1.8) * 0.5 + 0.5;
+          
+          // Andean lithology: ferruginous red/ochre sandstone, deep slate, and weathered granodiorite bands
+          vec3 slateColor = vec3(0.58, 0.54, 0.50);
+          vec3 sandstoneColor = vec3(0.85, 0.74, 0.62);
+          vec3 graniteColor = vec3(0.72, 0.70, 0.68);
+          vec3 strataTint = mix(slateColor, sandstoneColor, strataNoise);
+          float fineStrata = sin(vWorldPos.y * strataFrequency * 4.0) * 0.5 + 0.5;
+          strataTint = mix(strataTint, graniteColor, fineStrata * 0.25);
+
+          triplanarColor.rgb = mix(triplanarColor.rgb, triplanarColor.rgb * strataTint * 1.35, cliffSlope * 0.78);
+
+          diffuseColor *= triplanarColor;
+        #endif
+        `
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `
+        float roughnessFactor = roughness;
+        #ifdef USE_ROUGHNESSMAP
+          vec4 roughX = texture2D(roughnessMap, uvX);
+          vec4 roughY = texture2D(roughnessMap, uvY);
+          vec4 roughZ = texture2D(roughnessMap, uvZ);
+          float triplanarRoughness = roughX.g * blendWeight.x + roughY.g * blendWeight.y + roughZ.g * blendWeight.z;
+          roughnessFactor *= triplanarRoughness;
+          roughnessFactor = mix(roughnessFactor, mix(0.76, 0.96, strataNoise), cliffSlope * 0.55);
+        #endif
+        `
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_maps>',
+        `
+        #if defined( USE_NORMALMAP_TANGENTSPACE )
+          vec3 normX = texture2D(normalMap, uvX).xyz * 2.0 - 1.0;
+          vec3 normY = texture2D(normalMap, uvY).xyz * 2.0 - 1.0;
+          vec3 normZ = texture2D(normalMap, uvZ).xyz * 2.0 - 1.0;
+          vec3 triplanarNormal = normX * blendWeight.x + normY * blendWeight.y + normZ * blendWeight.z;
+          #if defined( USE_PACKED_NORMALMAP )
+            triplanarNormal = vec3( triplanarNormal.xy, sqrt( saturate( 1.0 - dot( triplanarNormal.xy, triplanarNormal.xy ) ) ) );
+          #endif
+          triplanarNormal.xy *= normalScale;
+          normal = normalize( tbn * triplanarNormal );
+        #elif defined( USE_BUMPMAP )
+          normal = perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection );
+        #endif
+        `
+      );
+    };
+
+    this.material = stdMat;
+  }
+
+  /**
+   * WebGPU Primary Path: upgrades the terrain material to MeshStandardNodeMaterial
+   * using TSL triplanarTextures for GPU-accelerated projection and sedimentary strata.
+   */
+  async initWebGPU() {
+    if (!this.isWebGPU) return;
+    try {
+      const [WEBGPU, TSL] = await Promise.all([
+        import('three/webgpu'),
+        import('three/tsl'),
+      ]);
+      const {
+        triplanarTextures, texture, float, positionWorld, normalWorld,
+        vertexColor, sin, clamp, mix, vec3, vec4
+      } = TSL;
+
+      const groundAlbedo = getImageTexture(ASSET_PATHS.environment.forestFloor, {
+        isSRGB: true,
+        repeatX: 24,
+        repeatY: 24,
+        anisotropy: this.maxAnisotropy,
+      });
+
+      const nodeMat = new WEBGPU.MeshStandardNodeMaterial({
+        vertexColors: true,
+        roughness: 0.90,
+        metalness: 0.0,
+      });
+
+      const triplanarAlbedo = triplanarTextures(texture(groundAlbedo), null, null, float(0.12), positionWorld, normalWorld);
+      const strataFreq = float(0.35);
+      const strataNoise = sin(positionWorld.y.mul(strataFreq).add(sin(positionWorld.x.mul(0.03).add(positionWorld.z.mul(0.03))).mul(1.8))).mul(0.5).add(0.5);
+      const cliffSlope = clamp(float(1.0).sub(normalWorld.y.abs()), 0.0, 1.0);
+      const strataTint = mix(vec3(0.68, 0.60, 0.52), vec3(0.92, 0.82, 0.72), strataNoise);
+      const finalAlbedo = mix(triplanarAlbedo.rgb, triplanarAlbedo.rgb.mul(strataTint).mul(1.35), cliffSlope.mul(0.75));
+      nodeMat.colorNode = vec4(finalAlbedo.mul(vertexColor().rgb), 1.0);
+
+      this.material = nodeMat;
+      for (const chunk of this.chunks.values()) {
+        chunk.material = nodeMat;
+      }
+    } catch (e) {
+      console.warn('WebGPU triplanar initialization fallback to standard material:', e);
+    }
   }
 
   getChunkKey(cx: number, cz: number): string {
@@ -423,6 +572,9 @@ export class TerrainManager {
 
 export function createTerrain(scene: THREE.Scene, caps?: RenderCaps) {
   const terrainManager = new TerrainManager(scene, caps);
+  if (caps?.isWebGPU) {
+    terrainManager.initWebGPU();
+  }
   // Initial load around center
   terrainManager.update(new THREE.Vector3(0,0,0));
   return terrainManager;

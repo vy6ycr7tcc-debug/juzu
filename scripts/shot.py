@@ -59,8 +59,8 @@ def main() -> int:
             page.wait_for_function("window.__shotReady === true",
                                    timeout=args.ready_timeout)
             print("game signalled ready")
-        except Exception:
-            print("WARNING: __shotReady never fired — capturing anyway; "
+        except Exception as e:
+            print(f"WARNING: __shotReady wait failed ({e}) — capturing anyway; "
                   "frames may show a loading state", file=sys.stderr)
 
         paths = []
