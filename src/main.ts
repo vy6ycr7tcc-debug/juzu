@@ -1933,6 +1933,17 @@ async function init() {
       camera.lookAt(posX + 45.0, groundY + 7.5, posZ - 4.0);
       sottrHUD.setObjective('GOLDEN CANOPY', 'Volumetric crepuscular light shafts streaming through the Andean mountain ridge');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'geological_strata_cliffs') {
+      // Phase 3 Geological Strata & Canyon Cliff Realism: Sheer Andean rock wall rising out of river canyon
+      const posX = 32, posZ = 120;
+      character.teleport(posX, posZ, -Math.PI * 0.45);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      // Camera looking across the natural river canyon at the towering opposite cliff wall
+      camera.position.set(posX + 3.5, groundY + 1.8, posZ + 3.5);
+      camera.lookAt(-25.0, groundY + 4.5, posZ - 10.0);
+      sottrHUD.setObjective('GEOLOGICAL STRATA', 'Triplanar texture projection and horizontal sedimentary strata banding on steep canyon cliffs');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1944,7 +1955,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2193,6 +2204,13 @@ async function init() {
       const groundY = character.mesh.position.y;
       camera.position.set(posX - 4.5, groundY + 2.0, posZ + 3.0);
       camera.lookAt(posX + 45.0, groundY + 7.5, posZ - 4.0);
+      sottrHUD.update(camera, character.mesh.position);
+    }
+    if (shot === 'geological_strata_cliffs') {
+      const posX = 32, posZ = 120;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 3.5, groundY + 1.8, posZ + 3.5);
+      camera.lookAt(-25.0, groundY + 4.5, posZ - 10.0);
       sottrHUD.update(camera, character.mesh.position);
     }
 
