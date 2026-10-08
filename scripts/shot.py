@@ -46,7 +46,8 @@ def main() -> int:
             "--use-gl=angle", "--use-angle=swiftshader",  # software WebGL: works headless
             "--enable-unsafe-swiftshader",
         ])
-        page = browser.new_page(viewport={"width": args.width, "height": args.height})
+        context = browser.new_context(viewport={"width": args.width, "height": args.height}, service_workers="block")
+        page = context.new_page()
         page.add_init_script("Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });")
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
