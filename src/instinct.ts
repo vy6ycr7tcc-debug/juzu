@@ -189,7 +189,8 @@ export class SurvivalInstinctSystem {
       }
 
       if (item.isPinged) {
-        const intensity = 2.4 * pulseMod * fadeRatio;
+        const baseIntensity = item.type === 'relic' ? 0.45 : (item.type === 'hazard' ? 2.0 : 2.4);
+        const intensity = baseIntensity * pulseMod * fadeRatio;
         const pingColor = item.type === 'hazard' ? hazardColor : (item.type === 'relic' ? relicColor : goldColor);
 
         for (let m = 0; m < item.materials.length; m++) {
