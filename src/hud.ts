@@ -227,6 +227,11 @@ export class SOTTRHUD {
   private activeGear: 'bow' | 'axe' | 'torch' = 'bow';
   private isCinematic: boolean = false;
 
+  // Stealth & Concealment Elements
+  private concealmentBadge: HTMLDivElement;
+  private threatArcCanvas: HTMLCanvasElement;
+  private threatArcCtx: CanvasRenderingContext2D | null = null;
+
   constructor() {
     this.container = document.createElement('div');
     this.container.id = 'sottr-hud-root';
@@ -717,6 +722,40 @@ export class SOTTRHUD {
       <span style="color: #ffd777;">ARCHAEOLOGICAL FIELD ARCHIVE • ANTISUYU EXPEDITION</span>
     `;
     this.journalModal.appendChild(jFooter);
+
+    // 7. Concealment Badge (Tall-grass / fern stealth)
+    this.concealmentBadge = document.createElement('div');
+    this.concealmentBadge.id = 'hud-stealth-concealed';
+    this.concealmentBadge.style.position = 'absolute';
+    this.concealmentBadge.style.top = '78px';
+    this.concealmentBadge.style.left = '50%';
+    this.concealmentBadge.style.transform = 'translateX(-50%)';
+    this.concealmentBadge.style.padding = '4px 14px';
+    this.concealmentBadge.style.background = 'rgba(18, 38, 22, 0.85)';
+    this.concealmentBadge.style.border = '1px solid rgba(110, 231, 140, 0.65)';
+    this.concealmentBadge.style.borderRadius = '16px';
+    this.concealmentBadge.style.color = '#86efac';
+    this.concealmentBadge.style.fontFamily = 'monospace';
+    this.concealmentBadge.style.fontSize = '11px';
+    this.concealmentBadge.style.fontWeight = '700';
+    this.concealmentBadge.style.letterSpacing = '2px';
+    this.concealmentBadge.style.boxShadow = '0 0 16px rgba(34, 197, 94, 0.35)';
+    this.concealmentBadge.style.display = 'none';
+    this.concealmentBadge.textContent = '🌿 CONCEALED';
+    this.container.appendChild(this.concealmentBadge);
+
+    // 8. Directional Threat Arc Canvas
+    this.threatArcCanvas = document.createElement('canvas');
+    this.threatArcCanvas.width = 240;
+    this.threatArcCanvas.height = 240;
+    this.threatArcCanvas.style.position = 'absolute';
+    this.threatArcCanvas.style.top = '50%';
+    this.threatArcCanvas.style.left = '50%';
+    this.threatArcCanvas.style.transform = 'translate(-50%, -50%)';
+    this.threatArcCanvas.style.pointerEvents = 'none';
+    this.threatArcCanvas.style.display = 'none';
+    this.threatArcCtx = this.threatArcCanvas.getContext('2d');
+    this.container.appendChild(this.threatArcCanvas);
 
     document.body.appendChild(this.container);
     document.body.appendChild(this.mapModal);
@@ -1244,6 +1283,68 @@ export class SOTTRHUD {
 
         this.drawMap(playerPos, this.cachedCameraYaw);
       }
+    }
+  }
+
+  public updateStealth(
+    isConcealed: boolean,
+    threatDir: THREE.Vector2,
+    maxAwareness: number,
+    cameraYaw: number
+  ) {
+    if (this.concealmentBadge) {
+      this.concealmentBadge.style.display = isConcealed ? 'block' : 'none';
+    }
+
+    if (!this.threatArcCanvas || !this.threatArcCtx) return;
+
+    if (maxAwareness > 0.05) {
+      this.threatArcCanvas.style.display = 'block';
+      const ctx = this.threatArcCtx;
+      const w = 240, h = 240;
+      ctx.clearRect(0, 0, w, h);
+
+      // Threat angle relative to camera view
+      const threatWorldAngle = Math.atan2(threatDir.x, threatDir.y);
+      const relAngle = threatWorldAngle - cameraYaw;
+
+      const cx = w * 0.5, cy = h * 0.5;
+      const radius = 95;
+      const arcSpread = Math.PI * 0.22;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(relAngle);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, -arcSpread, arcSpread);
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+
+      if (maxAwareness >= 0.9) {
+        ctx.strokeStyle = '#ef4444'; // Red combat
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 12;
+      } else if (maxAwareness > 0.35) {
+        ctx.strokeStyle = '#f59e0b'; // Amber suspicious
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)'; // White detection
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+        ctx.shadowBlur = 4;
+      }
+      ctx.stroke();
+
+      // Inner fill bar based on awareness
+      ctx.beginPath();
+      ctx.arc(0, 0, radius - 6, -arcSpread * maxAwareness, arcSpread * maxAwareness);
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.restore();
+    } else {
+      this.threatArcCanvas.style.display = 'none';
     }
   }
 

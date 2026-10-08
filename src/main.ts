@@ -37,6 +37,7 @@ import { createSOTTRHUD, type SOTTRHUD } from './hud.js';
 import { DialogueSystem } from './story/dialogueSystem.js';
 import { NPCManager } from './story/characters.js';
 import { StoryManager } from './story/storyManager.js';
+import { StealthSystem } from './combat/stealth.js';
 
 // Setup for global hook
 declare global {
@@ -505,6 +506,10 @@ async function init() {
   const dialogueSystem = new DialogueSystem(audioDirector);
   const npcManager = new NPCManager(scene);
   await npcManager.load();
+  const stealthSystem = new StealthSystem(scene);
+  await stealthSystem.load();
+  character.stealthSystem = stealthSystem;
+  (window as any).__stealthSystem = stealthSystem;
   const storyManager = new StoryManager(flags, sottrHUD, dialogueSystem, npcManager);
   sottrHUD.setJournalEntries(storyManager.getUnlockedJournalEntries());
   flags.onChange(() => {
@@ -1728,6 +1733,46 @@ async function init() {
       const groundY = getGlobalTerrainHeight(posX, posZ);
       camera.position.set(posX - 2.4, groundY + 1.6, posZ + 3.4);
       camera.lookAt(posX, groundY + 1.25, posZ);
+    } else if (shot === 'stealth_patrol') {
+      // Sentry on patrol with dynamic detection radar arc and foliage concealment
+      const posX = 48, posZ = 32;
+      character.teleport(posX, posZ, 0.45);
+      character.isCrouched = true;
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.8, groundY + 1.25, posZ + 3.0);
+      camera.lookAt(posX - 0.2, groundY + 0.95, posZ - 3.5);
+      if (stealthSystem.sentries.length > 0) {
+        const sentry = stealthSystem.sentries[0];
+        sentry.group.position.set(46, getGlobalTerrainHeight(46, 26), 26);
+        sentry.facingDir.set(-0.6, 0, 0.8).normalize();
+        sentry.group.rotation.y = Math.atan2(sentry.facingDir.x, sentry.facingDir.z);
+        sentry.awareness = 0.45;
+        sentry.setAnimation('walk');
+      }
+      sottrHUD.setObjective('INFILTRATE RUINS', 'Bypass or neutralize Sol Negro patrols quietly');
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'stealth_takedown') {
+      // Close-quarters Silent Takedown with [E] prompt behind mercenary
+      const posX = 42, posZ = 28;
+      character.teleport(posX, posZ - 1.1, 0);
+      character.isCrouched = true;
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 0.55, groundY + 1.35, posZ - 2.8);
+      camera.lookAt(posX, groundY + 1.15, posZ + 0.5);
+      if (stealthSystem.sentries.length > 0) {
+        const sentry = stealthSystem.sentries[0];
+        sentry.group.position.set(posX, getGlobalTerrainHeight(posX, posZ), posZ);
+        sentry.facingDir.set(0, 0, 1);
+        sentry.group.rotation.y = 0;
+        sentry.awareness = 0.1;
+        sentry.setAnimation('idle');
+        stealthSystem.activeTakedownTarget = sentry;
+      }
+      sottrHUD.setObjective('SILENT TAKEDOWN', 'Eliminate the patrol without raising the alarm');
+      sottrHUD.setPrompt('<span style="color: #ff4d4d; font-weight: 700;">[E]</span> SILENT TAKEDOWN');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1739,7 +1784,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -1924,6 +1969,26 @@ async function init() {
       cryptTrap.update(dt, character.mesh.position);
       relicSystem.update(dt, character.mesh.position);
       npcManager.update(dt);
+      stealthSystem.update(dt, character, camera, audioDirector);
+      if (shot === 'stealth_patrol') {
+        sottrHUD.updateStealth(true, new THREE.Vector2(-0.4, -0.9), 0.45, character.theta);
+      } else if (shot === 'stealth_takedown') {
+        sottrHUD.setPrompt('<span style="color: #ff4d4d; font-weight: 700;">[E]</span> SILENT TAKEDOWN');
+        sottrHUD.updateStealth(false, new THREE.Vector2(0, 1), 0.1, character.theta);
+      }
+    }
+
+    if (shot === 'stealth_patrol') {
+      const posX = 48, posZ = 32;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX - 1.8, groundY + 1.25, posZ + 3.0);
+      camera.lookAt(posX - 0.2, groundY + 0.95, posZ - 3.5);
+    }
+    if (shot === 'stealth_takedown') {
+      const posX = 42, posZ = 28;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 0.55, groundY + 1.35, posZ - 2.8);
+      camera.lookAt(posX, groundY + 1.15, posZ + 0.5);
     }
 
     if (shot === 'realism_valley_open_world') {
@@ -2138,9 +2203,21 @@ async function init() {
         cryptTrap.update(dt, character.mesh.position);
         relicSystem.update(dt, character.mesh.position);
         npcManager.update(dt);
+        stealthSystem.update(dt, character, camera, audioDirector);
+        sottrHUD.updateStealth(
+          stealthSystem.isPlayerConcealed,
+          stealthSystem.threatDirection,
+          stealthSystem.maxAwareness,
+          character.theta
+        );
         const nearbyNPC = storyManager.checkPlayerInteraction(character.mesh.position);
         if (input.consumeJustPressed('KeyE')) {
-          if (nearbyNPC) {
+          if (stealthSystem.activeTakedownTarget) {
+            stealthSystem.executeSilentTakedown(character, audioDirector);
+          } else if (stealthSystem.activeLootTarget) {
+            stealthSystem.lootSentry(stealthSystem.activeLootTarget);
+            audioDirector.play('cloth', { position: character.mesh.position, volume: 0.7 });
+          } else if (nearbyNPC) {
             storyManager.triggerInteraction(nearbyNPC);
           } else if (hydraulicCistern.canInteract(character.mesh.position)) {
             hydraulicCistern.interact();
@@ -2154,7 +2231,11 @@ async function init() {
         }
 
         // SOTTR Contextual interaction prompts & HUD update
-        if (nearbyNPC) {
+        if (stealthSystem.activeTakedownTarget) {
+          sottrHUD.setPrompt('<span style="color: #ff4d4d; font-weight: 700;">[E]</span> SILENT TAKEDOWN');
+        } else if (stealthSystem.activeLootTarget) {
+          sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> SEARCH MERCENARY');
+        } else if (nearbyNPC) {
           sottrHUD.setPrompt(nearbyNPC.config.prompt);
         } else if (relicSystem.canInteract(character.mesh.position)) {
           sottrHUD.setPrompt(relicSystem.isInspecting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STOW RELIC' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE SACRED RELIC');
@@ -2183,7 +2264,7 @@ async function init() {
           audioDirector.setBiome('highlands');
         }
 
-        if (character.isAiming || weather.state === 'STORM') {
+        if (stealthSystem.maxAwareness > 0.25 || character.isAiming || weather.state === 'STORM') {
           audioDirector.setIntensity('tension');
         } else if (relicSystem.isInspecting) {
           audioDirector.setIntensity('calm');

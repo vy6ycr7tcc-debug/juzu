@@ -11,6 +11,7 @@ import { waterDepthAt, waterSurfaceY } from './river.js';
 import { SurvivalInstinctSystem } from './instinct.js';
 import { BowSystem } from './bow.js';
 import { climbingSystem, ClimbableWall } from './climbing.js';
+import type { StealthSystem } from './combat/stealth.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
 // gates G3/G4 read live locomotion state instead of screenshot guessing.
@@ -374,6 +375,7 @@ export class CharacterController {
 
   // Archaeological Survival Instincts System (Shadow of the Tomb Raider North Star)
   public instinctSystem: SurvivalInstinctSystem;
+  public stealthSystem: StealthSystem | null = null;
 
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
@@ -568,11 +570,8 @@ export class CharacterController {
           else this.actions.run = action;
         }
 
-        if (xbotGltf) {
-          const sneak = xbotGltf.animations.find((c) => c.name === 'sneak_pose');
-          const rc = sneak ? retargetMixamoClip(sneak, xbotGltf.scene, model) : null;
-          if (rc) this.actions.crouch = this.mixer.clipAction(rc);
-        }
+        // Procedural stalk stance (center of gravity lowering + spine lean) is used for crouching
+        // to guarantee authentic bone posture without cross-rig distortion.
 
         if (this.actions.idle) {
           this.actions.idle.play();
@@ -1747,7 +1746,7 @@ export class CharacterController {
     this.updateMudParticles(dt);
     this.updateTorch(dt);
     this.instinctSystem.update(dt);
-    this.bowSystem?.update(dt, physics);
+    this.bowSystem?.update(dt, physics, this.stealthSystem ?? undefined);
     climbingSystem.update(dt);
     this.updateAnimationAndCamera(dt);
   }
@@ -2021,6 +2020,19 @@ export class CharacterController {
       this.mixer.update(dt);
     }
 
+    // Procedural crouched stalk posture (Shadow of the Tomb Raider North Star)
+    if (this.isCrouched && this.characterModel && !this.isRolling && this.state !== MovementState.CLIMB && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE) {
+      this.characterModel.position.y = THREE.MathUtils.lerp(this.characterModel.position.y, this.modelBaseY - 0.28, Math.min(1.0, 12.0 * dt));
+      if (this.spine1Bone) {
+        this.spine1Bone.rotation.x += 0.22;
+      }
+      if (this.neckBone) {
+        this.neckBone.rotation.x -= 0.12;
+      }
+    } else if (this.characterModel && !this.isRolling && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE) {
+      this.characterModel.position.y = THREE.MathUtils.lerp(this.characterModel.position.y, this.modelBaseY, Math.min(1.0, 12.0 * dt));
+    }
+
     // Rig arm adjustment for authentic ledge hanging posture (Shadow of the Tomb Raider North Star)
     if (this.state === MovementState.LEDGE_HANG) {
       if (this.leftArmBone && this.rightArmBone) {
@@ -2140,11 +2152,11 @@ export class CharacterController {
     } else if (this.state === MovementState.WALL_SCRAMBLE) {
       desiredAction = this.actions.run ?? this.actions.walk ?? this.actions.idle;
     } else if (this.state === MovementState.SLIDE) {
-      desiredAction = this.actions.crouch ?? this.actions.idle;
+      desiredAction = this.actions.idle;
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
       desiredAction = this.speed > 0.2 ? (this.actions.walk ?? this.actions.idle) : this.actions.idle;
-    } else if (this.isCrouched && this.actions.crouch) {
-      desiredAction = this.actions.crouch;
+    } else if (this.isCrouched) {
+      desiredAction = this.speed > 0.1 ? (this.actions.walk ?? this.actions.idle) : this.actions.idle;
     } else if (this.speed > 0.1) {
       if (this.speed > this.maxWalkSpeed * 1.1) {
         desiredAction = this.actions.run;
@@ -2165,7 +2177,9 @@ export class CharacterController {
     if (this.activeAction === this.actions.walk && this.actions.walk) {
       const walkTempo = (this.state === MovementState.SWIM || this.state === MovementState.DIVE)
         ? 0.65
-        : (this.speed / this.maxWalkSpeed);
+        : this.isCrouched
+          ? 0.70
+          : (this.speed / this.maxWalkSpeed);
       this.actions.walk.timeScale = Math.max(0.3, walkTempo);
     } else if (this.activeAction === this.actions.run && this.actions.run) {
       this.actions.run.timeScale = Math.max(0.6, this.speed / this.maxRunSpeed);
