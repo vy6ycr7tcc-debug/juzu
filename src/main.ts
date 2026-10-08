@@ -1220,12 +1220,71 @@ async function init() {
       // Position camera at a dramatic three-quarters angle to audit hand grip on the stone lip and suspended body
       camera.position.set(wallX - 2.2, groundY + 1.4, wallZ - 2.8);
       camera.lookAt(wallX, ledgeTopY - 0.2, wallZ);
+    } else if (shot === 'wall_scramble') {
+      // Phase 1.2 Wall Scramble Verification (Shadow of the Tomb Raider North Star):
+      // 3.2m high vertical Inca terrace wall requiring vertical foot-kick scramble to reach
+      const wallX = 60, wallZ = 60;
+      const groundY = getGlobalTerrainHeight(wallX, wallZ);
+      const wallHeight = 3.2;
+      const ledgeTopY = groundY + wallHeight;
+
+      const ledgeGroup = new THREE.Group();
+      const wallBox = new THREE.Mesh(
+        new THREE.BoxGeometry(4.0, wallHeight, 3.0),
+        ashlarWeathered()
+      );
+      wallBox.position.set(wallX, groundY + wallHeight / 2, wallZ + 1.5);
+      wallBox.castShadow = true;
+      wallBox.receiveShadow = true;
+      ledgeGroup.add(wallBox);
+      scene.add(ledgeGroup);
+
+      if (physics.world && physics.getRapier()) {
+        const R = physics.getRapier()!;
+        const bodyDesc = R.RigidBodyDesc.fixed().setTranslation(wallX, groundY + wallHeight / 2, wallZ + 1.5);
+        const body = physics.world.createRigidBody(bodyDesc);
+        const colDesc = R.ColliderDesc.cuboid(2.0, wallHeight / 2, 1.5);
+        physics.world.createCollider(colDesc, body);
+      }
+
+      const wallNormal = new THREE.Vector3(0, 0, -1);
+      const hangPos = new THREE.Vector3(wallX, ledgeTopY - 1.55, wallZ - 0.32);
+      const mantleTarget = new THREE.Vector3(wallX, ledgeTopY, wallZ + 0.8);
+
+      character.mesh.position.set(wallX, groundY + 1.15, wallZ - 0.32); // mid-kick vertical elevation
+      character.mesh.rotation.y = Math.PI; // Face +Z into the wall
+      character.isGrounded = false;
+      character.velocityY = 4.2;
+      character.state = MovementState.WALL_SCRAMBLE;
+      character.wallScrambleTimer = 0.22;
+      character.wallScrambleTargetLedge = {
+        ledgeY: ledgeTopY,
+        wallNormal,
+        hangPosition: hangPos,
+        mantleTargetPosition: mantleTarget,
+      };
+
+      character.disableCameraUpdate = true;
+      camera.position.set(wallX - 2.8, groundY + 1.8, wallZ - 1.8);
+      camera.lookAt(wallX, groundY + 1.8, wallZ);
+    } else if (shot === 'mud_slide') {
+      // Phase 1.2 Mud Chute Slide Verification (Shadow of the Tomb Raider North Star):
+      // Steep hillside slope (slope ~0.8) with mud spray particles and athletic surfing crouch
+      const slideX = 90, slideZ = 100;
+      const groundY = getGlobalTerrainHeight(slideX, slideZ);
+      character.mesh.position.set(slideX, groundY, slideZ);
+      character.state = MovementState.SLIDE;
+      character.speed = 8.5;
+      character.isGrounded = true;
+      character.disableCameraUpdate = true;
+      camera.position.set(slideX - 2.2, groundY + 1.2, slideZ - 1.0);
+      camera.lookAt(slideX + 0.5, groundY + 0.4, slideZ + 1.5);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0;
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {

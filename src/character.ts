@@ -29,6 +29,7 @@ export enum MovementState {
   LEDGE_GRAB = 'LEDGE_GRAB',
   LEDGE_HANG = 'LEDGE_HANG',
   MANTLE = 'MANTLE',
+  WALL_SCRAMBLE = 'WALL_SCRAMBLE',
   SWIM = 'SWIM',
   SLIDE = 'SLIDE',
   ROPE_SWING = 'ROPE_SWING',
@@ -89,6 +90,24 @@ function retargetMixamoClip(clip: THREE.AnimationClip, srcScene: THREE.Object3D,
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
+function createMudSplatterTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createRadialGradient(16, 16, 2, 16, 16, 15);
+    grad.addColorStop(0, 'rgba(85, 55, 35, 0.95)');
+    grad.addColorStop(0.6, 'rgba(115, 80, 45, 0.55)');
+    grad.addColorStop(1, 'rgba(70, 45, 25, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 32, 32);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export class CharacterController {
   public mesh: THREE.Group;
   private camera: THREE.PerspectiveCamera;
@@ -147,6 +166,26 @@ export class CharacterController {
   private rightArmBone: THREE.Object3D | null = null;
   private leftForeArmBone: THREE.Object3D | null = null;
   private rightForeArmBone: THREE.Object3D | null = null;
+  private leftUpLegBone: THREE.Object3D | null = null;
+  private rightUpLegBone: THREE.Object3D | null = null;
+  private leftLegBone: THREE.Object3D | null = null;
+  private rightLegBone: THREE.Object3D | null = null;
+
+  // Wall Scramble (Shadow of the Tomb Raider high vertical foot-push reach)
+  public wallScrambleTimer: number = 0;
+  public readonly wallScrambleDuration: number = 0.42;
+  public wallScrambleTargetLedge: {
+    ledgeY: number;
+    wallNormal: THREE.Vector3;
+    hangPosition: THREE.Vector3;
+    mantleTargetPosition: THREE.Vector3;
+  } | null = null;
+
+  // Mud Chute Slide Physics (Shadow of the Tomb Raider steep slope navigation)
+  public slideSteerAngle: number = 0;
+  private mudParticles: THREE.Sprite[] = [];
+  private mudAccum: number = 0;
+  private mudMat: THREE.SpriteMaterial | null = null;
 
   // Rigged GLB Model & Animation state
   public isLoaded: boolean = false;
@@ -252,6 +291,10 @@ export class CharacterController {
         this.rightArmBone = (model.getObjectByName('mixamorigRightArm') ?? model.getObjectByName('mixamorig:RightArm')) ?? null;
         this.leftForeArmBone = (model.getObjectByName('mixamorigLeftForeArm') ?? model.getObjectByName('mixamorig:LeftForeArm')) ?? null;
         this.rightForeArmBone = (model.getObjectByName('mixamorigRightForeArm') ?? model.getObjectByName('mixamorig:RightForeArm')) ?? null;
+        this.leftUpLegBone = (model.getObjectByName('mixamorigLeftUpLeg') ?? model.getObjectByName('mixamorig:LeftUpLeg')) ?? null;
+        this.rightUpLegBone = (model.getObjectByName('mixamorigRightUpLeg') ?? model.getObjectByName('mixamorig:RightUpLeg')) ?? null;
+        this.leftLegBone = (model.getObjectByName('mixamorigLeftLeg') ?? model.getObjectByName('mixamorig:LeftLeg')) ?? null;
+        this.rightLegBone = (model.getObjectByName('mixamorigRightLeg') ?? model.getObjectByName('mixamorig:RightLeg')) ?? null;
 
         // AnimationMixer with RETARGETED locomotion clips. The soldier/xbot
         // exports share Michelle's 65 mixamorig bone names but NOT her
@@ -330,7 +373,7 @@ export class CharacterController {
    * then casts a vertical downward ray from above the detected wall to find the exact top surface lip.
    * Also verifies headroom clearance to ensure the player can stand on the ledge.
    */
-  public checkLedge(forwardDir?: THREE.Vector3): {
+  public checkLedge(forwardDir?: THREE.Vector3, maxReach: number = 2.45): {
     ledgeY: number;
     wallNormal: THREE.Vector3;
     hangPosition: THREE.Vector3;
@@ -356,17 +399,17 @@ export class CharacterController {
       const probeOverhang = 0.25;
       const topProbeOrigin = new THREE.Vector3(
         forwardHit.point.x - wallNormal.x * probeOverhang,
-        charFeetY + 2.6,
+        charFeetY + Math.max(2.6, maxReach + 0.35),
         forwardHit.point.z - wallNormal.z * probeOverhang
       );
-      const downHit = physics.raycast(topProbeOrigin, new THREE.Vector3(0, -1, 0), 2.8, this.body ?? undefined);
+      const downHit = physics.raycast(topProbeOrigin, new THREE.Vector3(0, -1, 0), maxReach + 0.8, this.body ?? undefined);
 
       if (downHit && downHit.normal.y > 0.55) {
         const ledgeY = downHit.point.y;
         const deltaY = ledgeY - charFeetY;
 
-        // Reachable range: 0.8m (low vaultable ledge) up to 2.45m (high jump reach)
-        if (deltaY >= 0.8 && deltaY <= 2.45) {
+        // Reachable range: 0.8m up to maxReach
+        if (deltaY >= 0.8 && deltaY <= maxReach) {
           // Headroom check: at least 1.8m vertical clearance above the ledge
           const headroomCheck = physics.raycast(
             new THREE.Vector3(downHit.point.x, ledgeY + 0.1, downHit.point.z),
@@ -400,7 +443,7 @@ export class CharacterController {
     const terrainAheadY = getGlobalTerrainHeight(terrainAheadX, terrainAheadZ);
     const deltaTerrainY = terrainAheadY - charFeetY;
 
-    if (deltaTerrainY >= 0.85 && deltaTerrainY <= 2.45) {
+    if (deltaTerrainY >= 0.85 && deltaTerrainY <= maxReach) {
       // Check that the terrain further ahead is relatively flat (a walkable shelf/plateau, not infinite steep slope)
       const shelfX = charPos.x + dir.x * (probeDist + 0.5);
       const shelfZ = charPos.z + dir.z * (probeDist + 0.5);
@@ -436,9 +479,9 @@ export class CharacterController {
     }
 
     const slope = 1.0 - terrainData.normal.y;
-    if (this.state === MovementState.WALK && slope > 0.65 && this.speed > 2.5) {
+    if (this.state === MovementState.WALK && slope > 0.08 && this.speed > 2.2) {
       this.state = MovementState.SLIDE;
-    } else if (this.state === MovementState.SLIDE && slope < 0.3) {
+    } else if (this.state === MovementState.SLIDE && slope < 0.04) {
       this.state = MovementState.WALK;
     }
   }
@@ -595,6 +638,121 @@ export class CharacterController {
       return;
     }
 
+    // 5. Wall Scramble State Update (Shadow of the Tomb Raider North Star)
+    if (this.state === MovementState.WALL_SCRAMBLE) {
+      if (this.wallScrambleTargetLedge) {
+        this.wallScrambleTimer += dt;
+        const wallNormal = this.wallScrambleTargetLedge.wallNormal;
+        const targetYaw = Math.atan2(wallNormal.x, wallNormal.z);
+        this.mesh.rotation.y = targetYaw;
+
+        // Upward trajectory with wall friction
+        this.mesh.position.y += this.velocityY * dt;
+        this.velocityY -= 14.0 * dt;
+
+        // Hug wall face
+        this.mesh.position.x = this.wallScrambleTargetLedge.hangPosition.x;
+        this.mesh.position.z = this.wallScrambleTargetLedge.hangPosition.z;
+
+        // When reaching ledge hang elevation, grab the rim!
+        if (this.mesh.position.y >= this.wallScrambleTargetLedge.hangPosition.y - 0.1 || this.wallScrambleTimer >= this.wallScrambleDuration) {
+          this.ledgeInfo = this.wallScrambleTargetLedge;
+          this.state = MovementState.LEDGE_HANG;
+          this.mesh.position.copy(this.wallScrambleTargetLedge.hangPosition);
+          this.velocityY = 0;
+          this.speed = 0;
+          this.isGrounded = false;
+          this.wallScrambleTargetLedge = null;
+        }
+      } else {
+        this.state = MovementState.WALK;
+      }
+
+      this.updateAnimationAndCamera(dt);
+      return;
+    }
+
+    // 6. Mud Chute Slide Physics (Shadow of the Tomb Raider North Star)
+    if (this.state === MovementState.SLIDE) {
+      const terrainData = this.getTerrainHeightAndNormal(this.mesh.position.x, this.mesh.position.z);
+      const slope = 1.0 - terrainData.normal.y;
+
+      // Chute Leap (Space pressed during slide!)
+      if (this.input.consumeJustPressed('Space')) {
+        this.state = MovementState.WALK;
+        this.isGrounded = false;
+        this.velocityY = 7.2; // explosive forward leap
+        this.speed = Math.min(12.0, this.speed * 1.35);
+        this.updateAnimationAndCamera(dt);
+        return;
+      }
+
+      // Exit slide if slope flattens out
+      if (slope < 0.04) {
+        this.state = MovementState.WALK;
+      }
+
+      // Downhill direction vector
+      const downhill = new THREE.Vector3(terrainData.normal.x, 0, terrainData.normal.z);
+      if (downhill.lengthSq() > 0.001) {
+        downhill.normalize();
+      } else {
+        downhill.set(0, 0, 1);
+      }
+
+      // Lateral steering with A / D
+      let steerInput = 0;
+      if (this.input.isDown('KeyA')) steerInput -= 1;
+      if (this.input.isDown('KeyD')) steerInput += 1;
+      this.slideSteerAngle += steerInput * 1.8 * dt;
+      this.slideSteerAngle = THREE.MathUtils.clamp(this.slideSteerAngle, -0.65, 0.65);
+
+      const slideDir = downhill.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.slideSteerAngle);
+
+      // Downhill gravity acceleration
+      const slideAccel = 14.0 * Math.max(0.3, slope);
+      this.speed = THREE.MathUtils.clamp(this.speed + slideAccel * dt, 4.0, 11.5);
+
+      // Translate along slope
+      this.mesh.position.addScaledVector(slideDir, this.speed * dt);
+      const groundH = this.getGroundedHeight(this.mesh.position.x, this.mesh.position.z);
+      this.mesh.position.y = groundH;
+      this.isGrounded = true;
+      this.velocityY = 0;
+
+      // Mesh orientation: faces slide direction, low back-tilt crouch
+      this.mesh.rotation.y = Math.atan2(-slideDir.x, -slideDir.z);
+      this.mesh.rotation.x = -0.35;
+
+      // Spawn mud spray particles
+      this.mudAccum += dt * 14;
+      while (this.mudAccum >= 1) {
+        this.mudAccum -= 1;
+        if (!this.mudMat) {
+          this.mudMat = new THREE.SpriteMaterial({
+            map: createMudSplatterTexture(),
+            transparent: true,
+            opacity: 0.75,
+            depthWrite: false,
+          });
+        }
+        const mud = new THREE.Sprite(this.mudMat);
+        mud.scale.setScalar(0.24);
+        const sprayOffset = new THREE.Vector3(
+          (Math.random() - 0.5) * 0.35,
+          0.12,
+          -0.45
+        ).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.mesh.rotation.y);
+        mud.position.copy(this.mesh.position).add(sprayOffset);
+        this.mesh.parent?.add(mud);
+        this.mudParticles.push(mud);
+      }
+
+      this.updateMudParticles(dt);
+      this.updateAnimationAndCamera(dt);
+      return;
+    }
+
     // Crouch & Dodge Roll actions
     if (this.input.consumeJustPressed('KeyC')) {
       if (this.isGrounded && this.speed > 1.2 && !this.isRolling) {
@@ -626,10 +784,10 @@ export class CharacterController {
       }
     }
 
-    // Jump Input & Ledge Grab
+    // Jump Input & Ledge Grab & Wall Scramble
     const wantsJump = this.input.consumeJustPressed('Space');
     if (this.isGrounded && wantsJump && !this.isRolling && (this.state === MovementState.WALK || this.state === MovementState.CROUCH)) {
-      const ledge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
+      const ledge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined, 2.45);
       if (ledge && this.ledgeCooldown <= 0) {
         const deltaY = ledge.ledgeY - this.mesh.position.y;
         if (deltaY <= 1.35) {
@@ -652,6 +810,22 @@ export class CharacterController {
           return;
         }
       } else {
+        // Check for high wall for Wall Scramble (2.45m to 3.6m reach!)
+        const scrambleLedge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined, 3.6);
+        if (scrambleLedge && this.ledgeCooldown <= 0) {
+          const deltaY = scrambleLedge.ledgeY - this.mesh.position.y;
+          if (deltaY > 2.2 && deltaY <= 3.6) {
+            // Initiate Wall Scramble!
+            this.state = MovementState.WALL_SCRAMBLE;
+            this.wallScrambleTimer = 0;
+            this.wallScrambleTargetLedge = scrambleLedge;
+            this.velocityY = 8.2; // explosive foot-kick impulse
+            this.isGrounded = false;
+            this.updateAnimationAndCamera(dt);
+            return;
+          }
+        }
+
         this.velocityY = this.jumpForce;
         this.isGrounded = false;
         this.isCrouched = false;
@@ -813,7 +987,21 @@ export class CharacterController {
       }
     }
 
+    this.updateMudParticles(dt);
     this.updateAnimationAndCamera(dt);
+  }
+
+  private updateMudParticles(dt: number) {
+    for (let i = this.mudParticles.length - 1; i >= 0; i--) {
+      const p = this.mudParticles[i];
+      p.position.y += dt * 0.35;
+      p.material.opacity -= dt * 1.6;
+      p.scale.addScalar(dt * 0.4);
+      if (p.material.opacity <= 0) {
+        p.parent?.remove(p);
+        this.mudParticles.splice(i, 1);
+      }
+    }
   }
 
   private updateAnimationAndCamera(dt: number) {
@@ -837,11 +1025,36 @@ export class CharacterController {
         this.leftArmBone.rotation.set(armX, 0.25 * (1 - u), 0.35 * (1 - u));
         this.rightArmBone.rotation.set(armX, -0.25 * (1 - u), -0.35 * (1 - u));
       }
+    } else if (this.state === MovementState.WALL_SCRAMBLE) {
+      if (this.leftArmBone && this.rightArmBone) {
+        this.leftArmBone.rotation.set(-1.45, 0.2, 0.2);
+        this.rightArmBone.rotation.set(-1.45, -0.2, -0.2);
+        if (this.leftForeArmBone) this.leftForeArmBone.rotation.set(0.2, 0, 0);
+        if (this.rightForeArmBone) this.rightForeArmBone.rotation.set(0.2, 0, 0);
+      }
+      if (this.leftUpLegBone && this.rightUpLegBone) {
+        const kick = Math.sin(this.wallScrambleTimer * 24.0);
+        this.leftUpLegBone.rotation.set(0.75 + kick * 0.4, 0, 0);
+        this.rightUpLegBone.rotation.set(0.75 - kick * 0.4, 0, 0);
+      }
+    } else if (this.state === MovementState.SLIDE) {
+      if (this.leftArmBone && this.rightArmBone) {
+        this.leftArmBone.rotation.set(0.5, 0.4, -0.45);
+        this.rightArmBone.rotation.set(0.5, -0.4, 0.45);
+      }
+      if (this.leftUpLegBone && this.rightUpLegBone) {
+        this.leftUpLegBone.rotation.set(0.9, 0, -0.2);
+        this.rightUpLegBone.rotation.set(0.9, 0, 0.2);
+      }
     }
 
     let desiredAction = this.actions.idle;
     if (this.state === MovementState.LEDGE_HANG || this.state === MovementState.MANTLE) {
       desiredAction = this.actions.idle;
+    } else if (this.state === MovementState.WALL_SCRAMBLE) {
+      desiredAction = this.actions.run ?? this.actions.walk ?? this.actions.idle;
+    } else if (this.state === MovementState.SLIDE) {
+      desiredAction = this.actions.crouch ?? this.actions.idle;
     } else if (this.isCrouched && this.actions.crouch) {
       desiredAction = this.actions.crouch;
     } else if (this.speed > 0.1) {
@@ -868,7 +1081,7 @@ export class CharacterController {
     }
 
     if (this.state === MovementState.SLIDE) {
-      this.mesh.rotation.x = Math.PI / 6;
+      this.mesh.rotation.x = -0.35;
     } else if (!this.isRolling) {
       this.mesh.rotation.x = 0;
     }
