@@ -32,6 +32,8 @@ import { createCraggyCliffWall, climbingSystem } from './climbing.js';
 import { createIncaTrapCorridor } from './puzzles/traps.js';
 import { createSacredRelicSystem } from './relics.js';
 import { WeatherSystem, type WeatherState } from './weather.js';
+import { AudioDirector } from './audio/engine.js';
+import { createSOTTRHUD, type SOTTRHUD } from './hud.js';
 
 // Setup for global hook
 declare global {
@@ -341,6 +343,11 @@ async function init() {
   if (weatherParam) {
     weather.setWeather(weatherParam, true);
   }
+  // Shadow of the Tomb Raider Minimalist Cinematic HUD & Procedural Audio (Phase 13)
+  const sottrHUD = createSOTTRHUD();
+  const audioDirector = new AudioDirector(camera);
+  window.addEventListener('pointerdown', () => audioDirector.resume(), { once: true });
+  window.addEventListener('keydown', () => audioDirector.resume(), { once: true });
   // §7.2: decor takes RenderCaps (the old callsite passed nothing — tier
   // counts/shadow rules never applied and the WebGPU wind branch was dead).
   const decor = createDecor(scene, renderCaps);
@@ -1534,6 +1541,37 @@ async function init() {
       // Close macro inspection view focusing directly on the elevated Inti Sun Effigy with museum lighting
       camera.position.set(35.0, cryptFloorY + 1.88, -57.72);
       camera.lookAt(35.0, cryptFloorY + 1.88, -58.5);
+    } else if (shot === 'cinematic_hud') {
+      // Phase 13 Shadow of the Tomb Raider Minimalist Cinematic HUD
+      const posX = 42, posZ = 12;
+      character.teleport(posX, posZ, 0.45);
+      character.disableCameraUpdate = true;
+      sottrHUD.setCinematicMode(true);
+      sottrHUD.setObjective('SOLSTICE SANCTUM', 'Explore the ancient Inca ruins and locate the Coricancha Sun Temple');
+      sottrHUD.setAmmo(16, 16);
+      sottrHUD.setActiveGear('bow');
+      sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[RIGHT CLICK]</span> AIM RECURVE BOW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
+      const groundY = character.mesh.position.y;
+
+      // Medium third-person camera framing Michelle in the lush Andean landscape with active SOTTR HUD
+      camera.position.set(posX - 1.85, groundY + 1.45, posZ + 2.85);
+      camera.lookAt(posX + 0.35, groundY + 1.15, posZ - 1.2);
+      sottrHUD.update(camera);
+    } else if (shot === 'sanctuary_atmosphere') {
+      // Phase 13 Final Cinematic Tomb Raider Polish: Sacred Sanctuary Atmosphere & Procedural Audio
+      const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
+      character.teleport(35.35, -57.1, 0);
+      character.disableCameraUpdate = true;
+      sottrHUD.setCinematicMode(true);
+      sottrHUD.setObjective('SACRED EFFIGY', 'Examine the Inti Solar Effigy on the ceremonial altar');
+      sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE INTI SUN EFFIGY');
+      audioDirector.setBiome('cave');
+      audioDirector.setIntensity('explore');
+
+      // Cinematic anamorphic framing inside the sanctum showing Michelle, altar, sunbeam, and dust motes
+      camera.position.set(35.65, cryptFloorY + 1.48, -55.8);
+      camera.lookAt(35.05, cryptFloorY + 1.32, -58.5);
+      sottrHUD.update(camera);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1545,7 +1583,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.45;
-    } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect') {
+    } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
     } else if (shot === 'wetness_sheen') {
       t = 0.25;
@@ -1576,6 +1614,18 @@ async function init() {
         const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
         character.mesh.position.set(35.35, cryptFloorY, -57.1);
         character.mesh.rotation.y = 0;
+      }
+      if (shot === 'cinematic_hud') {
+        const posX = 42, posZ = 12;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = 0.45;
+        sottrHUD.update(camera);
+      }
+      if (shot === 'sanctuary_atmosphere') {
+        const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
+        character.mesh.position.set(35.35, cryptFloorY, -57.1);
+        character.mesh.rotation.y = 0;
+        sottrHUD.update(camera);
       }
       if (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
         const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
@@ -1816,7 +1866,47 @@ async function init() {
             hydraulicCistern.interact();
           } else if (relicSystem.canInteract(character.mesh.position)) {
             relicSystem.toggleInspection(camera);
+            sottrHUD.setCinematicMode(relicSystem.isInspecting);
+            if (relicSystem.isInspecting) {
+              audioDirector.play('quena', { volume: 0.6 });
+            }
           }
+        }
+
+        // SOTTR Contextual interaction prompts & HUD update
+        if (relicSystem.canInteract(character.mesh.position)) {
+          sottrHUD.setPrompt(relicSystem.isInspecting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STOW RELIC' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE SACRED RELIC');
+        } else if (hydraulicCistern.canInteract(character.mesh.position)) {
+          sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> TURN SLUICE WHEEL');
+        } else if (character.state === MovementState.CLIMB) {
+          sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[WASD]</span> AXE TRAVERSAL • <span style="color: #ffd875; font-weight: 700;">[SPACE]</span> SCRAMBLE');
+          sottrHUD.setActiveGear('axe');
+        } else if (character.isAiming) {
+          sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[LEFT CLICK]</span> RELEASE ARROW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
+          sottrHUD.setActiveGear('bow');
+        } else {
+          sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[RIGHT CLICK]</span> AIM BOW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
+        }
+        sottrHUD.update(camera);
+        audioDirector.update(camera);
+
+        // Dynamic audio biome and intensity modulation
+        if (character.mesh.position.z < -45) {
+          audioDirector.setBiome('cave');
+        } else if (character.mesh.position.y < -4) {
+          audioDirector.setBiome('river');
+        } else if (character.mesh.position.x > 25 && character.mesh.position.z > 0) {
+          audioDirector.setBiome('jungle');
+        } else {
+          audioDirector.setBiome('highlands');
+        }
+
+        if (character.isAiming || weather.state === 'STORM') {
+          audioDirector.setIntensity('tension');
+        } else if (relicSystem.isInspecting) {
+          audioDirector.setIntensity('calm');
+        } else {
+          audioDirector.setIntensity('explore');
         }
         decor.update(camera, undefined, character.mesh.position);
         weather.update(dt, camera, character.mesh.position);

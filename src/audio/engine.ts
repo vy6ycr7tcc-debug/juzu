@@ -12,8 +12,8 @@ export interface PlayOptions {
 
 export class AudioDirector {
     private ctx: AudioContext;
-    private masterGain: GainNode;
-    private compressor: DynamicsCompressorNode;
+    private masterGain!: GainNode;
+    private compressor!: DynamicsCompressorNode;
 
     // Adaptive music state
     private currentBiome: Biome = 'highlands';
@@ -27,28 +27,39 @@ export class AudioDirector {
     private sfxCache: Map<AudioType, AudioBuffer> = new Map();
 
     constructor(_camera: THREE.Camera) {
-        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || (window as any).webkitAudioContext) : null;
+        if (!AudioCtx) {
+            this.ctx = null as any;
+            return;
+        }
 
-        // Setup Master Bus
-        this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.8;
+        try {
+            this.ctx = new AudioCtx();
 
-        this.compressor = this.ctx.createDynamicsCompressor();
-        this.compressor.threshold.value = -12;
-        this.compressor.knee.value = 40;
-        this.compressor.ratio.value = 12;
-        this.compressor.attack.value = 0.003;
-        this.compressor.release.value = 0.25;
+            // Setup Master Bus
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = 0.8;
 
-        this.masterGain.connect(this.compressor);
-        this.compressor.connect(this.ctx.destination);
+            this.compressor = this.ctx.createDynamicsCompressor();
+            this.compressor.threshold.value = -12;
+            this.compressor.knee.value = 40;
+            this.compressor.ratio.value = 12;
+            this.compressor.attack.value = 0.003;
+            this.compressor.release.value = 0.25;
 
-        this.setupMusicLayers();
+            this.masterGain.connect(this.compressor);
+            this.compressor.connect(this.ctx.destination);
+
+            this.setupMusicLayers();
+        } catch (e) {
+            // Headless or audio permission restricted
+            this.ctx = null as any;
+        }
     }
 
     public resume() {
-        if (this.ctx.state === 'suspended') {
-            this.ctx.resume();
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
         }
     }
 
@@ -64,6 +75,7 @@ export class AudioDirector {
     }
 
     public async play(name: AudioType, options: PlayOptions = {}): Promise<void> {
+        if (!this.ctx) return;
         this.resume();
 
         let buffer = this.sfxCache.get(name);
@@ -108,18 +120,19 @@ export class AudioDirector {
     }
 
     public setBiome(biome: Biome) {
-        if (this.currentBiome === biome) return;
+        if (!this.ctx || this.currentBiome === biome) return;
         this.currentBiome = biome;
         this.updateMusicLayers();
     }
 
     public setIntensity(intensity: Intensity) {
-        if (this.currentIntensity === intensity) return;
+        if (!this.ctx || this.currentIntensity === intensity) return;
         this.currentIntensity = intensity;
         this.crossfadeIntensity(intensity);
     }
 
     private crossfadeIntensity(targetIntensity: Intensity) {
+        if (!this.ctx) return;
         const fadeTime = 2.0; // 2 seconds crossfade
         const now = this.ctx.currentTime;
 
@@ -134,6 +147,7 @@ export class AudioDirector {
     }
 
     private async updateMusicLayers() {
+        if (!this.ctx) return;
         this.resume();
 
         // Stop previous layers
@@ -173,6 +187,7 @@ export class AudioDirector {
     }
 
     public update(camera: THREE.Camera) {
+        if (!this.ctx) return;
         // Sync AudioListener position with THREE Camera if context allows it
         if (this.ctx.listener && this.ctx.listener.positionX) {
             const pos = camera.position;
