@@ -1773,6 +1773,45 @@ async function init() {
       sottrHUD.setObjective('SILENT TAKEDOWN', 'Eliminate the patrol without raising the alarm');
       sottrHUD.setPrompt('<span style="color: #ff4d4d; font-weight: 700;">[E]</span> SILENT TAKEDOWN');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'camera_cliff_vista') {
+      // High Canyon Overlook: Spring-arm vista pull-back & wide 74° panoramic perspective
+      const posX = 52, posZ = 30;
+      character.teleport(posX, posZ, -Math.PI * 0.45);
+      character.disableCameraUpdate = false;
+      character.theta = -Math.PI * 0.45;
+      character.phi = Math.PI * 0.44; // elevated angle looking out over canyon
+      character.updateCamera(0.016);
+      sottrHUD.setObjective('EXPEDITION TRAIL', 'Survey the ancient Inca river gorge from the high overlook');
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'camera_stealth_prowl') {
+      // Intimate Over-the-Shoulder Stealth Prowl: low center of gravity, 2.4m radius, 58° FOV
+      const posX = 48, posZ = 32;
+      character.teleport(posX, posZ, 0.45);
+      character.isCrouched = true;
+      character.disableCameraUpdate = false;
+      character.theta = 0.45;
+      character.phi = Math.PI * 0.46; // lower angle looking forward
+      character.updateCamera(0.016);
+      if (stealthSystem.sentries.length > 0) {
+        const sentry = stealthSystem.sentries[0];
+        sentry.group.position.set(45, getGlobalTerrainHeight(45, 26), 26);
+        sentry.facingDir.set(-0.6, 0, 0.8).normalize();
+        sentry.group.rotation.y = Math.atan2(sentry.facingDir.x, sentry.facingDir.z);
+        sentry.awareness = 0.35;
+        sentry.setAnimation('walk');
+      }
+      sottrHUD.setObjective('INFILTRATE RUINS', 'Stalk through tall grass to bypass the patrol');
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'camera_wall_collision') {
+      // Multi-Ray Spring-Arm Wall Stand-Off: camera backing near solid stone cliff without clipping
+      const posX = 22, posZ = -40.2;
+      character.teleport(posX, posZ, 0);
+      character.disableCameraUpdate = false;
+      character.theta = 0; // facing forward (+Z), camera backed up directly into cliff (-Z)
+      character.phi = Math.PI * 0.44;
+      character.updateCamera(0.016);
+      sottrHUD.setObjective('ROCK SHELTER', 'Spring-arm geometry collision avoidance near cliff walls');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1784,7 +1823,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -1975,7 +2014,14 @@ async function init() {
       } else if (shot === 'stealth_takedown') {
         sottrHUD.setPrompt('<span style="color: #ff4d4d; font-weight: 700;">[E]</span> SILENT TAKEDOWN');
         sottrHUD.updateStealth(false, new THREE.Vector2(0, 1), 0.1, character.theta);
+      } else if (shot === 'camera_stealth_prowl') {
+        sottrHUD.updateStealth(true, new THREE.Vector2(-0.4, -0.9), 0.35, character.theta);
       }
+    }
+
+    if (shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision') {
+      character.updateCamera(0.016);
+      sottrHUD.update(camera, character.mesh.position);
     }
 
     if (shot === 'stealth_patrol') {
