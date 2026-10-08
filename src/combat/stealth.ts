@@ -527,8 +527,9 @@ export class StealthSystem {
     character.mesh.position.copy(behindPos);
     character.mesh.rotation.y = target.group.rotation.y;
 
-    // Execute instant takedown
+    // Execute instant takedown with visceral camera impulse punch
     target.takeDamage(999, false);
+    character.addCameraImpulse(target.facingDir.clone().multiplyScalar(0.24), 2.8);
 
     if (audio) {
       audio.play('takedown', { position: target.group.position, volume: 0.95 });

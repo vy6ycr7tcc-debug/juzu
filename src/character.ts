@@ -377,6 +377,17 @@ export class CharacterController {
   public instinctSystem: SurvivalInstinctSystem;
   public stealthSystem: StealthSystem | null = null;
 
+  // Cinematic Spring-Arm & Contextual Framing Dynamics (Shadow of the Tomb Raider North Star)
+  public cameraImpulse: THREE.Vector3 = new THREE.Vector3();
+  public impulseFovOffset: number = 0;
+  public vistaPullRatio: number = 0; // 0.0 (flat/enclosed) to 1.0 (high canyon vista)
+  public stealthFramingRatio: number = 0; // 0.0 (upright) to 1.0 (intimate stealth prowl)
+
+  public addCameraImpulse(impulse: THREE.Vector3, fovKick: number = 0) {
+    this.cameraImpulse.add(impulse);
+    this.impulseFovOffset += fovKick;
+  }
+
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
     this.input = input;
@@ -619,6 +630,9 @@ export class CharacterController {
     // Initial ballistic velocity: 22m/s (quick snap) to 42m/s (full draw)
     const speed = 22 + 20 * this.aimDrawTension;
     this.bowSystem.spawnArrow(origin, launchDir, speed);
+
+    // Kinematic recoil impulse on arrow release (tactile physical kick)
+    this.addCameraImpulse(launchDir.clone().multiplyScalar(-0.16 * (0.6 + 0.4 * this.aimDrawTension)), -2.2);
 
     // Reset draw tension and briefly hide nocked arrow
     this.aimDrawTension = 0;
@@ -2225,13 +2239,34 @@ export class CharacterController {
     // Smooth lerp camera distance toward user target zoom
     this.radius += (this.targetRadius - this.radius) * Math.min(1.0, 8.0 * dt);
 
+    // 0. Contextual canyon vista & drop detection (Tomb Raider panoramic pull-back)
+    const forwardX = -sinTheta;
+    const forwardZ = -cosTheta;
+    const probeX = this.mesh.position.x + forwardX * 7.0;
+    const probeZ = this.mesh.position.z + forwardZ * 7.0;
+    const terrainAheadH = getGlobalTerrainHeight(probeX, probeZ);
+    const dropAhead = this.mesh.position.y - terrainAheadH;
+    // Standing at cliff/ridge overlooking a drop > 6.0m
+    const isVistaEdge = this.isGrounded && dropAhead > 6.0;
+    const targetVista = isVistaEdge ? Math.min(1.0, (dropAhead - 6.0) / 10.0) : 0.0;
+    this.vistaPullRatio += (targetVista - this.vistaPullRatio) * Math.min(1.0, 4.0 * dt);
+
+    // Contextual stealth prowl framing (intimate over-the-shoulder)
+    const isStealthStance = (this.isCrouched || (this.stealthSystem?.isPlayerConcealed ?? false)) && !this.isAiming;
+    const targetStealth = isStealthStance ? 1.0 : 0.0;
+    this.stealthFramingRatio += (targetStealth - this.stealthFramingRatio) * Math.min(1.0, 8.0 * dt);
+
     // 2. Over-the-shoulder offset:
-    // Smooth lerp towards target shoulder offset (+0.38m for right shoulder, -0.38m for left shoulder, or tight 0.44m when aiming)
-    const targetShoulderOffset = this.isAiming ? 0.44 : (0.38 * this.shoulderSide);
+    // Dynamic shoulder offset: right shoulder (+0.38m), left shoulder (-0.38m), wider in stealth (+0.46m), +0.44m when aiming
+    const baseShoulder = (0.38 + this.stealthFramingRatio * 0.08) * this.shoulderSide;
+    const targetShoulderOffset = this.isAiming ? 0.44 : baseShoulder;
     this.currentShoulderOffset += (targetShoulderOffset - this.currentShoulderOffset) * Math.min(1.0, 12.0 * dt);
     const shoulderOffset = camRight.clone().multiplyScalar(this.currentShoulderOffset);
-    // Lower-third cinematic framing: targetHeight at 1.18m (torso) gives 70% upper screen to vistas
-    const targetHeight = this.isAiming ? 1.42 : 1.18;
+
+    // Target height: 1.18m base (torso), 1.06m in stealth, lifts +0.35m on vista ridge, 1.42m when aiming
+    const targetHeight = this.isAiming
+      ? 1.42
+      : (1.18 - this.stealthFramingRatio * 0.12 + this.vistaPullRatio * 0.35);
     this.target.copy(this.mesh.position).add(new THREE.Vector3(0, targetHeight, 0)).add(shoulderOffset);
 
     // Physical landing impact camera compression
@@ -2240,63 +2275,85 @@ export class CharacterController {
       this.landingDip = THREE.MathUtils.lerp(this.landingDip, 0, Math.min(1.0, 14.0 * dt));
     }
 
-    // Dynamic Velocity FoV Punch & Tactical Aim Zoom (Shadow of the Tomb Raider North Star)
+    // Dynamic Velocity FoV Punch, Vista Expansion & Tactical Aim Zoom (Shadow of the Tomb Raider North Star)
     // 66° base FoV opens expansive peripheral vision across Andean valleys and mountain peaks
     const baseFov = 66.0;
     const runRatio = Math.max(0, Math.min(1.0, this.speed / this.maxRunSpeed));
-    const targetFov = this.isAiming
-      ? 42.0 // Tight tactical aim zoom
-      : ((this.state === MovementState.DIVE || this.state === MovementState.SWIM)
-        ? 66.0
-        : (baseFov + runRatio * 6.0));
-    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 10.0 * dt);
+    let targetFov = baseFov;
+    if (this.isAiming) {
+      targetFov = 42.0; // Tight tactical aim zoom
+    } else if (this.state === MovementState.DIVE || this.state === MovementState.SWIM) {
+      targetFov = 66.0;
+    } else {
+      targetFov = baseFov + runRatio * 5.0 + this.vistaPullRatio * 8.0 - this.stealthFramingRatio * 8.0;
+    }
+    targetFov += this.impulseFovOffset;
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 8.0 * dt);
+    this.impulseFovOffset = THREE.MathUtils.lerp(this.impulseFovOffset, 0, Math.min(1.0, 14.0 * dt));
     this.camera.updateProjectionMatrix();
 
-    // 3. Desired camera position at target radius
-    const currentRadius = this.isAiming ? 1.85 : (this.state === MovementState.CLIMB ? 3.2 : this.radius);
+    // 3. Desired camera position at target radius with contextual expansion
+    let nominalRadius = this.radius;
+    if (this.isAiming) {
+      nominalRadius = 1.85;
+    } else if (this.state === MovementState.CLIMB) {
+      nominalRadius = 3.2;
+    } else {
+      nominalRadius = (this.radius - this.stealthFramingRatio * 2.2) + this.vistaPullRatio * 1.6;
+    }
+
     const desiredOffset = new THREE.Vector3(
-      currentRadius * sinPhi * sinTheta,
-      currentRadius * cosPhi,
-      currentRadius * sinPhi * cosTheta
+      nominalRadius * sinPhi * sinTheta,
+      nominalRadius * cosPhi,
+      nominalRadius * sinPhi * cosTheta
     );
 
-    // 4. Spring-arm collision avoidance:
-    let safeDistance = currentRadius;
+    // 4. Spring-arm multi-ray swept collision avoidance:
+    let safeDistance = nominalRadius;
     const rayDir = desiredOffset.clone().normalize();
 
-    // 4a. Physical mesh collision check (stone architecture, temple ruins, bridges, crypts, pillars)
+    // 4a. 3-Ray bundle sweep (Center, Top-offset, Lateral-offset) prevents clipping through narrow doorframes or arches
     if (physics.world) {
-      const physHit = physics.raycast(this.target, rayDir, currentRadius, this.body ?? undefined);
-      if (physHit) {
-        // Safe stand-off distance: 0.35m cushion prevents camera near-plane from penetrating walls
-        safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, physHit.distance - 0.35));
+      const origins = [
+        this.target,
+        this.target.clone().add(new THREE.Vector3(0, 0.22, 0)),
+        this.target.clone().addScaledVector(camRight, 0.22)
+      ];
+      for (const orig of origins) {
+        const physHit = physics.raycast(orig, rayDir, nominalRadius, this.body ?? undefined);
+        if (physHit) {
+          const clamped = Math.max(this.minCameraDistance, physHit.distance - 0.35);
+          if (clamped < safeDistance) safeDistance = clamped;
+        }
       }
     }
 
-    // 4b. Terrain occlusion check: only collapse radius if obstructed by a steep obstacle within 45% of radius
-    const sampleSteps = 10;
+    // 4b. Terrain occlusion check
+    const sampleSteps = 12;
     let terrainBlockedDist: number | null = null;
     for (let i = 1; i <= sampleSteps; i++) {
-      const dist = (currentRadius * i) / sampleSteps;
+      const dist = (nominalRadius * i) / sampleSteps;
       const samplePos = this.target.clone().addScaledVector(rayDir, dist);
       const groundAtSample = getGlobalTerrainHeight(samplePos.x, samplePos.z);
-      if (samplePos.y <= groundAtSample + 0.30) {
+      if (samplePos.y <= groundAtSample + 0.32) {
         terrainBlockedDist = dist;
         break;
       }
     }
-    if (terrainBlockedDist !== null && terrainBlockedDist < currentRadius * 0.45) {
-      safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, terrainBlockedDist * 0.90));
+    if (terrainBlockedDist !== null && terrainBlockedDist < nominalRadius * 0.55) {
+      safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, terrainBlockedDist * 0.88));
     }
 
     // AAA Spring-arm response: rapid retraction on obstruction (prevent wall clipping), smooth extension in open air
     const lerpSpeed = safeDistance < this.currentCameraDistance
-      ? Math.min(1.0, 32.0 * dt)
+      ? Math.min(1.0, 36.0 * dt)
       : Math.min(1.0, 10.0 * dt);
     this.currentCameraDistance += (safeDistance - this.currentCameraDistance) * lerpSpeed;
 
-    // Compute final camera position
+    // Compute final camera position with impulse
     const finalPos = this.target.clone().addScaledVector(rayDir, this.currentCameraDistance);
+    finalPos.add(this.cameraImpulse);
+    this.cameraImpulse.lerp(new THREE.Vector3(0, 0, 0), Math.min(1.0, 14.0 * dt));
 
     // Terrain riding: smoothly lift camera over rising terrain behind player rather than burying it or pulling it in
     const camFloor = getGlobalTerrainHeight(finalPos.x, finalPos.z) + 0.55;
