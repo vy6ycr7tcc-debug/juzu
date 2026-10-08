@@ -19,7 +19,10 @@ async function run() {
 
   for (const mode of modes) {
     for (const scenario of scenarios) {
-      const context = await browser.newContext({ serviceWorkers: 'block' });
+      const context = await browser.newContext({
+        serviceWorkers: 'block',
+        viewport: { width: 1280, height: 720 },
+      });
       const page = await context.newPage();
 
       if (mode === 'webgl2') {
@@ -43,8 +46,12 @@ async function run() {
         await page.waitForTimeout(500);
 
         const safeName = scenario.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const canvas = await page.locator('#app canvas').first();
-        await canvas.screenshot({ path: `shot_${safeName}_${mode}.png` });
+        if (scenario.includes('map') || scenario.includes('hud') || scenario.includes('open_world')) {
+          await page.screenshot({ path: `shot_${safeName}_${mode}.png` });
+        } else {
+          const canvas = await page.locator('#app canvas').first();
+          await canvas.screenshot({ path: `shot_${safeName}_${mode}.png` });
+        }
         console.log(`Saved shot_${safeName}_${mode}.png`);
       } catch (e) {
         console.error(`Timeout for ${scenario} in ${mode}`, e);

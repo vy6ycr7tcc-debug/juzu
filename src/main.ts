@@ -489,6 +489,13 @@ async function init() {
   renderer.domElement.addEventListener('click', acquirePointerLock);
   renderer.domElement.addEventListener('pointerdown', acquirePointerLock);
 
+  // Tomb Raider Camera Zoom (Mouse Wheel / Pinch)
+  window.addEventListener('wheel', (e) => {
+    if (!sottrHUD.isMapOpen) {
+      character.adjustCameraZoom(e.deltaY * 0.003);
+    }
+  }, { passive: true });
+
   const flags = createQuestFlags();
   const saveAPI = createSaveSystem();
 
@@ -1585,7 +1592,39 @@ async function init() {
       // Cinematic anamorphic framing inside the sanctum showing Michelle, altar, sunbeam, and dust motes
       camera.position.set(35.65, cryptFloorY + 1.48, -55.8);
       camera.lookAt(35.05, cryptFloorY + 1.32, -58.5);
-      sottrHUD.update(camera);
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'open_world_camera') {
+      // Tomb Raider Open World Third-Person Camera (Wide 66° FoV, 4.8m radius, Lower-Third Framing)
+      const posX = 45, posZ = 10;
+      character.teleport(posX, posZ, 0.4);
+      character.disableCameraUpdate = false;
+      character.radius = 4.8;
+      character.targetRadius = 4.8;
+      character.currentCameraDistance = 4.8;
+      character.phi = Math.PI * 0.44;
+      character.theta = 0.4;
+      camera.fov = 66.0;
+      camera.updateProjectionMatrix();
+      character.updateCamera(0.016);
+      sottrHUD.setObjective('VILCABAMBA TRAVERSAL', 'Explore the open Andean highlands and survey the Urubamba canyon');
+      sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[WASD]</span> MOVE • <span style="color: #ffd875; font-weight: 700;">[SCROLL]</span> CAMERA ZOOM • <span style="color: #ffd875; font-weight: 700;">[M]</span> EXPEDITION MAP');
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'expedition_map') {
+      // Tomb Raider Authentic Topographic Expedition Map Modal
+      const posX = 45, posZ = 10;
+      character.teleport(posX, posZ, 0.4);
+      character.disableCameraUpdate = false;
+      character.radius = 4.8;
+      character.targetRadius = 4.8;
+      character.currentCameraDistance = 4.8;
+      character.phi = Math.PI * 0.44;
+      character.theta = 0.4;
+      camera.fov = 66.0;
+      camera.updateProjectionMatrix();
+      character.updateCamera(0.016);
+      sottrHUD.setObjective('EXPEDITION TOPOGRAPHY', 'Survey Andean valley contours, sacred shrines, and marked waypoints');
+      sottrHUD.openMap(character.mesh.position, character.theta);
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1597,6 +1636,8 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map') {
+      t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
     } else if (shot === 'wetness_sheen') {
@@ -1639,7 +1680,22 @@ async function init() {
         const cryptFloorY = getGlobalTerrainHeight(35, -55) + 0.2;
         character.mesh.position.set(35.35, cryptFloorY, -57.1);
         character.mesh.rotation.y = 0;
-        sottrHUD.update(camera);
+        sottrHUD.update(camera, character.mesh.position);
+      }
+      if (shot === 'open_world_camera') {
+        const posX = 45, posZ = 10;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = 0.4;
+        character.updateCamera(dt);
+        sottrHUD.update(camera, character.mesh.position);
+      }
+      if (shot === 'expedition_map') {
+        const posX = 45, posZ = 10;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = 0.4;
+        character.updateCamera(dt);
+        sottrHUD.openMap(character.mesh.position, character.theta);
+        sottrHUD.update(camera, character.mesh.position);
       }
       if (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
         const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
@@ -1903,7 +1959,7 @@ async function init() {
         } else {
           sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[RIGHT CLICK]</span> AIM BOW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
         }
-        sottrHUD.update(camera);
+        sottrHUD.update(camera, character.mesh.position);
         audioDirector.update(camera);
 
         // Dynamic audio biome and intensity modulation

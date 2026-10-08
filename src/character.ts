@@ -207,10 +207,12 @@ export class CharacterController {
   public phi: number = Math.PI * 0.44; // ~79°: dramatic horizontal Andean horizon vista
   private targetTheta: number = 0;
   private targetPhi: number = Math.PI * 0.44;
-  public radius: number = 3.8;
-  public target: THREE.Vector3 = new THREE.Vector3(0, 1.35, 0);
-  public currentCameraDistance: number = 3.8;
-  public minCameraDistance: number = 0.85;
+  public radius: number = 4.8;
+  public targetRadius: number = 4.8;
+  public minCameraDistance: number = 2.0;
+  public maxCameraDistance: number = 6.4;
+  public target: THREE.Vector3 = new THREE.Vector3(0, 1.18, 0);
+  public currentCameraDistance: number = 4.8;
 
   // Traversal State Machine
   public state: MovementState = MovementState.WALK;
@@ -828,6 +830,10 @@ export class CharacterController {
     }
   }
 
+  public adjustCameraZoom(delta: number): void {
+    this.targetRadius = THREE.MathUtils.clamp(this.targetRadius + delta, 2.2, this.maxCameraDistance);
+  }
+
   public update(dt: number) {
     this.stateTimer += dt;
     this.time += dt;
@@ -840,7 +846,7 @@ export class CharacterController {
         this.targetTheta -= camDelta.x * mouseSensitivity;
         // Invert-pitch fix: moving mouse down (camDelta.y > 0) increases phi (tilts camera down toward character/ground)
         this.targetPhi += camDelta.y * mouseSensitivity;
-        this.targetPhi = Math.max(0.15, Math.min(Math.PI * 0.48, this.targetPhi));
+        this.targetPhi = Math.max(0.10, Math.min(Math.PI * 0.52, this.targetPhi));
       }
     }
     const smoothCamSpeed = Math.min(1.0, 32.0 * dt);
@@ -2133,27 +2139,32 @@ export class CharacterController {
     // Lateral right vector on horizontal plane
     const camRight = new THREE.Vector3(cosTheta, 0, -sinTheta).normalize();
 
+    // Smooth lerp camera distance toward user target zoom
+    this.radius += (this.targetRadius - this.radius) * Math.min(1.0, 8.0 * dt);
+
     // 2. Over-the-shoulder offset:
     // Smooth lerp towards target shoulder offset (+0.38m for right shoulder, -0.38m for left shoulder, or tight 0.44m when aiming)
     const targetShoulderOffset = this.isAiming ? 0.44 : (0.38 * this.shoulderSide);
     this.currentShoulderOffset += (targetShoulderOffset - this.currentShoulderOffset) * Math.min(1.0, 12.0 * dt);
     const shoulderOffset = camRight.clone().multiplyScalar(this.currentShoulderOffset);
-    const targetHeight = this.isAiming ? 1.42 : 1.35;
+    // Lower-third cinematic framing: targetHeight at 1.18m (torso) gives 70% upper screen to vistas
+    const targetHeight = this.isAiming ? 1.42 : 1.18;
     this.target.copy(this.mesh.position).add(new THREE.Vector3(0, targetHeight, 0)).add(shoulderOffset);
 
     // Dynamic Velocity FoV Punch & Tactical Aim Zoom (Shadow of the Tomb Raider North Star)
-    const baseFov = 60.0;
+    // 66° base FoV opens expansive peripheral vision across Andean valleys and mountain peaks
+    const baseFov = 66.0;
     const runRatio = Math.max(0, Math.min(1.0, this.speed / this.maxRunSpeed));
     const targetFov = this.isAiming
       ? 42.0 // Tight tactical aim zoom
       : ((this.state === MovementState.DIVE || this.state === MovementState.SWIM)
-        ? 62.0
-        : (baseFov + runRatio * 6.5));
+        ? 66.0
+        : (baseFov + runRatio * 6.0));
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 10.0 * dt);
     this.camera.updateProjectionMatrix();
 
     // 3. Desired camera position at target radius
-    const currentRadius = this.isAiming ? 1.85 : (this.state === MovementState.CLIMB ? 3.1 : this.radius);
+    const currentRadius = this.isAiming ? 1.85 : (this.state === MovementState.CLIMB ? 3.2 : this.radius);
     const desiredOffset = new THREE.Vector3(
       currentRadius * sinPhi * sinTheta,
       currentRadius * cosPhi,
@@ -2168,21 +2179,25 @@ export class CharacterController {
     if (physics.world) {
       const physHit = physics.raycast(this.target, rayDir, currentRadius, this.body ?? undefined);
       if (physHit) {
-        // Safe stand-off distance: 0.30m cushion prevents camera near-plane from penetrating walls
-        safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, physHit.distance - 0.30));
+        // Safe stand-off distance: 0.35m cushion prevents camera near-plane from penetrating walls
+        safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, physHit.distance - 0.35));
       }
     }
 
-    // 4b. Ray-march 12 samples from target towards desired camera position to detect terrain occlusions
-    const sampleSteps = 12;
+    // 4b. Terrain occlusion check: only collapse radius if obstructed by a steep obstacle within 45% of radius
+    const sampleSteps = 10;
+    let terrainBlockedDist: number | null = null;
     for (let i = 1; i <= sampleSteps; i++) {
       const dist = (currentRadius * i) / sampleSteps;
       const samplePos = this.target.clone().addScaledVector(rayDir, dist);
       const groundAtSample = getGlobalTerrainHeight(samplePos.x, samplePos.z);
-      if (samplePos.y <= groundAtSample + 0.35) {
-        safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, dist * 0.85));
+      if (samplePos.y <= groundAtSample + 0.30) {
+        terrainBlockedDist = dist;
         break;
       }
+    }
+    if (terrainBlockedDist !== null && terrainBlockedDist < currentRadius * 0.45) {
+      safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, terrainBlockedDist * 0.90));
     }
 
     // AAA Spring-arm response: rapid retraction on obstruction (prevent wall clipping), smooth extension in open air
@@ -2194,8 +2209,8 @@ export class CharacterController {
     // Compute final camera position
     const finalPos = this.target.clone().addScaledVector(rayDir, this.currentCameraDistance);
 
-    // Ensure camera never clips through terrain floor
-    const camFloor = getGlobalTerrainHeight(finalPos.x, finalPos.z) + 0.45;
+    // Terrain riding: smoothly lift camera over rising terrain behind player rather than burying it or pulling it in
+    const camFloor = getGlobalTerrainHeight(finalPos.x, finalPos.z) + 0.55;
     if (finalPos.y < camFloor) {
       finalPos.y = camFloor;
     }
