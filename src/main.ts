@@ -49,6 +49,7 @@ declare global {
     }[];
     __charDebug?: {
       pos: THREE.Vector3; rotY: number; visible: boolean; state: string; camPos: THREE.Vector3;
+      isTorchEquipped?: boolean; shoulderSide?: number;
     };
     // Phase 8 shadow probe: full runtime shadow-rig state, evaluated AFTER the
     // shot render (same discipline as __charDebug/__atmosDebug). projScaleX/Y
@@ -1337,12 +1338,32 @@ async function init() {
       camera.position.set(cisternOrigin.x - 1.6, cisternOrigin.y + 1.85, cisternOrigin.z + 12.6);
       camera.lookAt(cisternOrigin.x, cisternOrigin.y - 0.4, cisternOrigin.z);
       hydraulicCistern.interact(); // Trigger water wheel & dynamic water rise
+    } else if (shot === 'torch_chiaroscuro') {
+      // Phase 5 Survival Pine Torch & Chiaroscuro Firelight (Shadow of the Tomb Raider North Star):
+      // Adventurer standing holding lit pine torch on mountain terrace, warm amber light casting onto character and terrain
+      const posX = 50, posZ = 50;
+      character.teleport(posX, posZ, 0.4);
+      character.setTorch(true);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+      camera.position.set(posX + 0.9, groundY + 1.45, posZ + 1.8);
+      camera.lookAt(posX - 0.1, groundY + 1.25, posZ);
+    } else if (shot === 'shoulder_swap') {
+      // Phase 5 Cinematic Over-The-Shoulder Camera Dynamics
+      const posX = 50, posZ = 50;
+      character.teleport(posX, posZ, 0);
+      character.setTorch(true);
+      character.shoulderSide = -1.0; // Left shoulder framing
+      character.disableCameraUpdate = false;
+      character.theta = 0;
+      character.phi = 1.35;
+      character.updateCamera(0.016);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))));
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
@@ -1363,6 +1384,12 @@ async function init() {
       if (shot === 'hydraulic_sluice') {
         character.mesh.position.set(45 + 0.6, -1.9, -30 + 8.5);
         character.mesh.rotation.y = Math.PI;
+      }
+      if (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap') {
+        character.setTorch(true);
+        character.mesh.position.set(50, character.getGroundedHeight(50, 50), 50);
+        character.mesh.rotation.y = shot === 'torch_chiaroscuro' ? 0.4 : 0;
+        character.state = MovementState.WALK;
       }
       physics.update(dt);
       character.update(dt);
@@ -1652,6 +1679,8 @@ async function init() {
         visible: character.mesh.visible,
         state: character.state,
         camPos: camera.position.clone(),
+        isTorchEquipped: character.isTorchEquipped,
+        shoulderSide: character.shoulderSide,
       };
       // Phase 8 shadow probe: evaluated AFTER the render so shadowMapAllocated
       // reflects whether the shadow pass actually ran (LightShadow.map is

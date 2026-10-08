@@ -6,7 +6,7 @@ import { physics } from './physics.js';
 import { getGlobalTerrainHeight } from './terrain.js';
 import { hairDark, leatherDark } from './materials.js';
 import { createMistTexture } from './textures.js';
-import { createClimbingAxe, createRecurveBow, createQuiver } from './equipment.js';
+import { createClimbingAxe, createRecurveBow, createQuiver, createPineTorch } from './equipment.js';
 import { waterDepthAt, waterSurfaceY } from './river.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
@@ -267,6 +267,18 @@ export class CharacterController {
   public bubbleMat: THREE.SpriteMaterial | null = null;
   public swimStrokeTimer: number = 0;
 
+  // Survival Pine Torch & Chiaroscuro Flame (Shadow of the Tomb Raider North Star)
+  public isTorchEquipped: boolean = false;
+  public torchData: ReturnType<typeof createPineTorch> | null = null;
+  private torchEmberParticles: THREE.Sprite[] = [];
+  private torchEmberMat: THREE.SpriteMaterial | null = null;
+  private torchEmberTimer: number = 0;
+  private leftHandBone: THREE.Object3D | null = null;
+
+  // Cinematic Camera Dynamics (Shoulder-Swap, Sprint Shake & FoV Punch)
+  public shoulderSide: number = 1.0; // +1.0 = right shoulder, -1.0 = left shoulder
+  private currentShoulderOffset: number = 0.38;
+
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
     this.input = input;
@@ -375,6 +387,16 @@ export class CharacterController {
         this.rightUpLegBone = (model.getObjectByName('mixamorigRightUpLeg') ?? model.getObjectByName('mixamorig:RightUpLeg')) ?? null;
         this.leftLegBone = (model.getObjectByName('mixamorigLeftLeg') ?? model.getObjectByName('mixamorig:LeftLeg')) ?? null;
         this.rightLegBone = (model.getObjectByName('mixamorigRightLeg') ?? model.getObjectByName('mixamorig:RightLeg')) ?? null;
+        this.leftHandBone = (model.getObjectByName('mixamorigLeftHand') ?? model.getObjectByName('mixamorig:LeftHand')) ?? null;
+        if (this.leftHandBone) {
+          const torch = createPineTorch();
+          torch.group.position.set(1.5, 9.5, 2.5); // grip in cm coordinates
+          torch.group.rotation.set(Math.PI / 2, 0, 0);
+          torch.group.scale.setScalar(90.0);
+          torch.group.visible = this.isTorchEquipped;
+          this.leftHandBone.add(torch.group);
+          this.torchData = torch;
+        }
 
         // AnimationMixer with RETARGETED locomotion clips. The soldier/xbot
         // exports share Michelle's 65 mixamorig bone names but NOT her
@@ -419,6 +441,17 @@ export class CharacterController {
   public setForceState(state: MovementState) {
     this.state = state;
     this.stateTimer = 0;
+  }
+
+  public setTorch(equipped: boolean) {
+    this.isTorchEquipped = equipped;
+    if (this.torchData) {
+      this.torchData.group.visible = equipped;
+    }
+  }
+
+  public toggleTorch() {
+    this.setTorch(!this.isTorchEquipped);
   }
 
   public getTerrainHeightAndNormal(x: number, z: number): { y: number, normal: THREE.Vector3 } {
@@ -597,6 +630,16 @@ export class CharacterController {
     }
     if (this.input.consumeJustPressed('KeyQ')) {
       this.triggerArchaeologistInstinct();
+    }
+
+    // Survival pine torch toggle (KeyT)
+    if (this.input.consumeJustPressed('KeyT')) {
+      this.toggleTorch();
+    }
+
+    // Over-the-shoulder camera swap (KeyV)
+    if (this.input.consumeJustPressed('KeyV')) {
+      this.shoulderSide *= -1.0;
     }
 
     // 3. Movement Direction Input
@@ -1168,8 +1211,13 @@ export class CharacterController {
       }
     }
 
+    if ((this.state === MovementState.SWIM || this.state === MovementState.DIVE) && this.isTorchEquipped) {
+      this.setTorch(false);
+    }
+
     this.updateWetnessAndMud(dt, groundH);
     this.updateMudParticles(dt);
+    this.updateTorch(dt);
     this.updateAnimationAndCamera(dt);
   }
 
@@ -1254,6 +1302,62 @@ export class CharacterController {
     }
   }
 
+  private updateTorch(dt: number) {
+    if (!this.torchData) return;
+
+    if (this.isTorchEquipped) {
+      // 1. Turbulent organic flame flicker
+      const flicker = Math.sin(this.time * 18.0) * 0.35 + Math.sin(this.time * 31.0) * 0.2 + (Math.random() - 0.5) * 0.15;
+      this.torchData.light.intensity = Math.max(0.8, 2.6 + flicker);
+
+      // Flame cone pulsates and stretches
+      const pulseY = 1.0 + Math.sin(this.time * 15.0) * 0.15;
+      const pulseXZ = 1.0 + Math.sin(this.time * 24.0) * 0.1;
+      this.torchData.flameMesh.scale.set(pulseXZ, pulseY, pulseXZ);
+
+      // 2. Rising ember spark particles
+      this.torchEmberTimer += dt;
+      if (this.torchEmberTimer > 0.07) {
+        this.torchEmberTimer = 0;
+        if (!this.torchEmberMat) {
+          this.torchEmberMat = new THREE.SpriteMaterial({
+            map: createMistTexture(),
+            color: 0xff7722,
+            transparent: true,
+            opacity: 0.95,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          });
+        }
+        const ember = new THREE.Sprite(this.torchEmberMat);
+        ember.scale.setScalar(0.025 + Math.random() * 0.02);
+        const worldTip = new THREE.Vector3();
+        this.torchData.flameMesh.getWorldPosition(worldTip);
+        ember.position.copy(worldTip).add(new THREE.Vector3(
+          (Math.random() - 0.5) * 0.04,
+          0.02,
+          (Math.random() - 0.5) * 0.04
+        ));
+        this.mesh.parent?.add(ember);
+        this.torchEmberParticles.push(ember);
+      }
+    }
+
+    // Update ember particles regardless of equipped state
+    for (let i = this.torchEmberParticles.length - 1; i >= 0; i--) {
+      const p = this.torchEmberParticles[i];
+      p.position.y += dt * 0.85;
+      p.position.x += Math.sin(this.time * 8.0 + i) * dt * 0.12;
+      p.position.z += Math.cos(this.time * 8.0 + i) * dt * 0.12;
+      p.material.opacity -= dt * 1.5;
+      p.scale.subScalar(dt * 0.018);
+      if (p.material.opacity <= 0 || p.scale.x <= 0.005) {
+        p.parent?.remove(p);
+        this.torchEmberParticles.splice(i, 1);
+      }
+    }
+  }
+
   private updateAnimationAndCamera(dt: number) {
     // Skeletal animation updates
     if (this.mixer) {
@@ -1298,6 +1402,14 @@ export class CharacterController {
       }
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
       this.swimStrokeTimer += dt * (this.speed > 0.5 ? 4.5 : 2.2);
+    }
+
+    if (this.isTorchEquipped && this.leftArmBone && this.state !== MovementState.LEDGE_HANG && this.state !== MovementState.MANTLE && this.state !== MovementState.WALL_SCRAMBLE && this.state !== MovementState.SLIDE && this.state !== MovementState.SWIM && this.state !== MovementState.DIVE) {
+      // Hold left arm raised forward and steady to cast torchlight into the dark
+      this.leftArmBone.rotation.set(-0.65, 0.35, 0.45);
+      if (this.leftForeArmBone) {
+        this.leftForeArmBone.rotation.set(0.75, -0.1, -0.2);
+      }
     }
 
     let desiredAction = this.actions.idle;
@@ -1371,9 +1483,20 @@ export class CharacterController {
     const camRight = new THREE.Vector3(cosTheta, 0, -sinTheta).normalize();
 
     // 2. Over-the-shoulder offset:
-    // Offset target 0.35m to the right shoulder so adventurer occupies the lower-left third
-    const shoulderOffset = camRight.clone().multiplyScalar(0.35);
+    // Smooth lerp towards target shoulder offset (+0.38m for right shoulder, -0.38m for left shoulder)
+    const targetShoulderOffset = 0.38 * this.shoulderSide;
+    this.currentShoulderOffset += (targetShoulderOffset - this.currentShoulderOffset) * Math.min(1.0, 10.0 * dt);
+    const shoulderOffset = camRight.clone().multiplyScalar(this.currentShoulderOffset);
     this.target.copy(this.mesh.position).add(new THREE.Vector3(0, 1.35, 0)).add(shoulderOffset);
+
+    // Dynamic Velocity FoV Punch (Shadow of the Tomb Raider North Star)
+    const baseFov = 60.0;
+    const runRatio = Math.max(0, Math.min(1.0, this.speed / this.maxRunSpeed));
+    const targetFov = (this.state === MovementState.DIVE || this.state === MovementState.SWIM)
+      ? 62.0
+      : (baseFov + runRatio * 6.5);
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 8.0 * dt);
+    this.camera.updateProjectionMatrix();
 
     // 3. Desired camera position at full radius
     const desiredOffset = new THREE.Vector3(
@@ -1408,6 +1531,13 @@ export class CharacterController {
     const camFloor = getGlobalTerrainHeight(finalPos.x, finalPos.z) + 0.45;
     if (finalPos.y < camFloor) {
       finalPos.y = camFloor;
+    }
+
+    // Handheld sprint micro-shake (visceral momentum)
+    if (this.speed > this.maxWalkSpeed * 1.1 && this.isGrounded) {
+      const shakeIntensity = (this.speed / this.maxRunSpeed) * 0.028;
+      finalPos.x += Math.sin(this.time * 24.0) * shakeIntensity;
+      finalPos.y += Math.cos(this.time * 28.0) * (shakeIntensity * 1.2);
     }
 
     this.camera.position.copy(finalPos);
