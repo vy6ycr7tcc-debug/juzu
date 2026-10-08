@@ -6,18 +6,33 @@ export function getGlobalTerrainHeight(x: number, z: number): number {
   // Base valley shape
   let valleyShape = Math.pow(Math.abs(x / (size / 2)), 2) * 100;
 
-  // Basic noise
+  // Base natural Andean undulating terrain
   let noise = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 5 +
               Math.sin(x * 0.01 + z * 0.02) * 15;
 
   const riverBed = -Math.exp(-Math.pow(x / 30, 2)) * 10;
 
+  // Andean Craggy Multi-Fractal Modulation:
+  // Adds razor-sharp mountain crests, cliff terraces, and rocky escarpments
+  // away from the immediate river channel bed (|x| > 28m).
+  const distFromRiver = Math.max(0, (Math.abs(x) - 28) / 36);
+  const mountainWeight = Math.min(1.0, distFromRiver);
+
+  if (mountainWeight > 0) {
+    // Multi-octave ridged fractal noise for Andean crags
+    const ridge1 = (1.0 - Math.abs(Math.sin(x * 0.018 + z * 0.014))) * 18.0;
+    const ridge2 = (1.0 - Math.abs(Math.cos(x * 0.035 - z * 0.028))) * 8.5;
+    const terrace = Math.sin((valleyShape + noise) * 0.35) * 2.2; // Natural geological rock terraces
+    const detail = (Math.sin(x * 0.08 + z * 0.06) * Math.cos(z * 0.09)) * 3.5;
+    noise += (ridge1 + ridge2 + terrace + detail) * mountainWeight;
+  }
+
   // High-sierra modifier: as z increases past 500, terrain rises and becomes craggier
   if (z > 500) {
     const factor = Math.min(1.0, (z - 500) / 500); // 0 at 500, 1 at 1000+
-    const highSierraRise = factor * 100;
-    const highSierraNoise = (Math.sin(x * 0.1) * Math.cos(z * 0.1) * 10 +
-                             Math.sin(x * 0.05 + z * 0.05) * 20) * factor;
+    const highSierraRise = factor * 110;
+    const highSierraNoise = ((1.0 - Math.abs(Math.sin(x * 0.08))) * Math.cos(z * 0.07) * 14 +
+                             Math.sin(x * 0.04 + z * 0.04) * 22) * factor;
     valleyShape += highSierraRise;
     noise += highSierraNoise;
   }
@@ -55,47 +70,45 @@ export class TerrainManager {
 
   constructor(scene: THREE.Scene, caps?: RenderCaps) {
     this.scene = scene;
-    // §7.2: visual modules take RenderCaps, never re-detect. The old
-    // detectRenderer()/__isWebGPU probe is gone.
     this.isWebGPU = caps?.isWebGPU ?? false;
     this.maxAnisotropy = caps?.maxAnisotropy ?? 4;
     this.lowTier = caps?.tier === 'LOW';
 
-    // Neutral procedural PBR micro-detail texture (0.92-1.0) preserving true biome albedos
-    const texSize = 256;
-    const detailMap = createTerrainDetailTexture(texSize);
-    detailMap.repeat.set(16, 16);
-    detailMap.anisotropy = this.maxAnisotropy;
+    // 1. High-resolution photographic soil, pebbles, humus, and forest floor albedo
+    const groundAlbedo = getImageTexture(ASSET_PATHS.environment.forestFloor, {
+      isSRGB: true,
+      repeatX: 24,
+      repeatY: 24,
+      anisotropy: this.maxAnisotropy,
+    });
 
-    const roughnessMap = createTerrainRoughnessTexture(texSize);
-    roughnessMap.repeat.set(5, 5);
+    // 2. High-resolution photographic granite and weathered rock normal & roughness maps
+    const normalMap = createNormalTexture(512, 10, 4.2);
+    normalMap.repeat.set(24, 24);
+    normalMap.anisotropy = this.maxAnisotropy;
 
-    const normalMap = createNormalTexture(texSize, 7, 3.0);
-    normalMap.repeat.set(10, 10);
+    // 3. Macro roughness texture
+    const roughnessMap = createTerrainRoughnessTexture(512);
+    roughnessMap.repeat.set(8, 8);
+    roughnessMap.anisotropy = this.maxAnisotropy;
 
-    // AO as macro blotches on the same low-freq generator (0.72–0.98 ×
-    // intensity 0.8 = subtle broad darkening). PlaneGeometry has no uv1;
-    // without channel=0 the aoMap samples a missing attribute (uniform
-    // texel) — the previous aoMap was effectively inert.
-    const aoMap = createTerrainRoughnessTexture(texSize);
-    aoMap.repeat.set(2, 2);
+    // 4. Broad ambient occlusion blotches
+    const aoMap = createTerrainRoughnessTexture(512);
+    aoMap.repeat.set(3, 3);
     aoMap.channel = 0;
-
-    for (const t of [detailMap, roughnessMap, normalMap, aoMap]) {
-      t.anisotropy = this.maxAnisotropy; // T8: 8 WebGPU / 4 WebGL2
-    }
+    aoMap.anisotropy = this.maxAnisotropy;
 
     this.material = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      map: detailMap,
-      roughness: 0.96,
+      map: groundAlbedo,
+      roughness: 0.90,
       roughnessMap: roughnessMap,
       metalness: 0.0, // Andean earth, soil, and rock are 100% dielectric
       normalMap: normalMap,
-      normalScale: new THREE.Vector2(0.35, 0.35), // Soft natural rock/soil relief without metallic glint
+      normalScale: new THREE.Vector2(0.65, 0.65), // Crisp natural rock/soil relief
       aoMap: aoMap,
-      aoMapIntensity: 0.8,
-      envMapIntensity: 0.15 // Natural ground ambient, never chrome reflection
+      aoMapIntensity: 0.85,
+      envMapIntensity: 0.25 // Natural ground ambient
     });
   }
 
@@ -174,27 +187,27 @@ export class TerrainManager {
     // Calibrated Andean PBR biome albedos (Visual Bible §2.2-§2.5):
     // Real dielectric soil, vegetation, and rock reflectance without zero-diffuse specular artifacts.
     const CF = {
-      rock: new THREE.Color(0x5A574E),   // wet stone — dark granite
-      soilA: new THREE.Color(0x4A3C23),  // humus/earth — rich moist loam
-      soilB: new THREE.Color(0x3D5428)   // canopy green tint — moss/foliage
+      rock: new THREE.Color(0xA0988A),   // wet stone — mountain granite
+      soilA: new THREE.Color(0x9E8662),  // humus/earth — rich moist loam
+      soilB: new THREE.Color(0x6E9450)   // lush moss/canopy green
     };
     const HS = {
-      rock: new THREE.Color(0x6E6A63),   // granite
-      lichen: new THREE.Color(0x7A8A5A), // lichen patches (§2.3 dressing vocab)
-      soilA: new THREE.Color(0x9A8B4F),  // ichu grass lit
-      soilB: new THREE.Color(0x6B6335),  // ichu shadowed
-      snow: new THREE.Color(0xE0E6EB),   // snowfields (high mountain peaks only)
-      snowShadow: new THREE.Color(0xAABCCC) // soft shadowed snow
+      rock: new THREE.Color(0xB2ACA2),   // high granite
+      lichen: new THREE.Color(0xB4C882), // lichen patches (§2.3 dressing vocab)
+      soilA: new THREE.Color(0xD4C078),  // ichu grass lit
+      soilB: new THREE.Color(0x9E9254),  // ichu shadowed
+      snow: new THREE.Color(0xF0F4F8),   // snowfields (high mountain peaks only)
+      snowShadow: new THREE.Color(0xB0C4D8) // soft shadowed snow
     };
     const JL = {
-      rock: new THREE.Color(0x45433C),   // swallowed limestone
-      moss: new THREE.Color(0x3E5624),   // heavy moss reclamation
-      soil: new THREE.Color(0x382C18)    // rich mud/loam
+      rock: new THREE.Color(0x8A8478),   // swallowed limestone
+      moss: new THREE.Color(0x628C42),   // heavy moss reclamation
+      soil: new THREE.Color(0x886842)    // rich mud/loam
     };
     const PA = {
-      rockA: new THREE.Color(0x6E685B),  // plaza stone
-      rockB: new THREE.Color(0x524D42),  // ashlar shadow
-      soil: new THREE.Color(0x3A5228)    // encroaching green
+      rockA: new THREE.Color(0xC0B49E),  // plaza stone
+      rockB: new THREE.Color(0x8E8472),  // ashlar shadow
+      soil: new THREE.Color(0x6E9852)    // encroaching green
     };
     const WET = new THREE.Color(0x363028); // riverbank darkening target
     const color = new THREE.Color();
@@ -226,16 +239,20 @@ export class TerrainManager {
       const wCf = Math.max(0, 1 - wPa - wHs - wJl);
 
       // Soft soil→rock split (the old binary slope > 0.4 switch).
-      const rockW = smoothstepf(0.30, 0.50, slope);
+      const rockW = smoothstepf(0.26, 0.46, slope);
+      // Geological horizontal sedimentary strata banding on steep rock faces
+      const strata = Math.sin(y * 0.85 + Math.sin(worldX * 0.04 + worldZ * 0.04) * 2.2) * 0.5 + 0.5;
 
       // Per-biome soil/rock colors, then blend the four biomes.
       tmpA.copy(CF.soilA).lerp(CF.soilB, r1 * 0.5);
       tmpB.copy(CF.rock);
+      if (rockW > 0.05) tmpB.multiplyScalar(0.88 + strata * 0.24);
       color.copy(tmpA).lerp(tmpB, rockW);
 
       if (wHs > 0) {
         tmpA.copy(HS.soilA).lerp(HS.soilB, r1 * 0.5);
         tmpB.copy(HS.rock);
+        if (rockW > 0.05) tmpB.multiplyScalar(0.88 + strata * 0.24);
         if (r2 > 0.86) tmpB.lerp(HS.lichen, Math.min(1, (r2 - 0.86) / 0.14) * 0.7);
         tmpA.lerp(tmpB, rockW);
         color.lerp(tmpA, wHs);
@@ -243,12 +260,14 @@ export class TerrainManager {
       if (wJl > 0) {
         tmpA.copy(JL.soil);
         tmpB.copy(JL.rock).lerp(JL.moss, r1 * 0.55); // heavy moss on ruins-adjacent rock
+        if (rockW > 0.05) tmpB.multiplyScalar(0.88 + strata * 0.24);
         tmpA.lerp(tmpB, rockW);
         color.lerp(tmpA, wJl);
       }
       if (wPa > 0) {
         tmpA.copy(PA.soil).lerp(PA.rockA, r1 * 0.3);
         tmpB.copy(PA.rockA).lerp(PA.rockB, r1 * 0.5);
+        if (rockW > 0.05) tmpB.multiplyScalar(0.88 + strata * 0.24);
         tmpA.lerp(tmpB, rockW);
         color.lerp(tmpA, wPa);
       }
