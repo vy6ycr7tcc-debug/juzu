@@ -135,7 +135,47 @@ export const MAP_LANDMARKS: MapLandmark[] = [
     color: '#fed7aa',
     summary: 'Underground chamber housing ancient knotted Incan quipu records.',
   },
+  {
+    id: 'tomas_blockade',
+    name: 'Tayta Tomas (Blockade)',
+    category: 'poi',
+    pos: new THREE.Vector3(-100, 24.8, -500),
+    icon: '🧔',
+    color: '#86efac',
+    summary: 'Quechua community elder organizing resistance against Sol Negro bulldozers.',
+    labelAlign: 'bottom',
+  },
+  {
+    id: 'vance_chakana',
+    name: 'Dr. Elias Vance (Chakana)',
+    category: 'poi',
+    pos: new THREE.Vector3(-78, 48.0, 448),
+    icon: '📚',
+    color: '#cbd5e1',
+    summary: 'Academic consultant debating the astronomical meaning of the Chakana gate.',
+    labelAlign: 'top',
+  },
+  {
+    id: 'vargas_outpost',
+    name: 'Vargas (Sol Negro Outpost)',
+    category: 'poi',
+    pos: new THREE.Vector3(120, 68.0, 650),
+    icon: '🎖️',
+    color: '#f87171',
+    summary: 'Leader of Sol Negro resource extraction front overseeing illegal demolitions.',
+    labelAlign: 'right',
+  },
 ];
+
+export interface JournalEntryData {
+  id: string;
+  act: number;
+  entryNumber: string;
+  title: string;
+  date: string;
+  audioDuration: string;
+  transcript: string;
+}
 
 export class SOTTRHUD {
   private container: HTMLDivElement;
@@ -147,6 +187,15 @@ export class SOTTRHUD {
   private topLetterbox: HTMLDivElement;
   private bottomLetterbox: HTMLDivElement;
   private mapButton: HTMLButtonElement;
+  private journalButton: HTMLButtonElement;
+
+  // Expedition Journal Elements
+  public isJournalOpen: boolean = false;
+  private journalModal: HTMLDivElement;
+  private journalListEl: HTMLDivElement;
+  private journalReaderEl: HTMLDivElement;
+  private journalEntries: JournalEntryData[] = [];
+  private selectedJournalIndex: number = 0;
 
   // Expedition Map Elements
   public isMapOpen: boolean = false;
@@ -298,9 +347,8 @@ export class SOTTRHUD {
     this.promptContainer.style.fontWeight = '600';
     this.promptContainer.style.color = '#e8dec5';
     this.promptContainer.style.letterSpacing = '1px';
-    this.promptContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.6)';
+    this.promptContainer.style.opacity = '0';
     this.promptContainer.style.transition = 'opacity 0.3s ease';
-    this.promptContainer.innerHTML = `<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE ALTAR`;
     this.container.appendChild(this.promptContainer);
 
     // 6. Top-Right HUD Map Button (clickable on desktop & mobile)
@@ -337,6 +385,41 @@ export class SOTTRHUD {
       this.toggleMap();
     });
     this.container.appendChild(this.mapButton);
+
+    // 6b. Top-Right HUD Journal Button
+    this.journalButton = document.createElement('button');
+    this.journalButton.id = 'hud-journal-btn';
+    this.journalButton.style.position = 'absolute';
+    this.journalButton.style.top = '24px';
+    this.journalButton.style.right = '164px';
+    this.journalButton.style.pointerEvents = 'auto';
+    this.journalButton.style.background = 'rgba(18, 24, 20, 0.88)';
+    this.journalButton.style.border = '1px solid rgba(212, 175, 88, 0.6)';
+    this.journalButton.style.borderRadius = '6px';
+    this.journalButton.style.padding = '8px 16px';
+    this.journalButton.style.color = '#ffd777';
+    this.journalButton.style.fontSize = '11px';
+    this.journalButton.style.fontWeight = '700';
+    this.journalButton.style.letterSpacing = '1.5px';
+    this.journalButton.style.cursor = 'pointer';
+    this.journalButton.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.6)';
+    this.journalButton.style.transition = 'all 0.2s ease';
+    this.journalButton.innerHTML = `📖 JOURNAL <span style="color: rgba(255,255,255,0.7); font-size: 10px; margin-left: 4px;">[J]</span>`;
+    this.journalButton.addEventListener('mouseenter', () => {
+      this.journalButton.style.background = 'rgba(32, 42, 36, 0.95)';
+      this.journalButton.style.borderColor = '#ffd777';
+      this.journalButton.style.transform = 'scale(1.04)';
+    });
+    this.journalButton.addEventListener('mouseleave', () => {
+      this.journalButton.style.background = 'rgba(18, 24, 20, 0.88)';
+      this.journalButton.style.borderColor = 'rgba(212, 175, 88, 0.6)';
+      this.journalButton.style.transform = 'scale(1.0)';
+    });
+    this.journalButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleJournal();
+    });
+    this.container.appendChild(this.journalButton);
 
     // 7. Fullscreen Tomb Raider Expedition Topographic Map Modal
     this.mapModal = document.createElement('div');
@@ -542,20 +625,122 @@ export class SOTTRHUD {
 
     this.mapModal.appendChild(mapFooter);
 
+    // 8. Fullscreen Tomb Raider Archaeological Field Journal Modal
+    this.journalModal = document.createElement('div');
+    this.journalModal.id = 'expedition-journal-modal';
+    this.journalModal.style.position = 'fixed';
+    this.journalModal.style.top = '0';
+    this.journalModal.style.left = '0';
+    this.journalModal.style.width = '100vw';
+    this.journalModal.style.height = '100vh';
+    this.journalModal.style.background = 'radial-gradient(ellipse at center, rgba(16, 22, 18, 0.97) 0%, rgba(8, 12, 10, 0.99) 100%)';
+    this.journalModal.style.zIndex = '9600';
+    this.journalModal.style.display = 'none';
+    this.journalModal.style.flexDirection = 'column';
+    this.journalModal.style.boxSizing = 'border-box';
+    this.journalModal.style.padding = '22px 34px';
+    this.journalModal.style.userSelect = 'none';
+    this.journalModal.style.color = '#e8dec5';
+
+    // Journal Header Bar
+    const jHeader = document.createElement('div');
+    jHeader.style.display = 'flex';
+    jHeader.style.justifyContent = 'space-between';
+    jHeader.style.alignItems = 'center';
+    jHeader.style.paddingBottom = '14px';
+    jHeader.style.borderBottom = '1px solid rgba(212, 175, 88, 0.35)';
+
+    const jTitle = document.createElement('div');
+    jTitle.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 20px; color: #ffd777;">★</span>
+        <span style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: 2px; text-transform: uppercase;">
+          NAIRA'S ARCHAEOLOGICAL FIELD JOURNAL
+        </span>
+      </div>
+      <div style="font-size: 11px; color: #9ab098; letter-spacing: 1.2px; margin-top: 3px;">
+        EXPEDITION AUDIO TRANSCRIPTS & RECOVERED LORE
+      </div>
+    `;
+    jHeader.appendChild(jTitle);
+
+    const jClose = document.createElement('button');
+    jClose.textContent = '✕ CLOSE [J / ESC]';
+    jClose.style.background = 'rgba(212, 175, 88, 0.15)';
+    jClose.style.border = '1px solid rgba(212, 175, 88, 0.6)';
+    jClose.style.color = '#ffd777';
+    jClose.style.padding = '6px 14px';
+    jClose.style.borderRadius = '4px';
+    jClose.style.fontWeight = '700';
+    jClose.style.fontSize = '11px';
+    jClose.style.cursor = 'pointer';
+    jClose.addEventListener('click', () => this.closeJournal());
+    jHeader.appendChild(jClose);
+    this.journalModal.appendChild(jHeader);
+
+    // Journal Content Body (2 columns)
+    const jBody = document.createElement('div');
+    jBody.style.display = 'flex';
+    jBody.style.flex = '1';
+    jBody.style.gap = '24px';
+    jBody.style.marginTop = '18px';
+    jBody.style.minHeight = '0';
+
+    this.journalListEl = document.createElement('div');
+    this.journalListEl.style.width = '320px';
+    this.journalListEl.style.borderRight = '1px solid rgba(212, 175, 88, 0.25)';
+    this.journalListEl.style.overflowY = 'auto';
+    this.journalListEl.style.paddingRight = '14px';
+    jBody.appendChild(this.journalListEl);
+
+    this.journalReaderEl = document.createElement('div');
+    this.journalReaderEl.style.flex = '1';
+    this.journalReaderEl.style.overflowY = 'auto';
+    this.journalReaderEl.style.padding = '16px 28px';
+    this.journalReaderEl.style.background = 'rgba(10, 14, 12, 0.65)';
+    this.journalReaderEl.style.border = '1px solid rgba(212, 175, 88, 0.25)';
+    this.journalReaderEl.style.borderRadius = '6px';
+    jBody.appendChild(this.journalReaderEl);
+
+    this.journalModal.appendChild(jBody);
+
+    // Journal Footer
+    const jFooter = document.createElement('div');
+    jFooter.style.paddingTop = '14px';
+    jFooter.style.borderTop = '1px solid rgba(212, 175, 88, 0.25)';
+    jFooter.style.display = 'flex';
+    jFooter.style.justifyContent = 'space-between';
+    jFooter.style.fontSize = '11px';
+    jFooter.style.color = '#8a9c88';
+    jFooter.innerHTML = `
+      <span>[CLICK] SELECT LOG • [J / ESC] CLOSE</span>
+      <span style="color: #ffd777;">ARCHAEOLOGICAL FIELD ARCHIVE • ANTISUYU EXPEDITION</span>
+    `;
+    this.journalModal.appendChild(jFooter);
+
     document.body.appendChild(this.container);
     document.body.appendChild(this.mapModal);
+    document.body.appendChild(this.journalModal);
 
     // Setup Canvas Drag & Zoom Events
     this.setupMapInteraction();
 
-    // Global Keyboard Shortcut: [M] toggles map, [ESC] closes map
+    // Global Keyboard Shortcuts: [M] toggles map, [J] toggles journal, [ESC] closes
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyM') {
         e.preventDefault();
         this.toggleMap();
-      } else if (e.code === 'Escape' && this.isMapOpen) {
+      } else if (e.code === 'KeyJ') {
         e.preventDefault();
-        this.closeMap();
+        this.toggleJournal();
+      } else if (e.code === 'Escape') {
+        if (this.isJournalOpen) {
+          e.preventDefault();
+          this.closeJournal();
+        } else if (this.isMapOpen) {
+          e.preventDefault();
+          this.closeMap();
+        }
       } else if (e.code === 'Space' && this.isMapOpen) {
         e.preventDefault();
         this.recenterOnPlayer();
@@ -1062,12 +1247,116 @@ export class SOTTRHUD {
     }
   }
 
+  public openJournal() {
+    this.isJournalOpen = true;
+    if (this.isMapOpen) this.closeMap();
+    this.journalModal.style.display = 'flex';
+    this.renderJournal();
+  }
+
+  public closeJournal() {
+    this.isJournalOpen = false;
+    this.journalModal.style.display = 'none';
+  }
+
+  public toggleJournal() {
+    if (this.isJournalOpen) this.closeJournal();
+    else this.openJournal();
+  }
+
+  public setJournalEntries(entries: JournalEntryData[]) {
+    this.journalEntries = entries;
+    if (this.isJournalOpen) this.renderJournal();
+  }
+
+  public selectJournalEntry(index: number) {
+    if (index >= 0 && index < this.journalEntries.length) {
+      this.selectedJournalIndex = index;
+      this.renderJournal();
+    }
+  }
+
+  private renderJournal() {
+    this.journalListEl.innerHTML = '';
+    this.journalReaderEl.innerHTML = '';
+
+    if (this.journalEntries.length === 0) {
+      this.journalListEl.innerHTML = '<div style="color: #8a9c88; padding: 12px; font-size: 12px;">No recovered field entries yet.</div>';
+      this.journalReaderEl.innerHTML = '<div style="color: #8a9c88; padding: 24px; font-size: 13px;">Explore the Antisuyu regions to discover voice notes and quipu records.</div>';
+      return;
+    }
+
+    // Render list
+    this.journalEntries.forEach((entry, idx) => {
+      const item = document.createElement('div');
+      item.style.padding = '10px 12px';
+      item.style.marginBottom = '6px';
+      item.style.borderRadius = '4px';
+      item.style.cursor = 'pointer';
+      item.style.transition = 'all 0.15s ease';
+      const isSelected = idx === this.selectedJournalIndex;
+      item.style.background = isSelected ? 'rgba(212, 175, 88, 0.20)' : 'rgba(255, 255, 255, 0.03)';
+      item.style.border = isSelected ? '1px solid rgba(212, 175, 88, 0.7)' : '1px solid rgba(212, 175, 88, 0.15)';
+
+      item.innerHTML = `
+        <div style="font-size: 10px; color: ${isSelected ? '#ffd777' : '#9ab098'}; font-weight: 700; letter-spacing: 1px;">
+          ${entry.entryNumber} • ACT ${entry.act}
+        </div>
+        <div style="font-size: 12px; font-weight: 700; color: #ffffff; margin-top: 2px;">
+          ${entry.title}
+        </div>
+        <div style="font-size: 10px; color: #7a8c78; margin-top: 2px;">
+          ⏱ ${entry.audioDuration} • ${entry.date}
+        </div>
+      `;
+
+      item.addEventListener('click', () => {
+        this.selectJournalEntry(idx);
+      });
+      this.journalListEl.appendChild(item);
+    });
+
+    // Render active entry reader
+    const active = this.journalEntries[this.selectedJournalIndex] || this.journalEntries[0];
+    if (active) {
+      this.journalReaderEl.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(212, 175, 88, 0.25); padding-bottom: 12px;">
+          <div>
+            <div style="font-size: 11px; color: #ffd777; font-weight: 800; letter-spacing: 1.5px;">
+              ${active.entryNumber} • ACT ${active.act}
+            </div>
+            <div style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: 1.2px; margin-top: 3px;">
+              ${active.title}
+            </div>
+            <div style="font-size: 11px; color: #9ab098; margin-top: 4px;">
+              📅 ${active.date} • VOICE MEMO TRANSCRIPT
+            </div>
+          </div>
+          <button style="background: rgba(212, 175, 88, 0.2); border: 1px solid #ffd777; color: #ffd777; border-radius: 4px; padding: 6px 14px; font-size: 11px; font-weight: 700; cursor: pointer;">
+            ▶ PLAY VOICE NOTE (${active.audioDuration})
+          </button>
+        </div>
+
+        <div style="margin-top: 18px; font-size: 14px; line-height: 1.7; color: #f0ede6; font-style: italic; background: rgba(0,0,0,0.25); padding: 18px; border-radius: 6px; border-left: 3px solid #ffd777;">
+          "${active.transcript}"
+        </div>
+
+        <div style="margin-top: 18px; font-size: 12px; color: #a0af9f; line-height: 1.5;">
+          <b style="color: #d4af58;">ARCHAEOLOGICAL COMMENTARY:</b> Primary audio field recording synced from Naira's field recorder. Cross-referenced with Santa Leonor de Jucul quipu catalogs and Jesuit archives.
+        </div>
+      `;
+    }
+  }
+
   public dispose() {
     if (this.container && this.container.parentElement) {
       this.container.parentElement.removeChild(this.container);
     }
     if (this.mapModal && this.mapModal.parentElement) {
       this.mapModal.parentElement.removeChild(this.mapModal);
+    }
+    if (this.journalModal && this.journalModal.parentElement) {
+      this.journalModal.parentElement.removeChild(this.journalModal);
     }
   }
 }

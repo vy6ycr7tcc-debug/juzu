@@ -34,6 +34,9 @@ import { createSacredRelicSystem } from './relics.js';
 import { WeatherSystem, type WeatherState } from './weather.js';
 import { AudioDirector } from './audio/engine.js';
 import { createSOTTRHUD, type SOTTRHUD } from './hud.js';
+import { DialogueSystem } from './story/dialogueSystem.js';
+import { NPCManager } from './story/characters.js';
+import { StoryManager } from './story/storyManager.js';
 
 // Setup for global hook
 declare global {
@@ -498,6 +501,16 @@ async function init() {
 
   const flags = createQuestFlags();
   const saveAPI = createSaveSystem();
+
+  const dialogueSystem = new DialogueSystem(audioDirector);
+  const npcManager = new NPCManager(scene);
+  await npcManager.load();
+  const storyManager = new StoryManager(flags, sottrHUD, dialogueSystem, npcManager);
+  sottrHUD.setJournalEntries(storyManager.getUnlockedJournalEntries());
+  flags.onChange(() => {
+    sottrHUD.setJournalEntries(storyManager.getUnlockedJournalEntries());
+    storyManager.syncActiveObjective();
+  });
 
   const regionManager = createRegionManager({
     saveAPI,
@@ -1625,6 +1638,51 @@ async function init() {
       sottrHUD.setObjective('EXPEDITION TOPOGRAPHY', 'Survey Andean valley contours, sacred shrines, and marked waypoints');
       sottrHUD.openMap(character.mesh.position, character.theta);
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'story_dialogue_tomas') {
+      // Act I Narrative Verification: Tayta Tomas at Lower Blockade
+      const tomasPos = new THREE.Vector3(-100, getGlobalTerrainHeight(-100, -500), -500);
+      const playerPos = new THREE.Vector3(-97.5, getGlobalTerrainHeight(-97.5, -497.5), -497.5);
+      character.teleport(playerPos.x, playerPos.z, Math.PI * 0.85);
+      character.disableCameraUpdate = true;
+      camera.position.set(-95.8, playerPos.y + 1.45, -495.8);
+      camera.lookAt(tomasPos.x, tomasPos.y + 1.25, tomasPos.z);
+      dialogueSystem.startScene('scene_act1_blockade');
+      sottrHUD.setObjective('THE LOWER BLOCKADE', 'Speak with Tayta Tomas to learn the path through the cloud forest');
+      sottrHUD.setPrompt(null);
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'story_confrontation_vargas') {
+      // Act II Narrative Verification: Vargas at Mining Outpost
+      const vargasPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 650), 650);
+      const playerPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 645), 645);
+      character.teleport(playerPos.x, playerPos.z, 0);
+      character.disableCameraUpdate = true;
+      camera.position.set(118.5, playerPos.y + 1.45, 642.5);
+      camera.lookAt(vargasPos.x, vargasPos.y + 1.35, vargasPos.z);
+      dialogueSystem.startScene('scene_act2_outpost');
+      sottrHUD.setObjective('CONFRONT VARGAS', 'Halt Sol Negro demolition squad at the high mountain mining outpost');
+      sottrHUD.setPrompt(null);
+      sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'story_field_journal') {
+      // Archaeological Field Journal UI Verification
+      const posX = 45, posZ = 10;
+      character.teleport(posX, posZ, 0.4);
+      character.disableCameraUpdate = false;
+      character.radius = 4.8;
+      character.targetRadius = 4.8;
+      character.currentCameraDistance = 4.8;
+      character.phi = Math.PI * 0.44;
+      character.theta = 0.4;
+      camera.fov = 66.0;
+      camera.updateProjectionMatrix();
+      character.updateCamera(0.016);
+      flags.set('q_act1_met_tomas');
+      flags.set('q_act1_quipu_solved');
+      flags.set('q_act2_chakana_reached');
+      flags.set('q_act2_chakana_solved');
+      sottrHUD.setJournalEntries(storyManager.getUnlockedJournalEntries());
+      sottrHUD.openJournal();
+      sottrHUD.setPrompt(null);
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1636,7 +1694,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -1697,6 +1755,31 @@ async function init() {
         sottrHUD.openMap(character.mesh.position, character.theta);
         sottrHUD.update(camera, character.mesh.position);
       }
+      if (shot === 'story_dialogue_tomas') {
+        const tomasPos = new THREE.Vector3(-100, getGlobalTerrainHeight(-100, -500), -500);
+        const playerPos = new THREE.Vector3(-97.5, getGlobalTerrainHeight(-97.5, -497.5), -497.5);
+        character.mesh.position.copy(playerPos);
+        character.mesh.rotation.y = Math.PI * 0.85;
+        camera.position.set(-95.8, playerPos.y + 1.45, -495.8);
+        camera.lookAt(tomasPos.x, tomasPos.y + 1.25, tomasPos.z);
+        sottrHUD.update(camera, character.mesh.position);
+      }
+      if (shot === 'story_confrontation_vargas') {
+        const vargasPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 650), 650);
+        const playerPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 645), 645);
+        character.mesh.position.copy(playerPos);
+        character.mesh.rotation.y = 0;
+        camera.position.set(118.5, playerPos.y + 1.45, 642.5);
+        camera.lookAt(vargasPos.x, vargasPos.y + 1.35, vargasPos.z);
+        sottrHUD.update(camera, character.mesh.position);
+      }
+      if (shot === 'story_field_journal') {
+        const posX = 45, posZ = 10;
+        character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
+        character.mesh.rotation.y = 0.4;
+        character.updateCamera(dt);
+        sottrHUD.update(camera, character.mesh.position);
+      }
       if (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
         const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
         character.mesh.position.set(cryptOrigin.x + 0.4, character.mesh.position.y, cryptOrigin.z + (shot === 'crypt_pressure_plate' ? 3.8 : 4.2));
@@ -1751,6 +1834,20 @@ async function init() {
       hydraulicCistern.update(dt, character.mesh.position);
       cryptTrap.update(dt, character.mesh.position);
       relicSystem.update(dt, character.mesh.position);
+      npcManager.update(dt);
+    }
+
+    if (shot === 'story_dialogue_tomas') {
+      const tomasPos = new THREE.Vector3(-100, getGlobalTerrainHeight(-100, -500), -500);
+      const playerPos = new THREE.Vector3(-97.5, getGlobalTerrainHeight(-97.5, -497.5), -497.5);
+      camera.position.set(-95.8, playerPos.y + 1.45, -495.8);
+      camera.lookAt(tomasPos.x, tomasPos.y + 1.25, tomasPos.z);
+    }
+    if (shot === 'story_confrontation_vargas') {
+      const vargasPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 650), 650);
+      const playerPos = new THREE.Vector3(120, getGlobalTerrainHeight(120, 645), 645);
+      camera.position.set(118.5, playerPos.y + 1.45, 642.5);
+      camera.lookAt(vargasPos.x, vargasPos.y + 1.35, vargasPos.z);
     }
 
     if (shot === 'cliff_climb' || shot === 'axe_strike') {
@@ -1933,8 +2030,12 @@ async function init() {
         hydraulicCistern.update(dt, character.mesh.position);
         cryptTrap.update(dt, character.mesh.position);
         relicSystem.update(dt, character.mesh.position);
+        npcManager.update(dt);
+        const nearbyNPC = storyManager.checkPlayerInteraction(character.mesh.position);
         if (input.consumeJustPressed('KeyE')) {
-          if (hydraulicCistern.canInteract(character.mesh.position)) {
+          if (nearbyNPC) {
+            storyManager.triggerInteraction(nearbyNPC);
+          } else if (hydraulicCistern.canInteract(character.mesh.position)) {
             hydraulicCistern.interact();
           } else if (relicSystem.canInteract(character.mesh.position)) {
             relicSystem.toggleInspection(camera);
@@ -1946,7 +2047,9 @@ async function init() {
         }
 
         // SOTTR Contextual interaction prompts & HUD update
-        if (relicSystem.canInteract(character.mesh.position)) {
+        if (nearbyNPC) {
+          sottrHUD.setPrompt(nearbyNPC.config.prompt);
+        } else if (relicSystem.canInteract(character.mesh.position)) {
           sottrHUD.setPrompt(relicSystem.isInspecting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STOW RELIC' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE SACRED RELIC');
         } else if (hydraulicCistern.canInteract(character.mesh.position)) {
           sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> TURN SLUICE WHEEL');
