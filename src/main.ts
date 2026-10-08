@@ -1277,17 +1277,35 @@ async function init() {
       character.speed = 8.5;
       character.isGrounded = true;
       character.disableCameraUpdate = true;
-      camera.position.set(slideX - 2.2, groundY + 1.2, slideZ - 1.0);
-      camera.lookAt(slideX + 0.5, groundY + 0.4, slideZ + 1.5);
+    } else if (shot === 'gear_sockets') {
+      // Phase 2.1 Survival Equipment Verification (Shadow of the Tomb Raider North Star):
+      // Rear three-quarters closeup auditing the climbing axe on hip, recurve bow across spine, and quiver
+      const posX = 50, posZ = 50;
+      character.teleport(posX, posZ, 0.25); // Back facing camera (+Z) to clearly showcase bow, quiver, and axe on hip
+      character.disableCameraUpdate = true;
+      const gy = character.mesh.position.y;
+      camera.position.set(posX + 0.75, gy + 1.35, posZ + 1.65);
+      camera.lookAt(posX, gy + 1.05, posZ);
+    } else if (shot === 'wetness_sheen') {
+      // Phase 2.2 Dynamic Surface Wetness Verification (Shadow of the Tomb Raider North Star):
+      // Front three-quarters angle catching sunlight specular sheen on wet skin and dark soaked fabric
+      const posX = 50, posZ = 50;
+      character.teleport(posX, posZ, Math.PI - 0.35); // Front three-quarters toward camera
+      character.wetness = 0.95;
+      character.disableCameraUpdate = true;
+      const gy = character.mesh.position.y;
+      camera.position.set(posX - 0.65, gy + 1.35, posZ + 1.7);
+      camera.lookAt(posX, gy + 1.05, posZ);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0));
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
+      if (shot === 'wetness_sheen') character.wetness = 0.95;
       physics.update(dt);
       character.update(dt);
       river.update(i * dt);
