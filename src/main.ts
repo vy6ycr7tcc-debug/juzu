@@ -382,6 +382,10 @@ async function init() {
   await character.load();
   (window as any).__character = character;
 
+  // Register interactive ancient mechanisms with the survival instinct system
+  character.instinctSystem.registerInteractable(hydraulicCistern.wheelGroup, 'mechanism');
+  character.instinctSystem.registerInteractable(hydraulicCistern.gateMesh, 'mechanism');
+
   // Hide character during title screen so protagonist does not clip into title menu
   if (!urlParams.has('shot')) {
     character.mesh.visible = false;
@@ -1358,12 +1362,21 @@ async function init() {
       character.theta = 0;
       character.phi = 1.35;
       character.updateCamera(0.016);
+    } else if (shot === 'survival_instinct') {
+      // Phase 6 Archaeological Survival Instincts Pulse (Key Q) & Ancient Mechanism Glow
+      // Adventurer at the Inca Hydraulic Cistern triggering Key Q acoustic pulse revealing the bronze wheel & stone gate
+      const cisternOrigin = new THREE.Vector3(45, -2.0, -30);
+      character.teleport(cisternOrigin.x + 0.5, cisternOrigin.z + 5.5, Math.PI);
+      character.disableCameraUpdate = true;
+      camera.position.set(cisternOrigin.x + 1.8, cisternOrigin.y + 1.6, cisternOrigin.z + 8.5);
+      camera.lookAt(cisternOrigin.x - 1.2, cisternOrigin.y + 0.6, cisternOrigin.z + 1.8);
+      character.triggerArchaeologistInstinct();
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))))));
+    const t = shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
@@ -1383,6 +1396,10 @@ async function init() {
       }
       if (shot === 'hydraulic_sluice') {
         character.mesh.position.set(45 + 0.6, -1.9, -30 + 8.5);
+        character.mesh.rotation.y = Math.PI;
+      }
+      if (shot === 'survival_instinct') {
+        character.mesh.position.set(45 + 0.5, -1.9, -30 + 5.5);
         character.mesh.rotation.y = Math.PI;
       }
       if (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap') {

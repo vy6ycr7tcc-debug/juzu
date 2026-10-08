@@ -8,6 +8,7 @@ import { hairDark, leatherDark } from './materials.js';
 import { createMistTexture } from './textures.js';
 import { createClimbingAxe, createRecurveBow, createQuiver, createPineTorch } from './equipment.js';
 import { waterDepthAt, waterSurfaceY } from './river.js';
+import { SurvivalInstinctSystem } from './instinct.js';
 
 // P-MOBILE verification hook (docs/plans/phase-5-mobile-controls.md §P5.3):
 // gates G3/G4 read live locomotion state instead of screenshot guessing.
@@ -279,9 +280,13 @@ export class CharacterController {
   public shoulderSide: number = 1.0; // +1.0 = right shoulder, -1.0 = left shoulder
   private currentShoulderOffset: number = 0.38;
 
+  // Archaeological Survival Instincts System (Shadow of the Tomb Raider North Star)
+  public instinctSystem: SurvivalInstinctSystem;
+
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, input: InputManager) {
     this.camera = camera;
     this.input = input;
+    this.instinctSystem = new SurvivalInstinctSystem(scene);
 
     // Protagonist root group — positioned in world coordinates
     this.mesh = new THREE.Group();
@@ -478,6 +483,7 @@ export class CharacterController {
   public triggerArchaeologistInstinct(): void {
     this.isInstinctActive = true;
     this.instinctTimer = 3.5;
+    this.instinctSystem.trigger(this.mesh.position);
   }
 
   /**
@@ -1218,6 +1224,7 @@ export class CharacterController {
     this.updateWetnessAndMud(dt, groundH);
     this.updateMudParticles(dt);
     this.updateTorch(dt);
+    this.instinctSystem.update(dt);
     this.updateAnimationAndCamera(dt);
   }
 
