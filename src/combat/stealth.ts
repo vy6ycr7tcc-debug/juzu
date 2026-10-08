@@ -6,7 +6,7 @@ import { ironDark } from '../materials.js';
 import type { AudioDirector } from '../audio/engine.js';
 import type { CharacterController } from '../character.js';
 
-export type SentryState = 'PATROL' | 'SUSPICIOUS' | 'COMBAT' | 'DOWNED';
+export type SentryState = 'PATROL' | 'SUSPICIOUS' | 'INVESTIGATING' | 'COMBAT' | 'DOWNED';
 
 export interface SentryWaypoint {
   x: number;
@@ -40,6 +40,12 @@ export class EnemySentry {
   private waypointWaitTimer: number = 0;
   public patrolSpeed: number = 1.6;
   public combatSpeed: number = 4.2;
+
+  // Acoustic investigation
+  public investigationPoint: THREE.Vector3 | null = null;
+  public searchTimer: number = 0;
+  public maxSearchTime: number = 4.5;
+  private baseFacingRad: number = 0;
 
   // Vision cone
   public visionRange: number = 18.0;
@@ -152,6 +158,15 @@ export class EnemySentry {
       this.state = 'COMBAT';
       return { killed: false, headshot: false };
     }
+  }
+
+  public investigateSound(point: THREE.Vector3): void {
+    if (this.state === 'COMBAT' || this.state === 'DOWNED') return;
+    this.state = 'INVESTIGATING';
+    this.investigationPoint = point.clone();
+    this.searchTimer = 0;
+    this.awareness = Math.max(this.awareness, 0.45);
+    this.awarenessWidget.visible = true;
   }
 
   public update(
@@ -308,6 +323,37 @@ export class EnemySentry {
         this.facingDir.lerp(toWp, Math.min(1.0, 8.0 * dt));
         this.group.rotation.y = Math.atan2(this.facingDir.x, this.facingDir.z);
         this.group.position.addScaledVector(this.facingDir, this.patrolSpeed * dt);
+      }
+    } else if (this.state === 'INVESTIGATING' && this.investigationPoint) {
+      const toInvestigate = this.investigationPoint.clone().sub(this.group.position);
+      toInvestigate.y = 0;
+      const distToNoise = toInvestigate.length();
+
+      if (distToNoise > 1.35) {
+        // Move towards acoustic distraction origin
+        this.setAnimation('walk');
+        toInvestigate.normalize();
+        this.facingDir.lerp(toInvestigate, Math.min(1.0, 7.0 * dt));
+        this.group.rotation.y = Math.atan2(this.facingDir.x, this.facingDir.z);
+        this.baseFacingRad = this.group.rotation.y;
+        this.group.position.addScaledVector(this.facingDir, (this.patrolSpeed * 0.88) * dt);
+      } else {
+        // Arrived at impact point: scan surroundings cautiously
+        this.setAnimation('idle');
+        this.searchTimer += dt;
+        const sweepAngle = Math.sin(this.searchTimer * 2.2) * 0.65;
+        this.group.rotation.y = this.baseFacingRad + sweepAngle;
+
+        // Awareness decays slowly during active search
+        this.awareness = Math.max(0.05, this.awareness - dt * 0.08);
+
+        if (this.searchTimer >= this.maxSearchTime) {
+          // Completed investigation without finding threat -> resume patrol
+          this.state = 'PATROL';
+          this.investigationPoint = null;
+          this.searchTimer = 0;
+          this.awareness = 0.0;
+        }
       }
     } else if (this.state === 'SUSPICIOUS') {
       this.setAnimation('idle');
@@ -542,6 +588,34 @@ export class StealthSystem {
   public lootSentry(sentry: EnemySentry): { arrows: number; quipu: number } {
     sentry.hasLooted = true;
     return { arrows: 3, quipu: 1 };
+  }
+
+  public broadcastAcousticDistraction(
+    noiseOrigin: THREE.Vector3,
+    radius: number = 24.0,
+    audio?: AudioDirector
+  ): boolean {
+    // Find closest available sentry within hearing distance
+    let closestSentry: EnemySentry | null = null;
+    let closestDist = radius;
+
+    for (const sentry of this.sentries) {
+      if (sentry.state === 'COMBAT' || sentry.state === 'DOWNED') continue;
+      const dist = sentry.group.position.distanceTo(noiseOrigin);
+      if (dist <= closestDist) {
+        closestDist = dist;
+        closestSentry = sentry;
+      }
+    }
+
+    if (closestSentry) {
+      closestSentry.investigateSound(noiseOrigin);
+      if (audio) {
+        audio.play('arrow_hit_stone', { position: noiseOrigin, volume: 0.8 });
+      }
+      return true;
+    }
+    return false;
   }
 
   public update(

@@ -268,6 +268,7 @@ export class BowSystem {
 
       // Continuous collision check against sentries, terrain, and physics colliders
       let hit = false;
+      let hitSentry = false;
       const hitPoint = new THREE.Vector3();
       const hitNormal = new THREE.Vector3(0, 1, 0);
 
@@ -276,6 +277,7 @@ export class BowSystem {
         const sentryHit = stealthSystem.checkArrowHits(currentPos, flightDist, flightDir);
         if (sentryHit.hit && sentryHit.sentry) {
           hit = true;
+          hitSentry = true;
           hitPoint.copy(currentPos).addScaledVector(flightDir, 0.4);
           sentryHit.sentry.takeDamage(sentryHit.isHeadshot ? 999 : 60, sentryHit.isHeadshot);
           this.spawnImpactSparks(hitPoint, flightDir.clone().negate());
@@ -315,6 +317,11 @@ export class BowSystem {
         a.mesh.position.copy(hitPoint).addScaledVector(flightDir, 0.12);
         a.velocity.set(0, 0, 0);
         this.spawnImpactSparks(hitPoint, hitNormal);
+
+        // Acoustic Arrow-Lure: impact clatter broadcasts noise to attract nearby sentries
+        if (!hitSentry && stealthSystem) {
+          stealthSystem.broadcastAcousticDistraction(hitPoint, 24.0);
+        }
 
         // Limit maximum stuck arrows
         const stuckCount = this.arrows.filter(x => x.isStuck).length;
