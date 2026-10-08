@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type InteractableType = 'mechanism' | 'climbable' | 'relic';
+export type InteractableType = 'mechanism' | 'climbable' | 'relic' | 'hazard';
 
 interface RegisteredInteractable {
   object: THREE.Object3D;
@@ -98,10 +98,10 @@ export class SurvivalInstinctSystem {
 
     // Create an ethereal vertical beacon beam above mechanisms
     let beaconMesh: THREE.Mesh | null = null;
-    if (type === 'mechanism' || type === 'relic') {
+    if (type === 'mechanism' || type === 'relic' || type === 'hazard') {
       const beaconGeo = new THREE.CylinderGeometry(0.06, 0.35, 3.5, 12, 1, true);
       const beaconMat = new THREE.MeshBasicMaterial({
-        color: 0xffbb22,
+        color: type === 'hazard' ? 0xff3b10 : (type === 'relic' ? 0x22eecc : 0xffbb22),
         transparent: true,
         opacity: 0.0,
         side: THREE.DoubleSide,
@@ -175,6 +175,8 @@ export class SurvivalInstinctSystem {
     // 2. Check wave collision with registered interactables
     const worldObjPos = new THREE.Vector3();
     const goldColor = new THREE.Color(0xffaa00);
+    const hazardColor = new THREE.Color(0xff3b10);
+    const relicColor = new THREE.Color(0x22eecc);
     const fadeRatio = Math.min(1.0, this.timer / 1.0); // Smooth fade-out in final 1.0s
     const pulseMod = 0.75 + 0.25 * Math.sin(this.time * 10.0);
 
@@ -188,11 +190,12 @@ export class SurvivalInstinctSystem {
 
       if (item.isPinged) {
         const intensity = 2.4 * pulseMod * fadeRatio;
+        const pingColor = item.type === 'hazard' ? hazardColor : (item.type === 'relic' ? relicColor : goldColor);
 
         for (let m = 0; m < item.materials.length; m++) {
           const mat = item.materials[m];
           if (mat.emissive) {
-            mat.emissive.copy(goldColor);
+            mat.emissive.copy(pingColor);
             mat.emissiveIntensity = intensity;
           }
         }

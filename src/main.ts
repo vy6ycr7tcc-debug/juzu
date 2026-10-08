@@ -29,6 +29,7 @@ import { getKTX2Loader } from './assets.js';
 import { createIncaRopeBridge } from './bridge.js';
 import { createHydraulicCistern } from './puzzles/hydraulics.js';
 import { createCraggyCliffWall, climbingSystem } from './climbing.js';
+import { createIncaTrapCorridor } from './puzzles/traps.js';
 import { WeatherSystem, type WeatherState } from './weather.js';
 
 // Setup for global hook
@@ -325,6 +326,11 @@ async function init() {
     rotationY: Math.PI * 0.75,
   });
   scene.add(gorgeCliff.group);
+  // Ancient Inca Crypt Corridor & Deadly Traps (Shadow of the Tomb Raider North Star)
+  const cryptTrap = createIncaTrapCorridor(scene, physics, {
+    origin: new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55),
+    rotationY: 0,
+  });
   // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
   const weather = new WeatherSystem(scene);
   const weatherParam = urlParams.get('weather') as WeatherState | null;
@@ -403,6 +409,8 @@ async function init() {
   // Register interactive ancient mechanisms with the survival instinct system
   character.instinctSystem.registerInteractable(hydraulicCistern.wheelGroup, 'mechanism');
   character.instinctSystem.registerInteractable(hydraulicCistern.gateMesh, 'mechanism');
+  character.instinctSystem.registerInteractable(cryptTrap.pressurePlate, 'hazard');
+  character.instinctSystem.registerInteractable(cryptTrap.portcullisSlab, 'hazard');
 
   // Hide character during title screen so protagonist does not clip into title menu
   if (!urlParams.has('shot')) {
@@ -1460,12 +1468,33 @@ async function init() {
       const groundY = character.mesh.position.y;
       camera.position.set(posX - 1.2, groundY + 1.45, posZ + 2.2);
       camera.lookAt(posX + 0.1, groundY + 1.15, posZ);
+    } else if (shot === 'crypt_pressure_plate') {
+      // Phase 10 Ancient Incan Crypt Puzzles & Deadly Traps (Shadow of the Tomb Raider North Star)
+      const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
+      character.teleport(cryptOrigin.x + 0.4, cryptOrigin.z + 3.8, Math.PI);
+      character.disableCameraUpdate = true;
+      const groundY = character.mesh.position.y;
+
+      // OTS perspective framing Michelle approaching the stepped pressure plate and suspended spiked portcullis
+      camera.position.set(cryptOrigin.x + 1.6, groundY + 1.7, cryptOrigin.z + 6.2);
+      camera.lookAt(cryptOrigin.x - 0.1, groundY + 1.1, cryptOrigin.z + 1.2);
+    } else if (shot === 'trap_hazard_pulse') {
+      // Phase 10 Survival Instinct Hazard Detection & Threat Illumination (Shadow of the Tomb Raider North Star)
+      const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
+      character.teleport(cryptOrigin.x + 0.4, cryptOrigin.z + 4.2, Math.PI);
+      character.disableCameraUpdate = true;
+      character.triggerArchaeologistInstinct();
+      const groundY = character.mesh.position.y;
+
+      // Medium OTS angle showing the acoustic sonar wave illuminating the concealed pressure plate and spiked portcullis in warning crimson-amber
+      camera.position.set(cryptOrigin.x + 1.8, groundY + 1.75, cryptOrigin.z + 6.5);
+      camera.lookAt(cryptOrigin.x - 0.1, groundY + 1.1, cryptOrigin.z + 1.0);
     } else {
       character.teleport(0, 0, 0);
     }
 
     // Fast forward — simulate frames to let animations and physics settle (default 2s)
-    const t = (shot === 'andean_storm' || shot === 'lightning_flash') ? 0.05 : ((shot === 'cliff_climb' || shot === 'axe_strike') ? 0.05 : (shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0))))))))))));
+    const t = (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') ? 0.35 : ((shot === 'andean_storm' || shot === 'lightning_flash') ? 0.05 : ((shot === 'cliff_climb' || shot === 'axe_strike') ? 0.05 : (shot === 'wall_scramble' ? 0.05 : (shot === 'mud_slide' ? 0.35 : (shot === 'gear_sockets' ? 0.05 : (shot === 'wetness_sheen' ? 0.25 : (shot === 'underwater_dive' ? 0.45 : (shot === 'surface_swim' ? 0.15 : (shot === 'hydraulic_sluice' ? 4.5 : (shot === 'survival_instinct' ? 0.35 : (shot === 'torch_chiaroscuro' || shot === 'shoulder_swap' ? 0.1 : (shot === 'bow_aim' || shot === 'arrow_flight' ? 0.1 : (tStr ? Math.max(0.1, parseFloat(tStr)) : 2.0)))))))))))));
     const steps = 60;
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
@@ -1476,6 +1505,11 @@ async function init() {
           weather.lightningFlash = 1.0;
           if (weather.lightningLight) weather.lightningLight.intensity = 5.5;
         }
+      }
+      if (shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse') {
+        const cryptOrigin = new THREE.Vector3(35, getGlobalTerrainHeight(35, -55) + 0.2, -55);
+        character.mesh.position.set(cryptOrigin.x + 0.4, character.mesh.position.y, cryptOrigin.z + (shot === 'crypt_pressure_plate' ? 3.8 : 4.2));
+        character.mesh.rotation.y = Math.PI;
       }
       if (shot === 'cliff_climb' || shot === 'axe_strike') {
         const wall = gorgeCliff.wall;
@@ -1522,6 +1556,7 @@ async function init() {
       weather.update(dt, camera, character.mesh.position);
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
+      cryptTrap.update(dt, character.mesh.position);
     }
 
     if (shot === 'cliff_climb' || shot === 'axe_strike') {
@@ -1702,6 +1737,7 @@ async function init() {
         regionManager.update(character.mesh.position);
         river.update(time);
         hydraulicCistern.update(dt, character.mesh.position);
+        cryptTrap.update(dt, character.mesh.position);
         if (input.consumeJustPressed('KeyE') && hydraulicCistern.canInteract(character.mesh.position)) {
           hydraulicCistern.interact();
         }
