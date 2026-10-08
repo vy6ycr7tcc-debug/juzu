@@ -477,13 +477,17 @@ async function init() {
     }
   };
 
-  renderer.domElement.addEventListener('click', () => {
+  const acquirePointerLock = () => {
     if (journeyStarted && !ui.title.isOpen && !ui.menu.isOpen && !touchMode) {
-      if (document.pointerLockElement !== renderer.domElement) {
-        renderer.domElement.requestPointerLock();
+      if (document.pointerLockElement !== renderer.domElement && renderer.domElement.requestPointerLock) {
+        try {
+          renderer.domElement.requestPointerLock();
+        } catch (_) {}
       }
     }
-  });
+  };
+  renderer.domElement.addEventListener('click', acquirePointerLock);
+  renderer.domElement.addEventListener('pointerdown', acquirePointerLock);
 
   const flags = createQuestFlags();
   const saveAPI = createSaveSystem();
@@ -515,6 +519,9 @@ async function init() {
       console.error(`Failed to build region ${region.id}:`, e);
     }
   }
+
+  // Register all static stone architecture, temples, portals, and platforms in Rapier physics
+  physics.registerCollidersFromScene(scene);
 
   // V-POST: post-processing block start
   let composer: EffectComposer | null = null;
@@ -709,6 +716,7 @@ async function init() {
     // Let's add kinematic body to character
     const rigidBodyDesc = physics.getRapier()?.RigidBodyDesc.kinematicPositionBased();
     if (rigidBodyDesc) {
+       rigidBodyDesc.setTranslation(character.mesh.position.x, character.mesh.position.y + 0.9, character.mesh.position.z);
        character.body = physics.world.createRigidBody(rigidBodyDesc);
        const colliderDesc = physics.getRapier()?.ColliderDesc.capsule(0.5, 0.4);
        if (colliderDesc) {

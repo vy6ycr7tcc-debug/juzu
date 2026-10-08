@@ -128,6 +128,7 @@ export function createTrapezoidalPortal(opts: {
   portalMesh.castShadow = true;
   portalMesh.receiveShadow = true;
   group.add(portalMesh);
+  group.userData.collidable = true;
 
   return group;
 }
@@ -185,6 +186,7 @@ export function createAshlarWall(opts: {
   const wallMesh = new THREE.Mesh(merged, mat);
   wallMesh.castShadow = true;
   wallMesh.receiveShadow = true;
+  wallMesh.userData.collidable = true;
   return wallMesh;
 }
 
@@ -281,6 +283,7 @@ export function createChakanaPlazaPlatform(opts: {
     group.add(stairGroup);
   }
 
+  group.userData.collidable = true;
   return group;
 }
 
@@ -355,6 +358,7 @@ export function createIntihuatanaAltar(opts: {
   ring2.castShadow = true;
   group.add(ring2);
 
+  group.userData.collidable = true;
   return group;
 }
 
@@ -437,6 +441,7 @@ export function createPlazaColonnade(opts: {
   beamMesh.receiveShadow = true;
   group.add(beamMesh);
 
+  group.userData.collidable = true;
   return group;
 }
 
@@ -546,5 +551,6 @@ export function createTorreonSunTemple(opts: {
   portal.rotation.y = Math.PI / 2;
   group.add(portal);
 
+  group.userData.collidable = true;
   return group;
 }

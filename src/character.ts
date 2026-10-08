@@ -174,6 +174,8 @@ export class CharacterController {
   // Spring-arm orbit camera parameters — Tomb Raider over-the-shoulder framing
   public theta: number = 0;
   public phi: number = Math.PI * 0.44; // ~79°: dramatic horizontal Andean horizon vista
+  private targetTheta: number = 0;
+  private targetPhi: number = Math.PI * 0.44;
   public radius: number = 3.8;
   public target: THREE.Vector3 = new THREE.Vector3(0, 1.35, 0);
   public currentCameraDistance: number = 3.8;
@@ -185,6 +187,7 @@ export class CharacterController {
 
   // Locomotion & Physics parameters (Tomb Raider / Assassin's Creed feel)
   public speed: number = 0;
+  private facingDir: THREE.Vector3 = new THREE.Vector3(0, 0, -1);
   private maxWalkSpeed: number = 2.4;
   private maxRunSpeed: number = 5.6;
   private maxCrouchSpeed: number = 1.5;
@@ -341,6 +344,8 @@ export class CharacterController {
     this.load();
 
     // Camera initial orientation
+    this.targetTheta = this.theta;
+    this.targetPhi = this.phi;
     this.updateCamera(0.016);
   }
 
@@ -777,9 +782,11 @@ export class CharacterController {
     }
 
     const slope = 1.0 - terrainData.normal.y;
-    if (this.state === MovementState.WALK && slope > 0.08 && this.speed > 2.2) {
+    // AAA Mud chute slide: only trigger on intentional steep mud chutes (slope > 0.40 / > 53° incline)
+    // Prevents hijacking player controls on gentle 23° hillsides
+    if (this.state === MovementState.WALK && slope > 0.40 && this.speed > 3.5) {
       this.state = MovementState.SLIDE;
-    } else if (this.state === MovementState.SLIDE && slope < 0.04) {
+    } else if (this.state === MovementState.SLIDE && slope < 0.15) {
       this.state = MovementState.WALK;
     }
   }
@@ -788,17 +795,20 @@ export class CharacterController {
     this.stateTimer += dt;
     this.time += dt;
 
-    // 1. Consume camera mouse delta (with pointer lock or mouse drag)
+    // 1. Consume camera mouse delta (with pointer lock or mouse drag) with cinematic exponential smoothing
     if (typeof this.input.getCameraDelta === 'function') {
       const camDelta = this.input.getCameraDelta();
       if (camDelta.x !== 0 || camDelta.y !== 0) {
-        const mouseSensitivity = 0.003;
-        this.theta -= camDelta.x * mouseSensitivity;
+        const mouseSensitivity = this.isAiming ? 0.0012 : 0.0022;
+        this.targetTheta -= camDelta.x * mouseSensitivity;
         // Invert-pitch fix: moving mouse down (camDelta.y > 0) increases phi (tilts camera down toward character/ground)
-        this.phi += camDelta.y * mouseSensitivity;
-        this.phi = Math.max(0.15, Math.min(Math.PI * 0.48, this.phi));
+        this.targetPhi += camDelta.y * mouseSensitivity;
+        this.targetPhi = Math.max(0.15, Math.min(Math.PI * 0.48, this.targetPhi));
       }
     }
+    const smoothCamSpeed = Math.min(1.0, 32.0 * dt);
+    this.theta += (this.targetTheta - this.theta) * smoothCamSpeed;
+    this.phi += (this.targetPhi - this.phi) * smoothCamSpeed;
 
     // 2. Archaeologist survival instinct timer
     if (this.isInstinctActive) {
@@ -1185,6 +1195,7 @@ export class CharacterController {
 
     if (moveDir.lengthSq() > 0.001) {
       moveDir.normalize();
+      this.facingDir.copy(moveDir);
 
       // Snappy turning: rotate mesh directly towards move direction (facing direction matches move vector)
       const targetAngle = Math.atan2(-moveDir.x, -moveDir.z);
@@ -1208,14 +1219,35 @@ export class CharacterController {
       }
 
       this.speed = Math.min(targetSpeed, this.speed + this.acceleration * dt);
-
-      // DIRECT TRANSLATION ALONG INTENDED MOVE VECTOR (Eliminates ice-skating drift)
-      const stepDist = this.speed * dt;
-      this.mesh.position.x += moveDir.x * stepDist;
-      this.mesh.position.z += moveDir.z * stepDist;
-
     } else {
+      // Natural deceleration along travel direction: eliminates freezing while running in place
       this.speed = Math.max(0, this.speed - this.deceleration * dt);
+      if (this.speed < 0.05) {
+        this.speed = 0;
+      }
+    }
+
+    if (this.speed > 0) {
+      const travelDir = moveDir.lengthSq() > 0.001 ? moveDir : this.facingDir;
+      const stepDist = this.speed * dt;
+      const desiredX = travelDir.x * stepDist;
+      const desiredZ = travelDir.z * stepDist;
+
+      // Rapier Kinematic Character Controller collision resolution:
+      // Computes obstacle collision, wall-sliding, 50° slope climb blocking, and autostepping
+      if (physics.characterController && this.collider) {
+        physics.characterController.computeColliderMovement(this.collider, {
+          x: desiredX,
+          y: 0,
+          z: desiredZ,
+        });
+        const safeMove = physics.characterController.computedMovement();
+        this.mesh.position.x += safeMove.x;
+        this.mesh.position.z += safeMove.z;
+      } else {
+        this.mesh.position.x += desiredX;
+        this.mesh.position.z += desiredZ;
+      }
     }
 
     // Terrain sampling & grounding
@@ -1457,10 +1489,18 @@ export class CharacterController {
           }
         }
       } else {
-        // Step-up / step-down tolerance
+        // Step-up / step-down tolerance & ground smoothing
         const diff = groundH - this.mesh.position.y;
         if (diff > -1.2 && diff < 0.6) {
-          this.mesh.position.y = groundH;
+          if (Math.abs(diff) < 0.35) {
+            this.mesh.position.y += diff * Math.min(1.0, 26.0 * dt);
+          } else {
+            this.mesh.position.y = groundH;
+          }
+          // Strict guarantee: feet NEVER sink under soil
+          if (this.mesh.position.y < groundH) {
+            this.mesh.position.y = groundH;
+          }
         } else if (diff <= -1.2) {
           // Walking off an edge or drop
           this.isGrounded = false;
@@ -1480,11 +1520,11 @@ export class CharacterController {
       }
     }
 
-    // Sync kinematic physics body if present
+    // Sync kinematic physics body if present: capsule center is at torso (y + 0.9m)
     if (this.body) {
       this.body.setNextKinematicTranslation({
         x: this.mesh.position.x,
-        y: this.mesh.position.y,
+        y: this.mesh.position.y + 0.9,
         z: this.mesh.position.z
       });
     }
@@ -2016,22 +2056,34 @@ export class CharacterController {
     );
 
     // 4. Spring-arm collision avoidance:
-    // Ray-march 12 samples from target towards desired camera position to detect terrain occlusions
-    let safeDistance = this.radius;
+    let safeDistance = currentRadius;
     const rayDir = desiredOffset.clone().normalize();
+
+    // 4a. Physical mesh collision check (stone architecture, temple ruins, bridges, crypts, pillars)
+    if (physics.world) {
+      const physHit = physics.raycast(this.target, rayDir, currentRadius, this.body ?? undefined);
+      if (physHit) {
+        // Safe stand-off distance: 0.30m cushion prevents camera near-plane from penetrating walls
+        safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, physHit.distance - 0.30));
+      }
+    }
+
+    // 4b. Ray-march 12 samples from target towards desired camera position to detect terrain occlusions
     const sampleSteps = 12;
     for (let i = 1; i <= sampleSteps; i++) {
-      const dist = (this.radius * i) / sampleSteps;
+      const dist = (currentRadius * i) / sampleSteps;
       const samplePos = this.target.clone().addScaledVector(rayDir, dist);
       const groundAtSample = getGlobalTerrainHeight(samplePos.x, samplePos.z);
       if (samplePos.y <= groundAtSample + 0.35) {
-        safeDistance = Math.max(this.minCameraDistance, dist * 0.85);
+        safeDistance = Math.min(safeDistance, Math.max(this.minCameraDistance, dist * 0.85));
         break;
       }
     }
 
-    // Smooth damping of spring-arm distance to prevent jarring snaps
-    const lerpSpeed = Math.min(1.0, 14.0 * dt);
+    // AAA Spring-arm response: rapid retraction on obstruction (prevent wall clipping), smooth extension in open air
+    const lerpSpeed = safeDistance < this.currentCameraDistance
+      ? Math.min(1.0, 32.0 * dt)
+      : Math.min(1.0, 10.0 * dt);
     this.currentCameraDistance += (safeDistance - this.currentCameraDistance) * lerpSpeed;
 
     // Compute final camera position
@@ -2059,6 +2111,11 @@ export class CharacterController {
     this.mesh.position.set(x, y, z);
     this.mesh.rotation.y = theta;
     this.theta = theta;
+    this.targetTheta = theta;
+    this.facingDir.set(-Math.sin(theta), 0, -Math.cos(theta));
+    if (this.body) {
+      this.body.setTranslation({ x, y: y + 0.9, z }, true);
+    }
     this.state = MovementState.WALK;
     this.stateTimer = 0;
     this.speed = 0;
