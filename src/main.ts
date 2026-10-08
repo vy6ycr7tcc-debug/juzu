@@ -39,6 +39,7 @@ import { NPCManager } from './story/characters.js';
 import { StoryManager } from './story/storyManager.js';
 import { StealthSystem } from './combat/stealth.js';
 import { BasecampManager } from './basecamp.js';
+import { SteleManager } from './stele.js';
 
 // Setup for global hook
 declare global {
@@ -345,6 +346,8 @@ async function init() {
   const relicSystem = createSacredRelicSystem(scene, new THREE.Vector3(35, cryptFloorY, -58.5));
   // Andean Basecamp Progression & Campfire Rest (Shadow of the Tomb Raider North Star)
   const basecamp = new BasecampManager(scene);
+  // Incan Stele Murals & Quechua Dialect (Shadow of the Tomb Raider North Star)
+  const stele = new SteleManager(scene, new THREE.Vector3(38, 0, 36));
   // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
   const weather = new WeatherSystem(scene);
   const weatherParam = urlParams.get('weather') as WeatherState | null;
@@ -432,6 +435,7 @@ async function init() {
   character.instinctSystem.registerInteractable(cryptTrap.portcullisSlab, 'hazard');
   character.instinctSystem.registerInteractable(relicSystem.relicGroup, 'relic');
   character.instinctSystem.registerInteractable(basecamp.group, 'poi');
+  character.instinctSystem.registerInteractable(stele.group, 'relic');
 
   // Hide character during title screen so protagonist does not clip into title menu
   if (!urlParams.has('shot')) {
@@ -1970,6 +1974,17 @@ async function init() {
       camera.lookAt(posX + 0.85, groundY + 0.65, posZ + 0.35);
       sottrHUD.setObjective('HIGHLANDS BASECAMP', 'Resting fireside. Skills, quipu crafting, and checkpoint saved.');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'archaeological_mural') {
+      // Phase 6: Incan Stele Murals & Quechua Dialect Deciphering
+      const posX = 38, posZ = 36;
+      const groundY = getGlobalTerrainHeight(posX, posZ);
+      character.teleport(posX, posZ + 1.85, 0);
+      character.disableCameraUpdate = true;
+      camera.position.set(posX - 1.6, groundY + 1.65, posZ + 3.8);
+      camera.lookAt(posX, groundY + 2.0, posZ);
+      sottrHUD.setObjective('INCAN MONOLITH', 'Study ancient Quechua solstice inscriptions on the carved stone stele');
+      sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> STUDY INCAN STELE');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1981,7 +1996,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest' || shot === 'archaeological_mural') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2276,6 +2291,13 @@ async function init() {
       camera.lookAt(posX + 0.85, groundY + 0.65, posZ + 0.35);
       sottrHUD.update(camera, character.mesh.position);
     }
+    if (shot === 'archaeological_mural') {
+      const posX = 38, posZ = 36;
+      const groundY = getGlobalTerrainHeight(posX, posZ);
+      camera.position.set(posX - 1.6, groundY + 1.65, posZ + 3.8);
+      camera.lookAt(posX, groundY + 2.0, posZ);
+      sottrHUD.update(camera, character.mesh.position);
+    }
 
     if (shot === 'cliff_climb' || shot === 'axe_strike') {
       const wall = gorgeCliff.wall;
@@ -2477,6 +2499,8 @@ async function init() {
             storyManager.triggerInteraction(nearbyNPC);
           } else if (basecamp.canInteract(character.mesh.position)) {
             basecamp.toggleRest(character, camera, saveAPI, audioDirector, sottrHUD);
+          } else if (stele.canInteract(character.mesh.position)) {
+            stele.toggleInspect(character, camera, sottrHUD, audioDirector);
           } else if (hydraulicCistern.canInteract(character.mesh.position)) {
             hydraulicCistern.interact();
           } else if (relicSystem.canInteract(character.mesh.position)) {
@@ -2497,6 +2521,8 @@ async function init() {
           sottrHUD.setPrompt(nearbyNPC.config.prompt);
         } else if (basecamp.canInteract(character.mesh.position)) {
           sottrHUD.setPrompt(basecamp.isResting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STAND UP' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> REST AT BASE CAMP');
+        } else if (stele.canInteract(character.mesh.position)) {
+          sottrHUD.setPrompt(stele.isInspecting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> CLOSE CODEX' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> STUDY INCAN STELE');
         } else if (relicSystem.canInteract(character.mesh.position)) {
           sottrHUD.setPrompt(relicSystem.isInspecting ? '<span style="color: #ffd875; font-weight: 700;">[E]</span> STOW RELIC' : '<span style="color: #ffd875; font-weight: 700;">[E]</span> EXAMINE SACRED RELIC');
         } else if (hydraulicCistern.canInteract(character.mesh.position)) {
