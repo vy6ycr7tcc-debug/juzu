@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getGlobalTerrainHeight } from './terrain.js';
 import type { PhysicsSystem } from './physics.js';
+import type { StealthSystem } from './combat/stealth.js';
 
 // ============================================================================
 // Survival Recurve Bow & Ballistic Arrow System (Shadow of the Tomb Raider North Star)
@@ -241,7 +242,7 @@ export class BowSystem {
     }
   }
 
-  public update(dt: number, physics?: PhysicsSystem) {
+  public update(dt: number, physics?: PhysicsSystem, stealthSystem?: StealthSystem) {
     const gravity = -9.81;
 
     // 1. Update in-flight and stuck arrows
@@ -265,13 +266,24 @@ export class BowSystem {
       const flightDist = stepVel.length();
       const flightDir = a.velocity.clone().normalize();
 
-      // Continuous collision check against terrain and physics colliders
+      // Continuous collision check against sentries, terrain, and physics colliders
       let hit = false;
       const hitPoint = new THREE.Vector3();
       const hitNormal = new THREE.Vector3(0, 1, 0);
 
+      // Check collision with enemy sentries (headshots & body hits)
+      if (stealthSystem && flightDist > 0.001) {
+        const sentryHit = stealthSystem.checkArrowHits(currentPos, flightDist, flightDir);
+        if (sentryHit.hit && sentryHit.sentry) {
+          hit = true;
+          hitPoint.copy(currentPos).addScaledVector(flightDir, 0.4);
+          sentryHit.sentry.takeDamage(sentryHit.isHeadshot ? 999 : 60, sentryHit.isHeadshot);
+          this.spawnImpactSparks(hitPoint, flightDir.clone().negate());
+        }
+      }
+
       // Check physics raycast
-      if (physics && flightDist > 0.001) {
+      if (!hit && physics && flightDist > 0.001) {
         const physHitDist = physics.raycastDown(
           currentPos.x,
           currentPos.y,

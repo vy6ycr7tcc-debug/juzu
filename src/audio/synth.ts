@@ -1,6 +1,6 @@
 import { Biome, Intensity } from './engine';
 
-export type AudioType = 'wind' | 'water' | 'stone' | 'cloth' | 'breath' | 'footsteps' | 'quena' | 'charango' | 'cajon';
+export type AudioType = 'wind' | 'water' | 'stone' | 'cloth' | 'breath' | 'footsteps' | 'quena' | 'charango' | 'cajon' | 'bow_twang' | 'arrow_hit' | 'alert_stinger' | 'takedown';
 
 // Utility to create noise buffers
 function createNoiseBuffer(ctx: BaseAudioContext, duration: number, type: 'white' | 'pink' | 'brown' = 'white'): AudioBuffer {
@@ -181,6 +181,104 @@ export async function generateSfx(ctx: AudioContext, type: AudioType): Promise<A
         env.connect(offlineCtx.destination);
 
         osc.start();
+    } else if (type === 'bow_twang') {
+        // High-tension bowstring release
+        const osc = offlineCtx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, 0);
+        osc.frequency.exponentialRampToValueAtTime(60, 0.15);
+
+        const noiseBuffer = createNoiseBuffer(offlineCtx, 0.08, 'white');
+        const noiseSource = offlineCtx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const noiseFilter = offlineCtx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = 1200;
+
+        const env = offlineCtx.createGain();
+        env.gain.setValueAtTime(0.8, 0);
+        env.gain.exponentialRampToValueAtTime(0.01, 0.18);
+
+        osc.connect(env);
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(env);
+        env.connect(offlineCtx.destination);
+
+        osc.start();
+        noiseSource.start();
+    } else if (type === 'arrow_hit') {
+        // Heavy obsidian point impact thud
+        const osc = offlineCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, 0);
+        osc.frequency.exponentialRampToValueAtTime(50, 0.12);
+
+        const noiseBuffer = createNoiseBuffer(offlineCtx, 0.06, 'brown');
+        const noiseSource = offlineCtx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const env = offlineCtx.createGain();
+        env.gain.setValueAtTime(1.0, 0);
+        env.gain.exponentialRampToValueAtTime(0.01, 0.15);
+
+        osc.connect(env);
+        noiseSource.connect(env);
+        env.connect(offlineCtx.destination);
+
+        osc.start();
+        noiseSource.start();
+    } else if (type === 'alert_stinger') {
+        // Sudden high-tension minor second brass/string stinger
+        const osc1 = offlineCtx.createOscillator();
+        const osc2 = offlineCtx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc2.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(587.33, 0); // D5
+        osc2.frequency.setValueAtTime(622.25, 0); // D#5 (dissonant semitone)
+
+        const filter = offlineCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2400, 0);
+        filter.frequency.exponentialRampToValueAtTime(600, 0.45);
+
+        const env = offlineCtx.createGain();
+        env.gain.setValueAtTime(0.7, 0);
+        env.gain.exponentialRampToValueAtTime(0.01, 0.5);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(env);
+        env.connect(offlineCtx.destination);
+
+        osc1.start();
+        osc2.start();
+    } else if (type === 'takedown') {
+        // Silent climbing axe strike and body takedown
+        const osc = offlineCtx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(120, 0);
+        osc.frequency.exponentialRampToValueAtTime(30, 0.25);
+
+        const noiseBuffer = createNoiseBuffer(offlineCtx, 0.12, 'pink');
+        const noiseSource = offlineCtx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const filter = offlineCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 800;
+
+        const env = offlineCtx.createGain();
+        env.gain.setValueAtTime(1.0, 0);
+        env.gain.exponentialRampToValueAtTime(0.01, 0.3);
+
+        osc.connect(env);
+        noiseSource.connect(filter);
+        filter.connect(env);
+        env.connect(offlineCtx.destination);
+
+        osc.start();
+        noiseSource.start();
     }
 
     return await offlineCtx.startRendering();
