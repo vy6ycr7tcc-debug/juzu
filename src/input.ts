@@ -14,6 +14,8 @@ export class InputManager {
   public mouseButtonsJustPressed: Record<number, boolean> = {};
   public mouseButtonsJustReleased: Record<number, boolean> = {};
 
+  public mouseSensitivityMultiplier: number = 1.0;
+
   private isDragging = false;
   private previousMousePosition = { x: 0, y: 0 };
 
@@ -60,16 +62,16 @@ export class InputManager {
           ignorePointerLockSpike--;
           return;
         }
-        // Clamp raw delta per frame to reject browser hitch spikes
-        const mx = Math.max(-120, Math.min(120, e.movementX));
-        const my = Math.max(-120, Math.min(120, e.movementY));
-        this.cameraDelta.x += mx;
-        this.cameraDelta.y += my;
+        // Clamp raw delta per frame to reject extreme browser hitch spikes (600px allows fast 1:1 gaming mouse flicks)
+        const mx = Math.max(-600, Math.min(600, e.movementX));
+        const my = Math.max(-600, Math.min(600, e.movementY));
+        this.cameraDelta.x += mx * this.mouseSensitivityMultiplier;
+        this.cameraDelta.y += my * this.mouseSensitivityMultiplier;
       } else if (this.isDragging) {
-        const dx = Math.max(-120, Math.min(120, e.clientX - this.previousMousePosition.x));
-        const dy = Math.max(-120, Math.min(120, e.clientY - this.previousMousePosition.y));
-        this.cameraDelta.x += dx;
-        this.cameraDelta.y += dy;
+        const dx = Math.max(-600, Math.min(600, e.clientX - this.previousMousePosition.x));
+        const dy = Math.max(-600, Math.min(600, e.clientY - this.previousMousePosition.y));
+        this.cameraDelta.x += dx * this.mouseSensitivityMultiplier;
+        this.cameraDelta.y += dy * this.mouseSensitivityMultiplier;
       }
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     });

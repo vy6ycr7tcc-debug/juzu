@@ -62,7 +62,7 @@ export const BloomMixShader = {
         void main() {
             vec4 base = texture2D( baseTexture, vUv );
             vec3 bloom = texture2D( bloomTexture, vUv ).rgb;
-            gl_FragColor = vec4( bloom, 1.0 ); // DEBUG-TEMP bloomonly
+            gl_FragColor = vec4( base.rgb + bloom, base.a );
         }
     `
 };
@@ -147,10 +147,16 @@ export async function createRenderer(): Promise<{ renderer: WebGPURenderer | THR
   else if (qParam === 'medium') quality = QUALITY_TIERS.MEDIUM;
   else if (qParam === 'low') quality = QUALITY_TIERS.LOW;
 
-  // Try WebGPU first
+  const isAppleMobile = typeof navigator !== 'undefined' && (
+    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+  const forceWebGPU = urlParams.get('webgpu') === '1';
+
+  // Try WebGPU first (unless iOS Safari where experimental WebGPU loses device — AGENTS.md: iPhones/Safari stay on WebGL)
   try {
-    if (!navigator.gpu) {
-      throw new Error("WebGPU not supported");
+    if ((isAppleMobile || !navigator.gpu) && !forceWebGPU) {
+      throw new Error("iOS Safari routes to WebGL2 fallback per AGENTS.md constitution");
     }
 
     const adapter = await navigator.gpu.requestAdapter();

@@ -502,7 +502,10 @@ async function init() {
     }
   };
 
-  const acquirePointerLock = () => {
+  const acquirePointerLock = (e?: Event) => {
+    if (e?.target && (e.target as HTMLElement).closest && (e.target as HTMLElement).closest('button, input, select, textarea, #pause-menu, #title-screen, #map-modal')) {
+      return;
+    }
     if (journeyStarted && !ui.title.isOpen && !ui.menu.isOpen && !touchMode) {
       if (document.pointerLockElement !== renderer.domElement && renderer.domElement.requestPointerLock) {
         try {
@@ -511,7 +514,7 @@ async function init() {
       }
     }
   };
-  renderer.domElement.addEventListener('click', acquirePointerLock);
+  window.addEventListener('click', acquirePointerLock);
   renderer.domElement.addEventListener('pointerdown', acquirePointerLock);
 
   // Tomb Raider Camera Zoom (Mouse Wheel / Pinch)
@@ -817,7 +820,7 @@ async function init() {
               composer.addPass(mixPass);
               composer.addPass(outputPass);
           } else {
-              // iPhone budget rule: Bloom at half resolution on WebGL2 fallback
+              // iPhone budget rule: Bloom at half resolution on WebGL2 fallback (single pass, zero buffer desync)
               const bloomRes = new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2);
               const bloomPass = new UnrealBloomPass(bloomRes, bloomStrength, bloomRadius, bloomThreshold);
               composer.addPass(bloomPass);
@@ -841,7 +844,12 @@ async function init() {
       const bc = getBloomCamera();
       if (!bc) return;
       syncBloomCamera(camera);
-      if (bloomComposer) bloomComposer.render();
+      if (bloomComposer) {
+        const savedBg = scene.background;
+        scene.background = null;
+        bloomComposer.render();
+        scene.background = savedBg;
+      }
   }
 
   if (physics.world) {

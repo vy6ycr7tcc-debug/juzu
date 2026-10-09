@@ -343,3 +343,54 @@
   transform: none;
   color: var(--color-text);
 }
+
+/* Expedition Controls Guide in Pause Menu */
+.controls-guide-card {
+  margin-top: 1.2rem;
+  padding: 0.9rem 1.2rem;
+  background: rgba(18, 22, 28, 0.75);
+  border: 1px solid rgba(255, 215, 120, 0.25);
+  border-radius: 8px;
+  max-width: 580px;
+  width: 90%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.controls-guide-header {
+  font-family: var(--font-title);
+  font-size: 0.95rem;
+  letter-spacing: 2.5px;
+  color: #ffd875;
+  margin-bottom: 0.75rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 215, 120, 0.2);
+  padding-bottom: 0.4rem;
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem 1.2rem;
+  font-size: 0.82rem;
+  color: rgba(240, 240, 240, 0.88);
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.key-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #ffd875;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}

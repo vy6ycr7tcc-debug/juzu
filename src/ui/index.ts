@@ -54,6 +54,16 @@ export class UIManager {
 
   public bindCharacter(character: CharacterController) {
     this.characterController = character;
+    this.menu.onSensitivityChange = (val: number) => {
+      if (this.characterController) {
+        this.characterController.mouseSensitivity = 0.0038 * (val / 100);
+      }
+    };
+    this.menu.onInvertPitchChange = (inv: boolean) => {
+      if (this.characterController) {
+        this.characterController.invertPitch = inv;
+      }
+    };
   }
 
   public update(dt: number) {
