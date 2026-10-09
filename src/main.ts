@@ -40,6 +40,7 @@ import { StoryManager } from './story/storyManager.js';
 import { StealthSystem } from './combat/stealth.js';
 import { BasecampManager } from './basecamp.js';
 import { SteleManager } from './stele.js';
+import { CavernShelterManager } from './shelter.js';
 
 // Setup for global hook
 declare global {
@@ -348,8 +349,11 @@ async function init() {
   const basecamp = new BasecampManager(scene);
   // Incan Stele Murals & Quechua Dialect (Shadow of the Tomb Raider North Star)
   const stele = new SteleManager(scene, new THREE.Vector3(38, 0, 36));
+  // Paititi Cavern & Rain Shadow Shelter Sanctuary (Phase 7)
+  const cavernShelter = new CavernShelterManager(scene, new THREE.Vector3(48, 0, 26));
   // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
   const weather = new WeatherSystem(scene);
+  weather.registerShelterZone(cavernShelter.shelterBox);
   const weatherParam = urlParams.get('weather') as WeatherState | null;
   if (weatherParam) {
     weather.setWeather(weatherParam, true);
@@ -1985,6 +1989,21 @@ async function init() {
       sottrHUD.setObjective('INCAN MONOLITH', 'Study ancient Quechua solstice inscriptions on the carved stone stele');
       sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[E]</span> STUDY INCAN STELE');
       sottrHUD.update(camera, character.mesh.position);
+    } else if (shot === 'rain_wetness_shelter') {
+      // Phase 7: Paititi Hidden Valley & Dynamic Rain Wetness Occlusion
+      const posX = 48, posZ = 25.5;
+      const groundY = getGlobalTerrainHeight(posX, posZ);
+      weather.setWeather('STORM', true);
+      terrainManager.setRainIntensity(1.0);
+      character.teleport(posX, posZ, Math.PI); // Facing toward cavern entrance / storm
+      character.isSheltered = true;
+      character.wetness = 0.02; // Bone-dry inside shelter
+      character.disableCameraUpdate = true;
+      camera.position.set(posX - 1.25, groundY + 1.45, posZ - 2.8);
+      camera.lookAt(posX + 0.35, groundY + 1.35, posZ + 5.0);
+      sottrHUD.setObjective('MOUNTAIN SHELTER', 'Taking refuge under the cliff overhang as a mountain storm drenches the pass');
+      sottrHUD.setPrompt('<span style="color: #38bdf8; font-weight: 700;">[SHELTERED]</span> SAFE FROM STORM • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
+      sottrHUD.update(camera, character.mesh.position);
     } else {
       character.teleport(0, 0, 0);
     }
@@ -1996,7 +2015,7 @@ async function init() {
       t = 4.5;
     } else if (shot === 'underwater_dive') {
       t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest' || shot === 'archaeological_mural') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest' || shot === 'archaeological_mural' || shot === 'rain_wetness_shelter') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2013,8 +2032,13 @@ async function init() {
     const dt = t / steps;
     for (let i = 0; i < steps; i++) {
       if (shot === 'wetness_sheen') character.wetness = 0.95;
-      if (shot === 'andean_storm' || shot === 'lightning_flash') {
+      if (shot === 'andean_storm' || shot === 'lightning_flash' || shot === 'rain_wetness_shelter') {
         weather.setWeather('STORM', true);
+        terrainManager.setRainIntensity(1.0);
+        if (shot === 'rain_wetness_shelter') {
+          character.isSheltered = true;
+          character.wetness = 0.04;
+        }
         if (shot === 'lightning_flash') {
           weather.lightningFlash = 1.0;
           if (weather.lightningLight) weather.lightningLight.intensity = 5.5;
@@ -2174,8 +2198,11 @@ async function init() {
       }
       physics.update(dt);
       character.currentRainIntensity = weather.rainIntensity;
+      character.isSheltered = weather.isPositionSheltered(character.mesh.position);
+      terrainManager.setRainIntensity(weather.rainIntensity);
       character.update(dt);
       weather.update(dt, camera, character.mesh.position);
+      cavernShelter.update(dt);
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
       cryptTrap.update(dt, character.mesh.position);
@@ -2533,6 +2560,8 @@ async function init() {
         } else if (character.isAiming) {
           sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[LEFT CLICK]</span> RELEASE ARROW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
           sottrHUD.setActiveGear('bow');
+        } else if (character.isSheltered && weather.rainIntensity > 0.15) {
+          sottrHUD.setPrompt('<span style="color: #38bdf8; font-weight: 700;">[SHELTERED]</span> SAFE FROM STORM • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
         } else {
           sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[RIGHT CLICK]</span> AIM BOW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
         }
@@ -2558,8 +2587,11 @@ async function init() {
           audioDirector.setIntensity('explore');
         }
         decor.update(camera, undefined, character.mesh.position);
+        cavernShelter.update(dt);
         weather.update(dt, camera, character.mesh.position);
         character.currentRainIntensity = weather.rainIntensity;
+        character.isSheltered = weather.isPositionSheltered(character.mesh.position);
+        terrainManager.setRainIntensity(weather.rainIntensity);
         getActiveLightRig()?.update(character.mesh.position, camera);
 
         // V-ATMOS: one gated atmosphere step (region id first — the old order
@@ -2631,6 +2663,7 @@ async function init() {
     // p5: re-apply the water flow clock AFTER first-render compilation, same
     // reasoning as decor above.
     river.update(tStr ? parseFloat(tStr) : 0);
+    cavernShelter.update(0.016);
     weather.update(0.016, camera, character.mesh.position);
     // Render once and signal ready
     if (!skipPost) {
