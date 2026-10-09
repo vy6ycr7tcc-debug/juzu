@@ -94,9 +94,9 @@ export function createLightRig(scene: THREE.Scene, quality: RendererQuality): {
 
   return {
     sun: sunLight,
-    // Moon exposed for verification tooling (Phase 8 &sx= shadow experiments)
-    // and future per-light diagnostics — no behavior change.
     moon: moonLight,
+    hemi: hemiLight,
+    cameraFill: cameraFill,
     applyGrade(grade: keyof typeof TOD_GRADES) {
       const g = TOD_GRADES[grade];
       sunLight.color.setHex(g.sunColor);

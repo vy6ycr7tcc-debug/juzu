@@ -412,7 +412,7 @@ export function createWaterSurface(
   // on failure the WebGL2-equivalent material above keeps rendering.
   let tslFlowA: { value: THREE.Vector2 } | null = null;
   let tslFlowB: { value: THREE.Vector2 } | null = null;
-  if (caps.isWebGPU) {
+  if (caps.isWebGPU && (typeof window === 'undefined' || window.__rendererType === 'webgpu')) {
     buildWaterNodeMaterial(spec, texA, texB, caps, foamOn)
       .then((built) => {
         if (built) {

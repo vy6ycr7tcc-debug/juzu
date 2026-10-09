@@ -100,9 +100,14 @@ bakedEnvTexture.colorSpace = THREE.SRGBColorSpace;
 
 // Keep a reference to the active rig so we can update it if needed
 let activeRig: ReturnType<typeof createLightRig> | null = null;
+let activeSky: THREE.Mesh | null = null;
 
 export function getActiveLightRig() {
   return activeRig;
+}
+
+export function setSkyVisible(visible: boolean): void {
+  if (activeSky) activeSky.visible = visible;
 }
 
 export function setupEnvironment(scene: THREE.Scene, quality: RendererQuality, renderer: THREE.WebGLRenderer | WebGPURenderer, todParam: string | null, regionId?: string) {
@@ -210,6 +215,7 @@ export function setupEnvironment(scene: THREE.Scene, quality: RendererQuality, r
   }
 
   scene.add(sky);
+  activeSky = sky;
   // Phase 12 selective bloom: the dome lives on SKY_LAYER so the bloom source
   // (bloom camera, sky bit masked off) never sees it (p9 day-wash flag).
   registerSkyDome(sky);

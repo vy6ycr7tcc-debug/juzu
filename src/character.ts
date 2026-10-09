@@ -336,6 +336,7 @@ export class CharacterController {
 
   // 6-DOF Underwater Cenote Diving (Shadow of the Tomb Raider North Star)
   public oxygen: number = 1.0; // 1.0 (100% full) to 0.0 (empty)
+  public currentAirPocket: boolean = false; // Air-pocket cave dome flag
   public swimPitch: number = 0;
   public swimRoll: number = 0;
   public bubbleParticles: THREE.Sprite[] = [];
@@ -1419,7 +1420,12 @@ export class CharacterController {
       }
     } else if (this.state === MovementState.DIVE) {
       // 6-DOF Submerged Cenote Diving Physics (Shadow of the Tomb Raider North Star)
-      this.oxygen = Math.max(0.0, this.oxygen - dt / 32.0); // 32s breath reserve
+      if (this.currentAirPocket && this.mesh.position.y >= surfaceY - 1.25) {
+        // Surfaced inside subterranean air pocket: replenish breath reserve rapidly
+        this.oxygen = Math.min(1.0, this.oxygen + dt * 0.75);
+      } else {
+        this.oxygen = Math.max(0.0, this.oxygen - dt / 35.0); // 35s breath reserve
+      }
       this.isGrounded = false;
 
       // 3D camera-aligned swimming vector
@@ -1452,9 +1458,9 @@ export class CharacterController {
         this.mesh.rotation.y += yawDiff * Math.min(1.0, 8.0 * dt);
 
         const targetPitch = Math.asin(THREE.MathUtils.clamp(move3D.y, -0.85, 0.85));
-        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -targetPitch, 8.0 * dt);
+        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -1.15 - targetPitch * 0.45, 8.0 * dt);
       } else {
-        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -0.25, 4.0 * dt);
+        this.swimPitch = THREE.MathUtils.lerp(this.swimPitch, -1.15, 4.0 * dt);
       }
 
       this.mesh.position.y += this.velocityY * dt;
@@ -2087,9 +2093,9 @@ export class CharacterController {
       }
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
       // Natural aquatic locomotion driven by retargeted Mixamo clips
-      // Elevate chin and gaze forward across water surface
-      if (this.neckBone) this.neckBone.rotation.set(0.24, 0, 0);
-      if (this.headBone) this.headBone.rotation.set(0.16, 0, 0);
+      // Elevate chin and gaze forward across water surface / flooded cavern
+      if (this.neckBone) this.neckBone.rotation.set(0.28, 0, 0);
+      if (this.headBone) this.headBone.rotation.set(0.18, 0, 0);
     } else if (this.state === MovementState.CLIMB) {
       // Shadow of the Tomb Raider North Star: Climbing Axe Wall Traversal Pose
       const cycle = this.climbCycle * Math.PI;
@@ -2170,7 +2176,7 @@ export class CharacterController {
     } else if (this.state === MovementState.SLIDE) {
       desiredAction = this.actions.idle;
     } else if (this.state === MovementState.SWIM || this.state === MovementState.DIVE) {
-      desiredAction = this.speed > 0.2 ? (this.actions.walk ?? this.actions.idle) : this.actions.idle;
+      desiredAction = this.actions.walk ?? this.actions.idle;
     } else if (this.isCrouched) {
       desiredAction = this.speed > 0.1 ? (this.actions.walk ?? this.actions.idle) : this.actions.idle;
     } else if (this.speed > 0.1) {
