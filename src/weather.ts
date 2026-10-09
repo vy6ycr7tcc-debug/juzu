@@ -44,6 +44,22 @@ export class WeatherSystem {
   public lightningTimer: number = 0;
   public lightningLight: THREE.DirectionalLight | null = null;
 
+  // Dynamic Rain Shadow & Shelter Occlusion Volumes
+  private shelterZones: THREE.Box3[] = [];
+
+  public registerShelterZone(box: THREE.Box3): void {
+    this.shelterZones.push(box);
+  }
+
+  public isPositionSheltered(pos: THREE.Vector3): boolean {
+    for (let i = 0; i < this.shelterZones.length; i++) {
+      if (this.shelterZones[i].containsPoint(pos)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   constructor(scene: THREE.Scene) {
     this.group.name = 'WeatherSystem';
     scene.add(this.group);
@@ -304,12 +320,22 @@ export class WeatherSystem {
         // Wrap within camera-relative box
         if (this.rainOffsets[offIdx + 1] < -8.0) {
           this.rainOffsets[offIdx + 1] += boxH;
-          // Spawn occasional splash on bottom wrap if near ground
+          // Spawn occasional splash on bottom wrap if near ground and not occluded by shelter
           if (i % 12 === 0) {
             const worldX = camPos.x + this.rainOffsets[offIdx + 0];
             const worldZ = camPos.z + this.rainOffsets[offIdx + 2];
             const groundY = getGlobalTerrainHeight(worldX, worldZ);
-            this.spawnSplash(worldX, groundY, worldZ);
+            let occluded = false;
+            for (let s = 0; s < this.shelterZones.length; s++) {
+              const b = this.shelterZones[s];
+              if (worldX >= b.min.x && worldX <= b.max.x && worldZ >= b.min.z && worldZ <= b.max.z && groundY < b.max.y) {
+                occluded = true;
+                break;
+              }
+            }
+            if (!occluded) {
+              this.spawnSplash(worldX, groundY, worldZ);
+            }
           }
         }
         if (this.rainOffsets[offIdx + 0] > halfW) this.rainOffsets[offIdx + 0] -= boxW;
@@ -328,13 +354,33 @@ export class WeatherSystem {
         const botY = topY - streakLen;
         const botZ = topZ - windNormZ * streakLen;
 
-        pos[idx + 0] = topX;
-        pos[idx + 1] = topY;
-        pos[idx + 2] = topZ;
+        // Check if streak falls within a shelter ceiling
+        let streakSheltered = false;
+        for (let s = 0; s < this.shelterZones.length; s++) {
+          const b = this.shelterZones[s];
+          if (
+            topX >= b.min.x && topX <= b.max.x &&
+            topZ >= b.min.z && topZ <= b.max.z &&
+            topY <= b.max.y && botY >= b.min.y
+          ) {
+            streakSheltered = true;
+            break;
+          }
+        }
 
-        pos[idx + 3] = botX;
-        pos[idx + 4] = botY;
-        pos[idx + 5] = botZ;
+        if (streakSheltered) {
+          // Collapse streak to prevent drawing inside cave/overhang
+          pos[idx + 0] = 0; pos[idx + 1] = -999; pos[idx + 2] = 0;
+          pos[idx + 3] = 0; pos[idx + 4] = -999; pos[idx + 5] = 0;
+        } else {
+          pos[idx + 0] = topX;
+          pos[idx + 1] = topY;
+          pos[idx + 2] = topZ;
+
+          pos[idx + 3] = botX;
+          pos[idx + 4] = botY;
+          pos[idx + 5] = botZ;
+        }
       }
 
       this.rainLines.geometry.attributes.position.needsUpdate = true;

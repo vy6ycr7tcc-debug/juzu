@@ -115,6 +115,8 @@ export class TerrainManager {
     stdMat.onBeforeCompile = (shader) => {
       shader.uniforms.triplanarScale = { value: 0.12 };
       shader.uniforms.strataFrequency = { value: 0.35 };
+      shader.uniforms.uRainIntensity = { value: 0.0 };
+      stdMat.userData.uRainIntensity = shader.uniforms.uRainIntensity;
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
@@ -136,7 +138,16 @@ export class TerrainManager {
         varying vec3 vWorldPos;
         varying vec3 vWorldNorm;
         uniform float triplanarScale;
-        uniform float strataFrequency;`
+        uniform float strataFrequency;
+        uniform float uRainIntensity;`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        // Dynamic Rain Wetness: darken porous soil/rock albedo on rain-exposed surfaces
+        float rainDarken = 1.0 - (0.24 * uRainIntensity * clamp(vWorldNorm.y * 0.7 + 0.3, 0.0, 1.0));
+        diffuseColor.rgb *= rainDarken;`
       );
 
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -263,6 +274,17 @@ export class TerrainManager {
 
   getChunkKey(cx: number, cz: number): string {
     return `${cx},${cz}`;
+  }
+
+  public setRainIntensity(intensity: number): void {
+    if (this.material) {
+      // Dynamic PBR Roughness & Specular Sheen Modulation
+      this.material.roughness = THREE.MathUtils.lerp(0.90, 0.42, intensity);
+      this.material.envMapIntensity = THREE.MathUtils.lerp(0.25, 0.65, intensity);
+      if (this.material.userData && this.material.userData.uRainIntensity) {
+        this.material.userData.uRainIntensity.value = intensity;
+      }
+    }
   }
 
   update(cameraPosition: THREE.Vector3) {
