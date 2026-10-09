@@ -7,6 +7,8 @@ export class MenuManager {
   public onResume?: () => void;
   public onPause?: () => void;  // P-MOBILE: touch pause button + input release hook
   public onQuit?: () => void;
+  public onSensitivityChange?: (val: number) => void;
+  public onInvertPitchChange?: (val: boolean) => void;
 
   constructor(parent: HTMLElement) {
     this.container = parent;
@@ -33,9 +35,37 @@ export class MenuManager {
             <label>Master Volume</label>
             <input type="range" id="range-volume" min="0" max="100" value="100">
           </div>
+          <div class="setting-row">
+            <label>Look Sensitivity</label>
+            <input type="range" id="range-sensitivity" min="20" max="250" value="100">
+          </div>
+          <div class="setting-row">
+            <label>Invert Pitch</label>
+            <input type="checkbox" id="check-invert-pitch" style="width: 20px; height: 20px; accent-color: #ffd875; cursor: pointer;">
+          </div>
         </div>
 
-        <button id="btn-quit" style="margin-top: 2rem;">Quit to Title</button>
+        <div class="controls-guide-card">
+          <div class="controls-guide-header">EXPEDITION CONTROLS</div>
+          <div class="controls-grid">
+            <div class="control-item"><span class="key-badge">WASD</span> Move</div>
+            <div class="control-item"><span class="key-badge">SHIFT</span> Sprint</div>
+            <div class="control-item"><span class="key-badge">SPACE</span> Jump / Vault / Mantle</div>
+            <div class="control-item"><span class="key-badge">C</span> Crouch / Roll / Dive</div>
+            <div class="control-item"><span class="key-badge">MOUSE</span> Look / Orbit</div>
+            <div class="control-item"><span class="key-badge">SCROLL</span> Camera Zoom</div>
+            <div class="control-item"><span class="key-badge">RMB / F</span> Aim Recurve Bow</div>
+            <div class="control-item"><span class="key-badge">LMB / ENTER</span> Fire Arrow</div>
+            <div class="control-item"><span class="key-badge">E</span> Interact / Takedown</div>
+            <div class="control-item"><span class="key-badge">Q</span> Survival Instinct</div>
+            <div class="control-item"><span class="key-badge">T</span> Pine Torch</div>
+            <div class="control-item"><span class="key-badge">V</span> Shoulder Flip</div>
+            <div class="control-item"><span class="key-badge">M</span> Expedition Map</div>
+            <div class="control-item"><span class="key-badge">ESC</span> Pause Menu</div>
+          </div>
+        </div>
+
+        <button id="btn-quit" style="margin-top: 1rem;">Quit to Title</button>
       </div>
     `;
 
@@ -58,6 +88,16 @@ export class MenuManager {
     this.overlay.querySelector('#range-volume')?.addEventListener('input', (e) => {
       const target = e.target as HTMLInputElement;
       console.log('Volume stub set to:', target.value);
+    });
+
+    this.overlay.querySelector('#range-sensitivity')?.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (this.onSensitivityChange) this.onSensitivityChange(parseFloat(target.value));
+    });
+
+    this.overlay.querySelector('#check-invert-pitch')?.addEventListener('change', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (this.onInvertPitchChange) this.onInvertPitchChange(target.checked);
     });
 
     // We capture Escape globally at the capture phase so we can stop propagation if we consume it

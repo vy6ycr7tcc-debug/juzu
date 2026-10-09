@@ -215,6 +215,9 @@ export class CharacterController {
   public target: THREE.Vector3 = new THREE.Vector3(0, 1.18, 0);
   public currentCameraDistance: number = 4.8;
 
+  public mouseSensitivity: number = 0.0038;
+  public invertPitch: boolean = false;
+
   // Traversal State Machine
   public state: MovementState = MovementState.WALK;
   private stateTimer: number = 0;
@@ -225,10 +228,10 @@ export class CharacterController {
   private maxWalkSpeed: number = 2.4;
   private maxRunSpeed: number = 5.6;
   private maxCrouchSpeed: number = 1.5;
-  private acceleration: number = 24.0;
-  private airAcceleration: number = 9.5;
-  private deceleration: number = 28.0;
-  private brakingDeceleration: number = 44.0;
+  private acceleration: number = 26.0;
+  private airAcceleration: number = 14.0;
+  private deceleration: number = 44.0;
+  private brakingDeceleration: number = 60.0;
   private rotationSpeed: number = 16.0;
   private bankAngle: number = 0;
 
@@ -866,14 +869,16 @@ export class CharacterController {
     if (typeof this.input.getCameraDelta === 'function') {
       const camDelta = this.input.getCameraDelta();
       if (camDelta.x !== 0 || camDelta.y !== 0) {
-        const mouseSensitivity = this.isAiming ? 0.0013 : 0.0022;
-        this.targetTheta -= camDelta.x * mouseSensitivity;
-        // Invert-pitch fix: moving mouse down (camDelta.y > 0) increases phi (tilts camera down toward character/ground)
-        this.targetPhi += camDelta.y * mouseSensitivity;
-        this.targetPhi = Math.max(0.08, Math.min(Math.PI * 0.48, this.targetPhi));
+        const sens = this.isAiming ? this.mouseSensitivity * 0.55 : this.mouseSensitivity;
+        this.targetTheta -= camDelta.x * sens;
+        // Pitch: moving mouse down (camDelta.y > 0) increases phi (tilts camera down toward character/ground)
+        const pitchSign = this.invertPitch ? -1 : 1;
+        this.targetPhi += camDelta.y * sens * pitchSign;
+        // Allow tilting up to gaze at summits and ruins (1.95 rad = ~112° polar, 22° upward tilt)
+        this.targetPhi = THREE.MathUtils.clamp(this.targetPhi, 0.15, 1.95);
       }
     }
-    const smoothAlpha = 1.0 - Math.exp(-28.0 * dt);
+    const smoothAlpha = 1.0 - Math.exp(-42.0 * dt);
     this.theta += (this.targetTheta - this.theta) * smoothAlpha;
     this.phi += (this.targetPhi - this.phi) * smoothAlpha;
 
@@ -1274,6 +1279,10 @@ export class CharacterController {
         this.velocityY = this.jumpForce;
         this.isGrounded = false;
         this.isCrouched = false;
+        if (moveDir.lengthSq() > 0.001) {
+          const isSprint = this.input.isDown('ShiftLeft');
+          this.speed = Math.max(this.speed, isSprint ? 5.2 : 3.0);
+        }
         if (this.state === MovementState.CROUCH) this.state = MovementState.WALK;
       }
     }
@@ -1290,8 +1299,8 @@ export class CharacterController {
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-      // Agile turns when walking, athletic momentum arc when sprinting
-      const turnAgility = this.speed > this.maxWalkSpeed ? 14.0 : 18.0;
+      // Agile turns when walking, athletic momentum arc when sprinting (no crab-walking from idle)
+      const turnAgility = this.speed > this.maxWalkSpeed ? 20.0 : (this.speed < 0.8 ? 32.0 : 26.0);
       this.mesh.rotation.y += angleDiff * Math.min(1.0, turnAgility * dt);
 
       // Skid momentum bleed on sharp turnaround pivots (> 120°)
@@ -1329,15 +1338,19 @@ export class CharacterController {
         this.landingRecoveryTimer = Math.max(0, this.landingRecoveryTimer - dt);
       }
 
+      // Crisp step-off impulse: eliminate input deadzone / latency
+      if (this.speed < 1.1) {
+        this.speed = 1.1;
+      }
       const currentAccel = this.isGrounded ? this.acceleration : this.airAcceleration;
       this.speed = Math.min(targetSpeed, this.speed + currentAccel * dt);
     } else {
-      // Natural deceleration along travel direction with ground friction
-      this.speed = Math.max(0, this.speed - this.deceleration * dt);
-      if (this.speed < 0.05) {
+      // Crisp braking deceleration: no ice-skating, instant planted stop
+      this.speed = Math.max(0, this.speed - this.brakingDeceleration * dt);
+      if (this.speed < 0.15) {
         this.speed = 0;
       }
-      this.bankAngle = THREE.MathUtils.lerp(this.bankAngle, 0, Math.min(1.0, 12.0 * dt));
+      this.bankAngle = THREE.MathUtils.lerp(this.bankAngle, 0, Math.min(1.0, 16.0 * dt));
     }
 
     if (this.speed > 0) {
@@ -1679,8 +1692,8 @@ export class CharacterController {
           // True drop-off / cliff edge: begin falling
           this.isGrounded = false;
           this.velocityY = 0;
-        } else if (diff > 0.40 && this.speed > 1.6 && this.ledgeCooldown <= 0) {
-          // Running against a low ledge / stone terrace: auto-mantle
+        } else if (diff > 0.40 && (this.speed > 0.8 || this.input.isDown('Space')) && this.ledgeCooldown <= 0) {
+          // Running or stepping against a low ledge / stone terrace: auto-mantle
           const runLedge = this.checkLedge(moveDir.lengthSq() > 0.001 ? moveDir : undefined);
           if (runLedge && (runLedge.ledgeY - this.mesh.position.y) <= 1.45) {
             this.ledgeInfo = runLedge;
@@ -2363,10 +2376,10 @@ export class CharacterController {
     finalPos.add(this.cameraImpulse);
     this.cameraImpulse.lerp(new THREE.Vector3(0, 0, 0), Math.min(1.0, 14.0 * dt));
 
-    // Terrain riding: smoothly lift camera over rising terrain behind player rather than burying it or pulling it in
+    // Terrain riding: smoothly ease camera over rising terrain behind player without jarring vertical height snaps
     const camFloor = getGlobalTerrainHeight(finalPos.x, finalPos.z) + 0.55;
     if (finalPos.y < camFloor) {
-      finalPos.y = camFloor;
+      finalPos.y = THREE.MathUtils.lerp(finalPos.y, camFloor, Math.min(1.0, 18.0 * dt));
     }
 
     // Handheld sprint micro-shake (visceral momentum)
