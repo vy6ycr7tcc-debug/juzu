@@ -1879,12 +1879,12 @@ async function init() {
       camera.lookAt(0, groundY - 1.2, posZ - 25.0);
     } else if (shot === 'realism_character_and_nature') {
       // Photorealistic Protagonist, Photographic Forest Floor PBR, Rocks & Volumetric Foliage
-      const posX = 42, posZ = 18;
-      character.teleport(posX, posZ, 0.35);
+      const posX = 43, posZ = 118;
+      character.teleport(posX, posZ, 0.25);
       character.disableCameraUpdate = true;
       const groundY = character.mesh.position.y;
-      camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
-      camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+      camera.position.set(posX - 1.5, groundY + 1.3, posZ + 2.4);
+      camera.lookAt(posX + 0.2, groundY + 1.15, posZ - 1.2);
     } else if (shot === 'physics_locomotion') {
       // Dynamic Locomotion on Slope with Athletic Turn Banking
       const posX = 38, posZ = 24;
@@ -2235,12 +2235,12 @@ async function init() {
         camera.lookAt(0, groundY - 1.2, posZ - 25.0);
       }
       if (shot === 'realism_character_and_nature') {
-        const posX = 42, posZ = 18;
+        const posX = 43, posZ = 118;
         character.mesh.position.set(posX, character.getGroundedHeight(posX, posZ), posZ);
-        character.mesh.rotation.y = 0.35;
+        character.mesh.rotation.y = 0.25;
         const groundY = character.mesh.position.y;
-        camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
-        camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+        camera.position.set(posX - 1.5, groundY + 1.3, posZ + 2.4);
+        camera.lookAt(posX + 0.2, groundY + 1.15, posZ - 1.2);
       }
       if (shot === 'physics_locomotion') {
         const posX = 38, posZ = 24;
@@ -2328,10 +2328,10 @@ async function init() {
       camera.lookAt(0, groundY - 1.2, posZ - 25.0);
     }
     if (shot === 'realism_character_and_nature') {
-      const posX = 42, posZ = 18;
+      const posX = 43, posZ = 118;
       const groundY = character.mesh.position.y;
-      camera.position.set(posX - 1.8, groundY + 1.35, posZ + 2.8);
-      camera.lookAt(posX + 0.25, groundY + 1.15, posZ - 0.8);
+      camera.position.set(posX - 1.5, groundY + 1.3, posZ + 2.4);
+      camera.lookAt(posX + 0.2, groundY + 1.15, posZ - 1.2);
     }
     if (shot === 'story_dialogue_tomas') {
       const tomasPos = new THREE.Vector3(-100, getGlobalTerrainHeight(-100, -500), -500);

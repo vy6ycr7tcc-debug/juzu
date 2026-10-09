@@ -164,17 +164,60 @@ const REGION_SPECIES: Record<RegionId, SpeciesPalette[]> = {
 // Crossed alpha-tested cards: N planes rotated about Y, merged into one
 // geometry. Plane size (cardW × cardH), base at y=0 (planted), optionally
 // lifted by `y0` (tree canopies start at trunk-top height).
+// Volumetric 3D Foliage & Crossed alpha-tested cards:
+// For tree canopies (y0 > 1.5), builds multi-cluster 3D foliage domes with spherical
+// outward normals for genuine volumetric light wrap and self-shadowing (no flat paper look).
 function crossedCardGeometry(cardW: number, cardH: number, planes: 1 | 2 | 3 | 4, y0: number): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < planes; i++) {
-    const p = new THREE.PlaneGeometry(cardW, cardH);
-    p.rotateY((i / planes) * Math.PI);
-    p.translate(0, y0 + cardH / 2, 0);
-    parts.push(p);
+
+  if (y0 > 1.5) {
+    // 3D Volumetric Tree Canopy: Arrange multi-angle foliage clusters along branches and crown
+    const clusterOffsets = [
+      { x: 0, y: y0 + cardH * 0.45, z: 0, s: 1.0 },
+      { x: 0, y: y0 + cardH * 0.78, z: 0, s: 0.85 },
+      { x: cardW * 0.28, y: y0 + cardH * 0.36, z: cardW * 0.18, s: 0.78 },
+      { x: -cardW * 0.26, y: y0 + cardH * 0.38, z: cardW * 0.22, s: 0.78 },
+      { x: -cardW * 0.22, y: y0 + cardH * 0.42, z: -cardW * 0.25, s: 0.78 },
+      { x: cardW * 0.24, y: y0 + cardH * 0.44, z: -cardW * 0.22, s: 0.78 },
+      { x: 0, y: y0 + cardH * 0.96, z: 0, s: 0.65 },
+    ];
+
+    for (const c of clusterOffsets) {
+      const cW = cardW * 0.58 * c.s;
+      const cH = cardH * 0.58 * c.s;
+      for (let i = 0; i < 3; i++) {
+        const p = new THREE.PlaneGeometry(cW, cH);
+        p.rotateY((i / 3) * Math.PI + (c.x * 2.0 + c.z));
+        p.rotateX(0.14 * Math.sin(i * 2.1));
+        p.translate(c.x, c.y, c.z);
+        parts.push(p);
+      }
+    }
+  } else {
+    // Ground undergrowth (ferns, tufts): crossed cards with outward tilt
+    for (let i = 0; i < planes; i++) {
+      const p = new THREE.PlaneGeometry(cardW, cardH);
+      p.rotateY((i / planes) * Math.PI);
+      p.translate(0, y0 + cardH / 2, 0);
+      parts.push(p);
+    }
   }
+
   const merged = mergeGeometries(parts, false);
   if (!merged) throw new Error('decor: card merge failed');
   for (const p of parts) p.dispose();
+
+  // Spherical outward normal calculation:
+  // Replaces flat planar normals with radial outward normals, creating genuine 3D form shading!
+  const pos = merged.attributes.position as THREE.BufferAttribute;
+  const norm = merged.attributes.normal as THREE.BufferAttribute;
+  const center = new THREE.Vector3(0, y0 > 1.5 ? y0 + cardH * 0.55 : cardH * 0.3, 0);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).sub(center).normalize();
+    norm.setXYZ(i, v.x, Math.max(0.20, v.y), v.z);
+  }
+
   return merged;
 }
 
@@ -199,21 +242,52 @@ function displacedRockGeometry(): THREE.BufferGeometry {
   return welded;
 }
 
-// Instanced trunk: 10-sided tapered cylinder with root flare at ground contact.
+// Branching 3D Trunk: Compound geometry with root flare, organic trunk curvature,
+// and 4 spreading boughs/branches supporting the volumetric canopy clusters.
 function trunkGeometry(): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(0.22, 0.48, 3.6, 10, 4);
-  const pos = g.attributes.position as THREE.BufferAttribute;
+  const parts: THREE.BufferGeometry[] = [];
+
+  // Main trunk: tapered cylinder with organic curvature and root flare
+  const mainTrunk = new THREE.CylinderGeometry(0.24, 0.52, 3.8, 12, 6);
+  const pos = mainTrunk.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
+    // Root flare near soil
     if (y < -1.0) {
-      const flare = 1.0 + Math.pow((-1.0 - y) / 0.8, 2) * 0.45;
+      const flare = 1.0 + Math.pow((-1.0 - y) / 0.9, 2) * 0.50;
       pos.setX(i, pos.getX(i) * flare);
       pos.setZ(i, pos.getZ(i) * flare);
     }
+    // Organic trunk sway
+    const sway = Math.sin((y + 1.9) * 0.6) * 0.12;
+    pos.setX(i, pos.getX(i) + sway);
   }
-  g.computeVertexNormals();
-  g.translate(0, 1.55, 0);
-  return g;
+  mainTrunk.computeVertexNormals();
+  mainTrunk.translate(0, 1.65, 0);
+  parts.push(mainTrunk);
+
+  // 4 Organic 3D Branches spreading out to hold canopy clusters
+  const branchConfigs = [
+    { startY: 2.1, angle: 0.35, len: 1.55, pitch: 0.68, r0: 0.16, r1: 0.08 },
+    { startY: 2.45, angle: 1.85, len: 1.65, pitch: 0.62, r0: 0.15, r1: 0.07 },
+    { startY: 2.75, angle: 3.45, len: 1.45, pitch: 0.72, r0: 0.14, r1: 0.07 },
+    { startY: 3.05, angle: 5.05, len: 1.50, pitch: 0.65, r0: 0.14, r1: 0.06 },
+  ];
+
+  for (const b of branchConfigs) {
+    const branch = new THREE.CylinderGeometry(b.r1, b.r0, b.len, 7, 3);
+    branch.translate(0, b.len / 2, 0);
+    branch.rotateZ(-b.pitch);
+    branch.rotateY(b.angle);
+    branch.translate(0, b.startY, 0);
+    parts.push(branch);
+  }
+
+  const merged = mergeGeometries(parts, false);
+  if (!merged) throw new Error('decor: trunk merge failed');
+  for (const p of parts) p.dispose();
+  merged.computeVertexNormals();
+  return merged;
 }
 
 // --- §5.2 T5 wind — WebGL2 injection -----------------------------------------
@@ -399,15 +473,15 @@ export class DecorManager {
     // old 2000-per-mesh capacity processed ~336k parked vertices per frame.
     this.rocks = [
       {
-        mesh: this.makeScatterMesh(rockGeo, granite(), Math.round(1000 * countScale)),
-        count: Math.round(1000 * countScale), salt: 901, cursor: 0,
-        prob: { cloud_forest: 0.08, high_sierra: 0.65, jungle_lowlands: 0.05, paititi: 0.22 },
+        mesh: this.makeScatterMesh(rockGeo, granite(), Math.round(1800 * countScale)),
+        count: Math.round(1800 * countScale), salt: 901, cursor: 0,
+        prob: { cloud_forest: 0.16, high_sierra: 0.65, jungle_lowlands: 0.12, paititi: 0.25 },
         riverGap: 12,
       },
       {
-        mesh: this.makeScatterMesh(rockGeo, limestoneSwallowed(), Math.round(1000 * countScale)),
-        count: Math.round(1000 * countScale), salt: 908, cursor: 0,
-        prob: { cloud_forest: 0.25, high_sierra: 0.04, jungle_lowlands: 0.35, paititi: 0.08 },
+        mesh: this.makeScatterMesh(rockGeo, limestoneSwallowed(), Math.round(1800 * countScale)),
+        count: Math.round(1800 * countScale), salt: 908, cursor: 0,
+        prob: { cloud_forest: 0.32, high_sierra: 0.08, jungle_lowlands: 0.38, paititi: 0.15 },
         riverGap: 12,
       },
     ];
@@ -571,12 +645,12 @@ export class DecorManager {
             if (!gridProb) continue;
             this.placeSpecies(s, qx, qz, step, domId, gridProb, grid);
           }
-          if (grid === 'coarse') {
+          if (grid === 'coarse' || grid === 'mid') {
             for (const r of this.rocks) {
               if (r.cursor >= r.count) continue;
               this.placeScatter(r, qx, qz, step, domId, 'rock');
             }
-            if (this.mist.cursor < this.mist.count) {
+            if (grid === 'coarse' && this.mist.cursor < this.mist.count) {
               this.placeScatter(this.mist, qx, qz, step, domId, 'mist');
             }
           }
@@ -697,11 +771,10 @@ export class DecorManager {
       d.rotation.set(r2 * Math.PI, r3 * Math.PI * 2, r1 * Math.PI);
       d.scale.set(scale * (0.8 + r2 * 0.5), scale * (0.7 + r3 * 0.5), scale * (0.8 + r1 * 0.5));
     } else {
-      if (y > 26) return; // mist sits in valleys/forest floors, not peaks
-      // Never envelop the camera — a 20 m sprite at 5 m fills half the frame
-      // with white and defeats the fog it is supposed to thicken.
-      if (Math.hypot(fx - this.scanCam.x, fz - this.scanCam.z) < 40) return;
-      d.position.set(fx, y + 3.5 + r3 * 5.5, fz);
+      // Mist only sits over the low canyon river bed (|fx| < 24, y < 6.0), never on walking hillsides or near cameras
+      if (y > 6.0 || Math.abs(fx) > 24.0) return;
+      if (Math.hypot(fx - this.scanCam.x, fz - this.scanCam.z) < 60) return;
+      d.position.set(fx, y + 2.5 + r3 * 3.5, fz);
       d.rotation.set(0, r2 * Math.PI, 0);
       d.scale.set(1 + r1 * 1.4, 0.9 + r2 * 0.9, 1);
     }

@@ -52,41 +52,33 @@ function getSkyUniforms(sky: THREE.Mesh): SkyUniforms {
 
 export const TOD_GRADES: Record<'day'|'dawn'|'noon'|'dusk'|'night', LightRigConfig> = {
   day: {
-    sunColor: 0xFFF6E8, sunIntensity: 4.8, sunElevationDeg: 28, sunAzimuthDeg: 135,
+    sunColor: 0xFFF6E8, sunIntensity: 5.2, sunElevationDeg: 28, sunAzimuthDeg: 135,
     hemiSky: 0x90B8E0, hemiGround: 0x585244, hemiIntensity: 0.65,
-    fillIntensity: 0.35, exposure: 1.10,
+    fillIntensity: 0.06, exposure: 1.10,
     fogColor: 0x88B0CC, fogDensity: 0.00085, envIntensity: 0.45
   },
   dawn: {
-    sunColor: 0xFFA500, sunIntensity: 2.2, sunElevationDeg: 6, sunAzimuthDeg: 90,
-    // P-CANON-2 compensation (plan §P-CANON-2: "compensate in the ToD rigs
-    // with measured hemisphere lift where needed"): the canon albedo regrade
-    // darkened cf humus L49→32 / canopy L83→58, dropping the dawn shadow
-    // floor below the §8.3 gate (cf_dawn crush 9.96% → 25.55%). Hemi lift
-    // 0.25 → 0.50 + ground-bounce lift 0x4A4038 → 0x5A5048 restores the
-    // measured shadow floor while keeping the warm amber sun key (§2.6) and
-    // the low 6° elevation. Dusk row keeps 0.25 (west-sun clip headroom
-    // constraint documented in Phase 2 — dusk clip sits at 0.007% already).
+    sunColor: 0xFFA500, sunIntensity: 2.4, sunElevationDeg: 6, sunAzimuthDeg: 90,
     hemiSky: 0xD8C4B0, hemiGround: 0x5A5048, hemiIntensity: 0.65,
-    fillIntensity: 0.35, exposure: 1.08,
+    fillIntensity: 0.06, exposure: 1.08,
     fogColor: 0xD0B49F, fogDensity: 0.0022, envIntensity: 0.50
   },
   noon: {
-    sunColor: 0xFFFFFF, sunIntensity: 5.5, sunElevationDeg: 82, sunAzimuthDeg: 180,
+    sunColor: 0xFFFFFF, sunIntensity: 5.8, sunElevationDeg: 82, sunAzimuthDeg: 180,
     hemiSky: 0xC8DCF5, hemiGround: 0x6A6A55, hemiIntensity: 0.65,
-    fillIntensity: 0.35, exposure: 1.15,
+    fillIntensity: 0.06, exposure: 1.15,
     fogColor: 0xB4C6D8, fogDensity: 0.0011, envIntensity: 0.55
   },
   dusk: {
-    sunColor: 0xFF8C00, sunIntensity: 2.0, sunElevationDeg: 6, sunAzimuthDeg: 270,
+    sunColor: 0xFF8C00, sunIntensity: 2.2, sunElevationDeg: 6, sunAzimuthDeg: 270,
     hemiSky: 0xC4A490, hemiGround: 0x423A30, hemiIntensity: 0.25,
-    fillIntensity: 0.35, exposure: 1.0,
+    fillIntensity: 0.06, exposure: 1.0,
     fogColor: 0xB28C70, fogDensity: 0.0022, envIntensity: 0.35
   },
   night: {
-    sunColor: 0x9FB8DD, sunIntensity: 0.5, sunElevationDeg: 35, sunAzimuthDeg: 270,
+    sunColor: 0x9FB8DD, sunIntensity: 0.6, sunElevationDeg: 35, sunAzimuthDeg: 270,
     hemiSky: 0x2A3A55, hemiGround: 0x1A1A18, hemiIntensity: 0.15,
-    fillIntensity: 0.35, exposure: 0.85,
+    fillIntensity: 0.05, exposure: 0.85,
     fogColor: 0x1E2A3A, fogDensity: 0.0028, envIntensity: 0.25
   }
 };

@@ -105,10 +105,10 @@ export class TerrainManager {
       roughnessMap: roughnessMap,
       metalness: 0.0, // Andean earth, soil, and rock are 100% dielectric
       normalMap: normalMap,
-      normalScale: new THREE.Vector2(0.65, 0.65), // Crisp natural rock/soil relief
+      normalScale: new THREE.Vector2(1.25, 1.25), // Crisp natural rock/soil 3D relief
       aoMap: aoMap,
-      aoMapIntensity: 0.85,
-      envMapIntensity: 0.25 // Natural ground ambient
+      aoMapIntensity: 0.95,
+      envMapIntensity: 0.20 // Natural ground ambient
     });
 
     // WebGL2 Fallback Path: ShaderChunk onBeforeCompile for Triplanar Texture Projection & Sedimentary Strata
@@ -210,12 +210,16 @@ export class TerrainManager {
           vec3 normX = texture2D(normalMap, uvX).xyz * 2.0 - 1.0;
           vec3 normY = texture2D(normalMap, uvY).xyz * 2.0 - 1.0;
           vec3 normZ = texture2D(normalMap, uvZ).xyz * 2.0 - 1.0;
-          vec3 triplanarNormal = normX * blendWeight.x + normY * blendWeight.y + normZ * blendWeight.z;
-          #if defined( USE_PACKED_NORMALMAP )
-            triplanarNormal = vec3( triplanarNormal.xy, sqrt( saturate( 1.0 - dot( triplanarNormal.xy, triplanarNormal.xy ) ) ) );
-          #endif
-          triplanarNormal.xy *= normalScale;
-          normal = normalize( tbn * triplanarNormal );
+          normX.xy *= normalScale;
+          normY.xy *= normalScale;
+          normZ.xy *= normalScale;
+
+          vec3 worldX = vec3(normX.z * sign(vWorldNorm.x), normX.y, -normX.x * sign(vWorldNorm.x));
+          vec3 worldY = vec3(normY.x, normY.z * sign(vWorldNorm.y), normY.y);
+          vec3 worldZ = vec3(normZ.x, normZ.y, normZ.z * sign(vWorldNorm.z));
+
+          vec3 triplanarWorldNormal = normalize(worldX * blendWeight.x + worldY * blendWeight.y + worldZ * blendWeight.z);
+          normal = normalize( (viewMatrix * vec4(triplanarWorldNormal, 0.0)).xyz );
         #elif defined( USE_BUMPMAP )
           normal = perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection );
         #endif
