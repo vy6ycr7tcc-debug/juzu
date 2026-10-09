@@ -170,7 +170,7 @@ export const jungleLowlands: RegionModule = {
     emberMat.emissiveIntensity = 0.85;
 
     const caps: RenderCaps = {
-      isWebGPU: typeof navigator !== 'undefined' && !!(navigator as unknown as { gpu?: unknown }).gpu,
+      isWebGPU: typeof window !== 'undefined' && window.__rendererType === 'webgpu',
       tier: 'MEDIUM',
       maxAnisotropy: 4
     };

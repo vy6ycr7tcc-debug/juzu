@@ -1,7 +1,7 @@
 import { registerServiceWorker, mountOfflineUI } from "./pwa/offline.js";
 import * as THREE from 'three';
 import { createRenderer, getRenderCaps, QUALITY_TIERS } from './renderer.js';
-import { setupEnvironment, getActiveLightRig } from './environment.js';
+import { setupEnvironment, getActiveLightRig, setSkyVisible } from './environment.js';
 import { createTerrain } from './terrain.js';
 import { createRiver, waterSurfaceY } from './river.js';
 import { createDecor } from './decor.js';
@@ -41,6 +41,7 @@ import { StealthSystem } from './combat/stealth.js';
 import { BasecampManager } from './basecamp.js';
 import { SteleManager } from './stele.js';
 import { CavernShelterManager } from './shelter.js';
+import { CenoteCavernManager } from './cenote.js';
 
 // Setup for global hook
 declare global {
@@ -313,6 +314,8 @@ async function init() {
   setupEnvironment(scene, quality, renderer, todParam);
   const defaultFogColor = (scene.fog as THREE.FogExp2)?.color ? (scene.fog as THREE.FogExp2).color.clone() : new THREE.Color(0xA6BED2);
   const defaultFogDensity = (scene.fog as THREE.FogExp2)?.density ?? 0.0015;
+  const defaultBgColor = scene.background instanceof THREE.Color ? scene.background.clone() : new THREE.Color(0x90B8E0);
+  const UNDERWATER_FOG_COLOR = new THREE.Color(0x06201d);
   const terrainManager = createTerrain(scene, renderCaps);
   // §7.2: river takes RenderCaps (the old callsite passed nothing — the
   // WebGPU transmission branch never ran and tier rules never applied).
@@ -351,6 +354,8 @@ async function init() {
   const stele = new SteleManager(scene, new THREE.Vector3(38, 0, 36));
   // Paititi Cavern & Rain Shadow Shelter Sanctuary (Phase 7)
   const cavernShelter = new CavernShelterManager(scene, new THREE.Vector3(48, 0, 26));
+  // Subterranean Cenote Underwater Caverns & Air Pockets (Phase 8)
+  const cenote = new CenoteCavernManager(scene);
   // Dynamic Weather & Volumetric Cloudscapes (Shadow of the Tomb Raider North Star)
   const weather = new WeatherSystem(scene);
   weather.registerShelterZone(cavernShelter.shelterBox);
@@ -387,15 +392,18 @@ async function init() {
   const particlesSuspended = urlParams.get('np') === '1';
   const shaftsSuspended = urlParams.get('nv') === '1';
   const updateAtmosphere = (pos: THREE.Vector3, time: number, regionId: string | null, tod: string | null) => {
+    const isUnderwater = (cenote && cenote.isUnderwater(pos.y)) || pos.y < -2.7;
     const gate = (system: ParticleSystem, region: string) => {
-      system.points.visible = !particlesSuspended && regionId === region;
+      system.points.visible = !particlesSuspended && regionId === region && !isUnderwater;
       if (system.points.visible) system.update(pos, time);
     };
     gate(dustParticles, 'high_sierra');
     gate(leavesParticles, 'jungle_lowlands');
     gate(snowParticles, 'cloud_forest');
-    volumetrics.group.visible = !shaftsSuspended;
-    volumetrics.update(pos, regionId, tod);
+    volumetrics.group.visible = !shaftsSuspended && !isUnderwater;
+    if (volumetrics.group.visible) {
+      volumetrics.update(pos, regionId, tod);
+    }
   };
   // Verification probe (shot tooling, same discipline as __rendererType):
   // lets the §8 harness assert the biome gate + particle field state.
@@ -1482,23 +1490,78 @@ async function init() {
       const gy = character.mesh.position.y;
       camera.position.set(posX - 0.65, gy + 1.35, posZ + 1.7);
       camera.lookAt(posX, gy + 1.05, posZ);
-    } else if (shot === 'underwater_dive') {
-      // Phase 3 Underwater Cenote 6-DOF Swimming & Diving (Shadow of the Tomb Raider North Star):
-      // Submerged depth in the river canyon (cenote basin y = -4.2m, surface at y = -1.02m), angled diving posture, air bubbles, depth fog
-      const posX = 0, posZ = 10;
-      character.mesh.position.set(posX, -3.8, posZ);
-      character.mesh.rotation.y = 0.25;
-      character.mesh.rotation.x = -0.45;
+    } else if (shot === 'underwater_dive' || shot === 'cenote_underwater_cavern') {
+      // Phase 8 Subterranean Cenote Underwater Caverns & Buoyancy Exploration (Shadow of the Tomb Raider North Star):
+      // Submerged depth in the cenote limestone portal (y = -5.7m), swimming forward toward the bioluminescent cavern and air pocket
+      const posX = -0.2, posZ = -0.5;
+      character.mesh.position.set(posX, -5.4, posZ);
+      character.mesh.rotation.y = 0.0; // Swimming forward toward -Z into the cenote cavern
+      character.mesh.rotation.x = -1.15; // Hydrodynamic prone swimming glide
       character.state = MovementState.DIVE;
-      character.swimPitch = -0.45;
+      character.speed = 1.8;
+      character.swimPitch = -1.15;
       character.bubbleTimer = 1.05;
+      character.oxygen = 0.68;
       character.disableCameraUpdate = true;
-      camera.position.set(posX + 0.3, -3.2, posZ + 3.2);
-      camera.lookAt(posX, -3.7, posZ - 1.0);
-      if (scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.setHex(0x0c2c28);
-        scene.fog.density = 0.075;
+      camera.position.set(0.85, -4.85, 1.4);
+      camera.lookAt(-0.15, -5.25, -4.5);
+      const rig = getActiveLightRig();
+      if (rig) {
+        rig.sun.intensity = 0.0;
+        rig.sun.castShadow = false;
+        rig.hemi.intensity = 0.08;
+        rig.cameraFill.intensity = 0.05;
       }
+      setSkyVisible(false);
+      if (scene.background instanceof THREE.Color) {
+        scene.background.copy(UNDERWATER_FOG_COLOR);
+      }
+      if (scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.copy(UNDERWATER_FOG_COLOR); // Rich glacial teal optical absorption
+        scene.fog.density = 0.035;
+      }
+      scene.environmentIntensity = 0.02;
+
+      // Soft cinematic underwater fill/rim light for adventurer silhouette
+      const charRimLight = new THREE.PointLight(0x38bdf8, 1.4, 5.5, 1.6);
+      charRimLight.position.set(0.65, -4.8, 0.8);
+      scene.add(charRimLight);
+
+      // Trailing circular air bubbles from diving adventurer
+      const bCanvas = document.createElement('canvas');
+      bCanvas.width = 64; bCanvas.height = 64;
+      const bCtx = bCanvas.getContext('2d')!;
+      const grad = bCtx.createRadialGradient(32, 32, 4, 32, 32, 28);
+      grad.addColorStop(0, 'rgba(240, 255, 255, 0.95)');
+      grad.addColorStop(0.5, 'rgba(140, 230, 255, 0.6)');
+      grad.addColorStop(0.85, 'rgba(40, 180, 220, 0.25)');
+      grad.addColorStop(1, 'rgba(0, 120, 160, 0)');
+      bCtx.fillStyle = grad;
+      bCtx.beginPath(); bCtx.arc(32, 32, 28, 0, Math.PI * 2); bCtx.fill();
+      const bubbleTex = new THREE.CanvasTexture(bCanvas);
+      const bubbleMat = new THREE.SpriteMaterial({
+        map: bubbleTex,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+
+      for (let b = 0; b < 6; b++) {
+        const bubble = new THREE.Sprite(bubbleMat);
+        bubble.scale.setScalar(0.06 + Math.random() * 0.05);
+        bubble.position.set(
+          posX + (Math.random() - 0.5) * 0.1,
+          -4.65 + b * 0.12,
+          posZ - 1.2 + b * 0.25
+        );
+        scene.add(bubble);
+      }
+
+      sottrHUD.setObjective('SUBTERRANEAN CENOTE', 'Navigate flooded limestone tunnels to find breathable air pockets');
+      sottrHUD.setPrompt('<span style="color: #38bdf8; font-weight: 700;">[KEY C]</span> DIVE • <span style="color: #ffd875; font-weight: 700;">[SPACE]</span> SURFACE • <span style="color: #38bdf8; font-weight: 700;">[AIR POCKET AHEAD]</span>');
+      sottrHUD.updateOxygen(0.68, true);
+      sottrHUD.update(camera, character.mesh.position);
     } else if (shot === 'surface_swim') {
       // Phase 3 Surface Breaststroke in River
       const posX = 0, posZ = 10;
@@ -2013,9 +2076,7 @@ async function init() {
       t = Math.max(0.1, parseFloat(tStr));
     } else if (shot === 'hydraulic_sluice') {
       t = 4.5;
-    } else if (shot === 'underwater_dive') {
-      t = 0.8;
-    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest' || shot === 'archaeological_mural' || shot === 'rain_wetness_shelter') {
+    } else if (shot === 'open_world_camera' || shot === 'expedition_map' || shot === 'story_dialogue_tomas' || shot === 'story_confrontation_vargas' || shot === 'story_field_journal' || shot === 'realism_valley_open_world' || shot === 'realism_river_gorge' || shot === 'realism_character_and_nature' || shot === 'physics_locomotion' || shot === 'physics_jump' || shot === 'stealth_patrol' || shot === 'stealth_takedown' || shot === 'camera_cliff_vista' || shot === 'camera_stealth_prowl' || shot === 'camera_wall_collision' || shot === 'gtao_contact_grounding' || shot === 'gtao_stone_crevices' || shot === 'godrays_canopy_dawn' || shot === 'geological_strata_cliffs' || shot === 'stealth_arrow_lure' || shot === 'basecamp_campfire_rest' || shot === 'archaeological_mural' || shot === 'rain_wetness_shelter' || shot === 'underwater_dive' || shot === 'cenote_underwater_cavern') {
       t = 0.45;
     } else if (shot === 'mud_slide' || shot === 'survival_instinct' || shot === 'foliage_parting' || shot === 'jungle_canopy' || shot === 'crypt_pressure_plate' || shot === 'trap_hazard_pulse' || shot === 'relic_altar' || shot === 'relic_inspect' || shot === 'cinematic_hud' || shot === 'sanctuary_atmosphere') {
       t = 0.35;
@@ -2123,12 +2184,15 @@ async function init() {
       if (shot === 'bow_aim' || shot === 'arrow_flight') {
         character.setAim(true, shot === 'bow_aim' ? 0.85 : 1.0);
       }
-      if (shot === 'underwater_dive') {
+      if (shot === 'underwater_dive' || shot === 'cenote_underwater_cavern') {
         character.state = MovementState.DIVE;
-        character.mesh.position.set(0, -3.8, 10);
-        character.mesh.rotation.y = 0.25;
-        character.swimPitch = -0.45;
-        character.mesh.rotation.x = -0.45;
+        character.speed = 1.8;
+        character.mesh.position.set(-0.2, -5.4, -0.5);
+        character.mesh.rotation.y = 0.0;
+        character.swimPitch = -1.15;
+        character.mesh.rotation.x = -1.15;
+        character.velocityY = 0.0;
+        character.oxygen = 0.68;
       }
       if (shot === 'surface_swim') {
         character.state = MovementState.SWIM;
@@ -2203,6 +2267,9 @@ async function init() {
       character.update(dt);
       weather.update(dt, camera, character.mesh.position);
       cavernShelter.update(dt);
+      cenote.update(dt, camera);
+      character.currentAirPocket = cenote.isInsideAirPocket(character.mesh.position);
+      sottrHUD.updateOxygen(character.oxygen, character.state === MovementState.DIVE);
       river.update(i * dt);
       hydraulicCistern.update(dt, character.mesh.position);
       cryptTrap.update(dt, character.mesh.position);
@@ -2323,6 +2390,37 @@ async function init() {
       const groundY = getGlobalTerrainHeight(posX, posZ);
       camera.position.set(posX - 1.6, groundY + 1.65, posZ + 3.8);
       camera.lookAt(posX, groundY + 2.0, posZ);
+      sottrHUD.update(camera, character.mesh.position);
+    }
+    if (shot === 'underwater_dive' || shot === 'cenote_underwater_cavern') {
+      const posX = -0.2, posZ = -0.5;
+      character.mesh.position.set(posX, -5.4, posZ);
+      character.mesh.rotation.y = 0.0;
+      character.mesh.rotation.x = -1.15;
+      character.swimPitch = -1.15;
+      character.state = MovementState.DIVE;
+      character.speed = 1.8;
+      character.velocityY = 0.0;
+      camera.position.set(0.85, -4.85, 1.4);
+      camera.lookAt(-0.15, -5.25, -4.5);
+      const rig = getActiveLightRig();
+      if (rig) {
+        rig.sun.intensity = 0.0;
+        rig.sun.castShadow = false;
+        rig.hemi.intensity = 0.08;
+        rig.cameraFill.intensity = 0.05;
+      }
+      setSkyVisible(false);
+      scene.environmentIntensity = 0.02;
+      if (scene.background instanceof THREE.Color) {
+        scene.background.copy(UNDERWATER_FOG_COLOR);
+      }
+      if (scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.copy(UNDERWATER_FOG_COLOR);
+        scene.fog.density = 0.035;
+      }
+      volumetrics.group.visible = false;
+      sottrHUD.updateOxygen(0.68, true);
       sottrHUD.update(camera, character.mesh.position);
     }
 
@@ -2560,6 +2658,8 @@ async function init() {
         } else if (character.isAiming) {
           sottrHUD.setPrompt('<span style="color: #ffd875; font-weight: 700;">[LEFT CLICK]</span> RELEASE ARROW • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
           sottrHUD.setActiveGear('bow');
+        } else if (character.state === MovementState.DIVE) {
+          sottrHUD.setPrompt(character.currentAirPocket ? '<span style="color: #38bdf8; font-weight: 700;">[AIR POCKET]</span> REFILLING BREATH • <span style="color: #ffd875; font-weight: 700;">[KEY C]</span> DIVE' : '<span style="color: #38bdf8; font-weight: 700;">[KEY C]</span> DIVE DEEPER • <span style="color: #ffd875; font-weight: 700;">[SPACE]</span> SURFACE');
         } else if (character.isSheltered && weather.rainIntensity > 0.15) {
           sottrHUD.setPrompt('<span style="color: #38bdf8; font-weight: 700;">[SHELTERED]</span> SAFE FROM STORM • <span style="color: #ffd875; font-weight: 700;">[Q]</span> SURVIVAL INSTINCT');
         } else {
@@ -2588,6 +2688,9 @@ async function init() {
         }
         decor.update(camera, undefined, character.mesh.position);
         cavernShelter.update(dt);
+        cenote.update(dt, camera);
+        character.currentAirPocket = cenote.isInsideAirPocket(character.mesh.position);
+        sottrHUD.updateOxygen(character.oxygen, character.state === MovementState.DIVE);
         weather.update(dt, camera, character.mesh.position);
         character.currentRainIntensity = weather.rainIntensity;
         character.isSheltered = weather.isPositionSheltered(character.mesh.position);
@@ -2599,16 +2702,24 @@ async function init() {
         const activeRegionId = regionManager.currentRegionId;
         updateAtmosphere(camera.position, time, activeRegionId, todParam);
 
-        // Underwater optical absorption fog modulation (Phase 3 Cenote Diving)
+        // Underwater optical absorption fog and background modulation (Phase 3 & 8 Cenote Diving)
         if (scene.fog instanceof THREE.FogExp2) {
           const camWaterSurface = waterSurfaceY(camera.position.x, camera.position.z);
           const isCameraUnderwater = camWaterSurface !== null && camera.position.y < camWaterSurface - 0.05;
           if (isCameraUnderwater) {
-            scene.fog.color.lerp(new THREE.Color(0x0c2c28), 0.20);
-            scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.075, 0.20);
+            scene.fog.color.lerp(UNDERWATER_FOG_COLOR, 0.20);
+            scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.032, 0.20);
+            if (scene.background instanceof THREE.Color) {
+              scene.background.lerp(UNDERWATER_FOG_COLOR, 0.20);
+            }
+            setSkyVisible(false);
           } else if (defaultFogColor) {
             scene.fog.color.lerp(defaultFogColor, 0.15);
             scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, defaultFogDensity, 0.15);
+            if (scene.background instanceof THREE.Color && defaultBgColor) {
+              scene.background.lerp(defaultBgColor, 0.15);
+            }
+            setSkyVisible(true);
           }
         }
 
@@ -2664,6 +2775,7 @@ async function init() {
     // reasoning as decor above.
     river.update(tStr ? parseFloat(tStr) : 0);
     cavernShelter.update(0.016);
+    cenote.update(0.016, camera);
     weather.update(0.016, camera, character.mesh.position);
     // Render once and signal ready
     if (!skipPost) {

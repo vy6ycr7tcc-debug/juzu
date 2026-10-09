@@ -4,11 +4,12 @@ export function registerServiceWorker() {
       navigator.serviceWorker.register('/juzu/sw.js').then(registration => {
         console.log('SW registered: ', registration);
 
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+        if (registration) {
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                  // Toast for update
                  const toast = document.createElement('div');
                  toast.innerText = 'Update available! ';
@@ -32,6 +33,7 @@ export function registerServiceWorker() {
             });
           }
         });
+      }
       }).catch(registrationError => {
         console.log('SW registration failed: ', registrationError);
       });

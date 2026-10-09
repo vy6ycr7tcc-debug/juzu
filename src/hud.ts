@@ -1237,8 +1237,32 @@ export class SOTTRHUD {
     this.updateGearDisplay();
   }
 
+  private isDiving: boolean = false;
+  private oxygenRatio: number = 1.0;
+
+  public updateOxygen(oxygenRatio: number, isDiving: boolean) {
+    this.oxygenRatio = THREE.MathUtils.clamp(oxygenRatio, 0.0, 1.0);
+    this.isDiving = isDiving;
+    this.updateGearDisplay();
+  }
+
   private updateGearDisplay() {
+    const oxygenPct = Math.round(this.oxygenRatio * 100);
+    const oxygenColor = oxygenPct > 35 ? '#38bdf8' : (oxygenPct > 18 ? '#f59e0b' : '#ef4444');
+    const oxygenGrad = oxygenPct > 35 ? 'linear-gradient(90deg, #0284c7, #38bdf8)' : (oxygenPct > 18 ? 'linear-gradient(90deg, #b45309, #f59e0b)' : 'linear-gradient(90deg, #991b1b, #ef4444)');
+
+    const oxygenHtml = this.isDiving ? `
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; background: rgba(8, 28, 26, 0.85); padding: 6px 10px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+        <span style="font-size: 10px; font-weight: 700; color: ${oxygenColor}; letter-spacing: 1.5px;">OXYGEN</span>
+        <div style="width: 85px; height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden;">
+          <div style="width: ${oxygenPct}%; height: 100%; background: ${oxygenGrad}; border-radius: 3px;"></div>
+        </div>
+        <span style="font-size: 11px; font-weight: 700; color: #fff; font-family: monospace;">${oxygenPct}%</span>
+      </div>
+    ` : '';
+
     this.gearContainer.innerHTML = `
+      ${oxygenHtml}
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
         <span style="font-size: 11px; color: #9ab098; letter-spacing: 1px; text-transform: uppercase;">SURVIVAL RECURVE BOW</span>
         <span style="font-size: 18px; font-weight: 700; color: #ffffff; font-family: monospace;">

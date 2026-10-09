@@ -102,7 +102,7 @@ export const paititi: RegionModule = {
     greenMaterial.color.setHex(0x2E5A2E); // §2.5 encroaching green (per-instance recolor)
 
     const caps: RenderCaps = {
-      isWebGPU: typeof navigator !== 'undefined' && !!(navigator as unknown as { gpu?: unknown }).gpu,
+      isWebGPU: typeof window !== 'undefined' && window.__rendererType === 'webgpu',
       tier: 'MEDIUM',
       maxAnisotropy: 4
     };
