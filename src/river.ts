@@ -19,9 +19,9 @@ export interface WaterSpec {
 // createWaterSurface, never raw planes": §7.5 river example + the normative
 // §2.4 jungle dark water and §2.5 Paititi channel hexes.
 export const WATER_PRESETS: Record<'river' | 'junglePool' | 'paititiChannel', WaterSpec> = {
-  river:          { color: 0x0f2a28, roughness: 0.08, opacity: 0.85, flowSpeed: 0.45, flowDir: [0, 1], foamAtEdges: true },
-  junglePool:     { color: 0x14261E, roughness: 0.10, opacity: 0.78, flowSpeed: 0.15, flowDir: [0, 1], foamAtEdges: true },
-  paititiChannel: { color: 0x224855, roughness: 0.08, opacity: 0.72, flowSpeed: 0.35, flowDir: [1, 0], foamAtEdges: false },
+  river:          { color: 0x103632, roughness: 0.14, opacity: 0.85, flowSpeed: 0.50, flowDir: [0, 1], foamAtEdges: true },
+  junglePool:     { color: 0x14261E, roughness: 0.16, opacity: 0.78, flowSpeed: 0.15, flowDir: [0, 1], foamAtEdges: true },
+  paititiChannel: { color: 0x1e464d, roughness: 0.12, opacity: 0.75, flowSpeed: 0.35, flowDir: [1, 0], foamAtEdges: false },
 };
 
 export interface WaterSurfaceOptions {
@@ -42,18 +42,18 @@ export interface WaterSurfaceOptions {
 // injection must produce the same image by construction).
 const DEPTH_CENTER = 6.0;   // m of water above the channel-centerline bed
 const PLANE_W = 120;        // covers measured max waterline half-width (~60 m)
-const ABSORB: [number, number, number] = [0.35, 0.12, 0.08]; // Beer-Lambert σ per meter (glacial snowmelt teal transmission)
-const FOAM_NEAR = 0.08;      // depth (m) at which foam reaches full strength
-const FOAM_FAR = 0.75;       // depth (m) where the foam band ends
-const FADE_NEAR = 0.04;     // depth-alpha fade: transparent below this depth…
-const FADE_FAR = 0.65;       // …opaque above it (kills floodplain spill visually)
-const TILE_A: [number, number] = [12, 60];   // broad swell layer (~10 m × ~16 m tiles)
-const TILE_B: [number, number] = [18, 90];   // cross ripples & wake layer (~6.6 m × ~11 m tiles)
+const ABSORB: [number, number, number] = [0.26, 0.10, 0.06]; // Beer-Lambert σ per meter (glacial snowmelt teal transmission)
+const FOAM_NEAR = 0.05;      // depth (m) at which foam reaches full strength
+const FOAM_FAR = 0.65;       // depth (m) where the foam band ends
+const FADE_NEAR = 0.02;     // depth-alpha fade: transparent below this depth…
+const FADE_FAR = 0.85;       // …opaque above it (smooth shore gradient, kills harsh edge cuts)
+const TILE_A: [number, number] = [14, 70];   // broad swell layer (~8.5 m × ~14 m tiles)
+const TILE_B: [number, number] = [22, 105];  // cross ripples & wake layer (~5.4 m × ~9.5 m tiles)
 const UV_SHEAR = 0.618;     // golden-ratio shear on layer B
-const NORMAL_STRENGTH = 0.65; // crisp water surface wave slope with specular glints
+const NORMAL_STRENGTH = 1.15; // lively water surface wave slope with sparkling specular glints
 const CASCADE_DROP = 2.0;   // m drop per 4 m step that warrants a cascade sheet.
 const JUNGLE_WATER = 0x14261E; // §2.4 dark water (normative)
-const FOAM_COLOR = 0xd8e4dc;   // Soft Andean glacier froth tint (not clipped white)
+const FOAM_COLOR = 0xdbe6df;   // Soft Andean glacier froth tint (not clipped white)
 
 function smoothstepf(edge0: number, edge1: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
@@ -237,8 +237,8 @@ function createRiverNormalTexture(size: number, octaveScale: number, strength: n
       const hD = waveHeight(u, v - eps);
       const hU = waveHeight(u, v + eps);
 
-      // Natural wave slope scale (limits wave inclination to gentle ~6-8 deg slopes)
-      const slopeScale = 0.035;
+      // Natural wave slope scale (limits wave inclination to lively ~12-14 deg slopes)
+      const slopeScale = 0.14;
       const dx = ((hR - hL) / (2 * eps)) * slopeScale;
       const dy = ((hU - hD) / (2 * eps)) * slopeScale;
       const dz = 1.0;
@@ -305,7 +305,7 @@ export function createWaterSurface(
     normalMap: texA, // provides USE_NORMALMAP_TANGENTSPACE + TBN frame
     normalScale: new THREE.Vector2(NORMAL_STRENGTH, NORMAL_STRENGTH),
     depthWrite: false,
-    envMapIntensity: 0.55, // balanced sky and ambient mountain reflection
+    envMapIntensity: 0.35, // balanced sky and ambient mountain reflection without blinding glare
     side: THREE.DoubleSide,
   });
 
@@ -367,23 +367,28 @@ export function createWaterSurface(
       '#include <color_fragment>\n' +
       '{\n' +
       '  vec3 viewDirW = normalize( cameraPosition - vWorldPos );\n' +
-      '  float cosTheta = clamp( abs( viewDirW.y ), 0.25, 1.0 );\n' +
+      '  float cosTheta = clamp( abs( viewDirW.y ), 0.20, 1.0 );\n' +
       '  float pathM = vWaterDepth / cosTheta;\n' +
       '  vec3 transmittance = exp( -uAbsorb * pathM );\n' +
+      '  vec3 scatterColor = vec3( 0.04, 0.16, 0.15 );\n' +
+      '  vec3 waterBody = mix( scatterColor, vTint, transmittance );\n' +
       '  p5Foam = uFoamOn * ( 1.0 - smoothstep( ' + FOAM_NEAR.toFixed(2) + ', ' + FOAM_FAR.toFixed(2) + ', vWaterDepth ) );\n' +
-      '  float foamNoise = texture2D( uNormalB, vWaterUv * uTileB * 0.75 + uFlowB * 1.2 + vec2( 0.0, vWaterUv.x * ' + UV_SHEAR.toFixed(3) + ' ) ).g;\n' +
-      '  float foamLace = smoothstep( 0.38, 0.68, foamNoise );\n' +
-      '  p5Foam *= 0.25 + 0.75 * foamLace;\n' +
-      '  vec3 albedo = vTint * transmittance;\n' +
-      '  diffuseColor.rgb = mix( albedo, uFoamColor, p5Foam * 0.70 );\n' +
+      '  float foamNoiseA = texture2D( uNormalB, vWaterUv * uTileB * 0.70 + uFlowB * 1.3 + vec2( 0.0, vWaterUv.x * ' + UV_SHEAR.toFixed(3) + ' ) ).g;\n' +
+      '  float foamNoiseB = texture2D( normalMap, vWaterUv * uTileA * 0.85 + uFlowA * 0.9 ).r;\n' +
+      '  float foamLace = smoothstep( 0.40, 0.70, foamNoiseA * 0.6 + foamNoiseB * 0.4 );\n' +
+      '  p5Foam *= 0.20 + 0.80 * foamLace;\n' +
+      '  float waveCrest = smoothstep( 0.72, 0.96, texture2D( uNormalB, vWaterUv * uTileB + uFlowB ).b );\n' +
+      '  float crestFoam = waveCrest * smoothstep( 0.25, 2.0, vWaterDepth ) * 0.20;\n' +
+      '  float totalFoam = clamp( p5Foam + crestFoam, 0.0, 1.0 );\n' +
+      '  diffuseColor.rgb = mix( waterBody, uFoamColor, totalFoam * 0.75 );\n' +
       '  float depthFade = smoothstep( ' + FADE_NEAR.toFixed(2) + ', ' + FADE_FAR.toFixed(2) + ', vWaterDepth );\n' +
-      '  float fresnel = pow( 1.0 - cosTheta, 4.0 ) * 0.75 + 0.04;\n' +
-      '  diffuseColor.a = (0.65 + fresnel * 0.35) * uOpacity * vShore * depthFade;\n' +
+      '  float fresnel = pow( 1.0 - cosTheta, 3.5 ) * 0.65 + 0.06;\n' +
+      '  diffuseColor.a = (0.55 + fresnel * 0.40) * uOpacity * vShore * depthFade;\n' +
       '}\n'
     ).replace(
       '#include <roughnessmap_fragment>',
       '#include <roughnessmap_fragment>\n' +
-      'roughnessFactor = mix( roughnessFactor, 0.75, p5Foam );\n'
+      'roughnessFactor = mix( roughnessFactor, 0.80, p5Foam );\n'
     ).replace(
       '#include <normal_fragment_maps>',
       '#ifdef USE_NORMALMAP_TANGENTSPACE\n' +
@@ -471,7 +476,7 @@ async function buildWaterNodeMaterial(
     mat.metalness = 0.05;
     mat.transparent = true;
     mat.side = THREE.DoubleSide;
-    mat.envMapIntensity = 0.65; // balanced sky and ambient mountain reflection
+    mat.envMapIntensity = 0.40; // balanced sky and ambient mountain reflection without blinding glare
     // §6.3: transmission 0.75 is WebGPU HIGH only; LOW/MEDIUM ride the
     // opacity fallback exactly like the WebGL2 path.
     const highTier = caps.tier === 'HIGH';
@@ -493,13 +498,15 @@ async function buildWaterNodeMaterial(
 
     // View path length through the water column (same clamp as WebGL2).
     const dirW = normalize(positionWorld.sub(cameraPosition));
-    const cosTheta = max(float(0.25), min(abs(dirW.y), float(1.0)));
+    const cosTheta = max(float(0.20), min(abs(dirW.y), float(1.0)));
     const pathM = depth.div(cosTheta);
     const transmittance = exp(vec3(ABSORB[0], ABSORB[1], ABSORB[2]).mul(pathM).negate());
+    const scatterColor = vec3(0.04, 0.16, 0.15);
+    const waterBody = mix(scatterColor, tint, transmittance);
 
     const foamBand = float(1.0).sub(smoothstep(float(FOAM_NEAR), float(FOAM_FAR), depth));
     const depthFade = smoothstep(float(FADE_NEAR), float(FADE_FAR), depth);
-    const fresnel = float(1.0).sub(cosTheta).pow(float(4.0)).mul(float(0.75)).add(float(0.04));
+    const fresnel = float(1.0).sub(cosTheta).pow(float(3.5)).mul(float(0.65)).add(float(0.06));
 
     // Two-layer flowing normals, whiteout blend in tangent space, then the
     // TBN transform — identical formula to the WebGL2 injection. TBNViewMatrix
@@ -513,13 +520,18 @@ async function buildWaterNodeMaterial(
     const nA = texture(texA, uvA).rgb.mul(2).sub(1);
     const nB = texture(texB, uvB).rgb.mul(2).sub(1);
     // same intermittent-patch foam modulation as the WebGL2 color injection
-    const foamNoise = texture(texB, uv().mul(vec2(TILE_B[0] * 0.75, TILE_B[1] * 0.75)).add(flowB.mul(1.2)).add(uvShear)).g;
-    const foamLace = smoothstep(float(0.38), float(0.68), foamNoise);
-    const foam = foamBand.mul(float(foamOn ? 1 : 0)).mul(foamLace.mul(0.75).add(0.25)).mul(float(0.70));
+    const foamNoiseA = texture(texB, uv().mul(vec2(TILE_B[0] * 0.70, TILE_B[1] * 0.70)).add(flowB.mul(1.3)).add(uvShear)).g;
+    const foamNoiseB = texture(texA, uv().mul(vec2(TILE_A[0] * 0.85, TILE_A[1] * 0.85)).add(flowA.mul(0.9))).r;
+    const foamLace = smoothstep(float(0.40), float(0.70), foamNoiseA.mul(0.6).add(foamNoiseB.mul(0.4)));
+    const foam = foamBand.mul(float(foamOn ? 1 : 0)).mul(foamLace.mul(0.80).add(0.20)).mul(float(0.75));
 
-    mat.colorNode = mix(tint.mul(transmittance), color(FOAM_COLOR), foam);
-    mat.roughnessNode = mix(float(spec.roughness), float(0.75), foam);
-    mat.opacityNode = shore.mul(depthFade).mul(float(0.65).add(fresnel.mul(float(0.35)))).mul(float(highTier ? 1.0 : spec.opacity));
+    const waveCrest = smoothstep(float(0.72), float(0.96), texture(texB, uvB).b);
+    const crestFoam = waveCrest.mul(smoothstep(float(0.25), float(2.0), depth)).mul(float(0.20));
+    const totalFoam = min(float(1.0), foam.add(crestFoam));
+
+    mat.colorNode = mix(waterBody, color(FOAM_COLOR), totalFoam);
+    mat.roughnessNode = mix(float(spec.roughness), float(0.80), totalFoam);
+    mat.opacityNode = shore.mul(depthFade).mul(float(0.55).add(fresnel.mul(float(0.40)))).mul(float(highTier ? 1.0 : spec.opacity));
 
     const blendedXY = vec3(nA.x.add(nB.x), nA.y.add(nB.y), nA.z.mul(nB.z));
     const tbn = TBNViewMatrix as unknown as THREE.Matrix3;
