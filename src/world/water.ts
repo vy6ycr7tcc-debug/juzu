@@ -13,6 +13,9 @@ import { PbrMaterialLibrary } from './materials';
 export class WaterSystem {
   public readonly group: THREE.Group = new THREE.Group();
   private riverMesh: THREE.Mesh | null = null;
+  private riverGeo: THREE.PlaneGeometry | null = null;
+  private riverBasePositions: Float32Array | null = null;
+  private waveNormalFrame: number = 0;
   private waterfallMeshes: THREE.Mesh[] = [];
   private sprayPoints: THREE.Points | null = null;
   private geometries: THREE.BufferGeometry[] = [];
@@ -29,17 +32,22 @@ export class WaterSystem {
 
     const pos = riverGeo.attributes.position as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
-    const deepCol = new THREE.Color(0x184742);
-    const shallowCol = new THREE.Color(0x3a7a6e);
-    const foamCol = new THREE.Color(0xdbeae6);
+    const deepCol = new THREE.Color(0x123d38);
+    const shallowCol = new THREE.Color(0x2d6b63);
+    const foamCol = new THREE.Color(0xdceee8);
     const tmpCol = new THREE.Color();
 
+    const basePositions = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vz = pos.getZ(i);
       const centerZ = Math.sin(vx * 0.055) * 1.4;
       const worldZ = vz + centerZ;
       pos.setZ(i, worldZ);
+
+      basePositions[i * 3] = vx;
+      basePositions[i * 3 + 1] = pos.getY(i);
+      basePositions[i * 3 + 2] = worldZ;
 
       // Edge foam & depth gradient (§2.5)
       const edgeRatio = Math.min(1.0, Math.abs(vz) / 5.4);
@@ -56,9 +64,14 @@ export class WaterSystem {
     riverGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     riverGeo.computeVertexNormals();
     this.geometries.push(riverGeo);
+    this.riverGeo = riverGeo;
+    this.riverBasePositions = basePositions;
 
     const riverMat = materials.water.clone();
     riverMat.vertexColors = true;
+    riverMat.roughness = 0.06;
+    riverMat.metalness = 0.04;
+    riverMat.color.setHex(0x32786e);
     if (riverMat.normalMap) {
       riverMat.normalMap = riverMat.normalMap.clone();
       riverMat.normalMap.wrapS = THREE.RepeatWrapping;
@@ -204,12 +217,61 @@ export class WaterSystem {
 
   public update(dt: number): void {
     this.elapsedSec += dt;
+
+    // 1. Dynamic trochoidal wave micro-displacement & whitewater crest foam
+    if (this.riverGeo && this.riverBasePositions) {
+      const pos = this.riverGeo.attributes.position as THREE.BufferAttribute;
+      const colors = this.riverGeo.attributes.color as THREE.BufferAttribute;
+      const base = this.riverBasePositions;
+
+      const deepCol = new THREE.Color(0x123d38);
+      const shallowCol = new THREE.Color(0x2d6b63);
+      const foamCol = new THREE.Color(0xdceee8);
+      const tmpCol = new THREE.Color();
+
+      const t = this.elapsedSec;
+      for (let i = 0; i < pos.count; i++) {
+        const bx = base[i * 3];
+        const by = base[i * 3 + 1];
+        const bz = base[i * 3 + 2];
+
+        // Trochoidal wave harmonics: primary downstream surge + lateral eddy chop
+        const wave1 = Math.sin(bx * 0.18 + t * 2.2) * 0.08;
+        const wave2 = Math.cos(bz * 0.45 + bx * 0.09 + t * 1.6) * 0.04;
+        const wave3 = Math.sin(bx * 0.55 - bz * 0.35 + t * 3.4) * 0.025;
+        const wy = by + wave1 + wave2 + wave3;
+        pos.setY(i, wy);
+
+        // Dynamic whitewater foam generation at wave crests and shoreline rocks
+        const crest = (wy - by) / 0.12;
+        const edgeRatio = Math.min(1.0, Math.abs(bz) / 5.2);
+        const rapidSurge = Math.sin(bx * 0.6 + t * 2.0) * Math.cos(bz * 0.85);
+
+        if (edgeRatio > 0.78 || crest > 0.58 || rapidSurge > 0.68) {
+          tmpCol.copy(shallowCol).lerp(foamCol, Math.min(1.0, Math.max(0.45, crest * 0.8 + 0.3)));
+        } else {
+          tmpCol.copy(deepCol).lerp(shallowCol, edgeRatio * 0.7 + Math.max(0, crest * 0.3));
+        }
+
+        colors.setXYZ(i, tmpCol.r, tmpCol.g, tmpCol.b);
+      }
+
+      pos.needsUpdate = true;
+      colors.needsUpdate = true;
+
+      // Recompute surface normals periodically (every 4 frames) so specular glints reflect waves
+      this.waveNormalFrame = (this.waveNormalFrame + 1) % 4;
+      if (this.waveNormalFrame === 0) {
+        this.riverGeo.computeVertexNormals();
+      }
+    }
+
     // Scroll normal/albedo maps without any object allocation
     if (this.riverMesh) {
       const mat = this.riverMesh.material as THREE.MeshStandardMaterial;
       if (mat.normalMap) {
-        mat.normalMap.offset.x = (this.elapsedSec * 0.045) % 1.0;
-        mat.normalMap.offset.y = (this.elapsedSec * 0.018) % 1.0;
+        mat.normalMap.offset.x = (this.elapsedSec * 0.055) % 1.0;
+        mat.normalMap.offset.y = (this.elapsedSec * 0.022) % 1.0;
       }
     }
     for (let i = 0; i < this.waterfallMeshes.length; i++) {

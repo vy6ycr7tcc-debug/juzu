@@ -111,13 +111,16 @@ export class SkySystem {
     const rayGeo = new THREE.PlaneGeometry(4.2, 24);
     this.geometries.push(rayGeo);
     const raySpecs = [
-      { x: -4.5, y: 11.5, z: -4.0 },
-      { x: 4.8, y: 12.0, z: -9.5 },
+      { x: -5.5, y: 11.5, z: -4.0, scale: 1.05 },
+      { x: 4.2, y: 12.2, z: -8.8, scale: 0.95 },
+      { x: -1.8, y: 10.8, z: 3.5, scale: 0.85 },
+      { x: 7.5, y: 11.0, z: -1.2, scale: 1.0 },
     ];
     for (let i = 0; i < raySpecs.length; i++) {
       const r = raySpecs[i];
       const beam = new THREE.Mesh(rayGeo, rayMat);
       beam.position.set(r.x, r.y, r.z);
+      beam.scale.set(r.scale, r.scale, 1);
       beam.rotation.z = -0.36;
       beam.rotation.y = 0.25 * (i - 1);
       this.godRayMeshes.push(beam);
@@ -190,9 +193,39 @@ export class SkySystem {
   public update(dt: number): void {
     sharedUniforms.uTime.value += dt;
     const t = sharedUniforms.uTime.value;
+
+    // 1. Valley mist drift with wind direction
+    const windX = sharedUniforms.uWindDir.value.x * sharedUniforms.uWindStrength.value;
     for (let i = 0; i < this.mistPlanes.length; i++) {
       const m = this.mistPlanes[i];
-      m.position.x += Math.sin(t * 0.18 + i * 1.7) * dt * 0.35;
+      m.position.x += (Math.sin(t * 0.18 + i * 1.7) * 0.2 + windX * 0.3) * dt;
+    }
+
+    // 2. Dynamic canopy God-Rays aligned with sunlight vector (uSunDir)
+    const sunDir = sharedUniforms.uSunDir.value;
+    const sunElev = Math.max(0, sunDir.y);
+    const sunCol = sharedUniforms.uSunColor.value;
+
+    const yaw = Math.atan2(sunDir.x, sunDir.z);
+    const pitch = -Math.acos(Math.max(-1, Math.min(1, sunDir.y)));
+
+    for (let i = 0; i < this.godRayMeshes.length; i++) {
+      const beam = this.godRayMeshes[i];
+      beam.rotation.set(pitch + 0.08 * (i - 1.5), yaw + 0.12 * (i - 1.5), 0);
+
+      const mat = beam.material as THREE.MeshBasicMaterial;
+      if (mat) {
+        const isNight = sunElev < 0.15;
+        const baseOpacity = isNight ? 0.025 : Math.min(0.13, 0.04 + sunElev * 0.10);
+        const shimmer = 1.0 + Math.sin(t * 1.6 + i * 2.1) * 0.12;
+        mat.opacity = baseOpacity * shimmer;
+
+        if (isNight) {
+          mat.color.setHex(0x9bc0e4);
+        } else {
+          mat.color.copy(sunCol);
+        }
+      }
     }
   }
 

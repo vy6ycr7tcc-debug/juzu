@@ -10,6 +10,7 @@
  */
 
 import * as THREE from 'three';
+import { sharedUniforms } from '../gpu/tsl';
 import { PbrMaterialLibrary } from './materials';
 import { TerrainSystem } from './terrain';
 
@@ -27,6 +28,7 @@ export class FoliageSystem {
   public bromeliadInstanced!: THREE.InstancedMesh;
 
   private elapsedSec: number = 0;
+  private materialsRef: PbrMaterialLibrary | null = null;
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
 
@@ -36,6 +38,7 @@ export class FoliageSystem {
     terrain: TerrainSystem,
     densityMultiplier: number = 1.0
   ): void {
+    this.materialsRef = materials;
     this.group.name = 'CloudForestFoliage';
 
     let seed = 42069;
@@ -515,13 +518,38 @@ export class FoliageSystem {
     return geo;
   }
 
-  public update(dt: number): void {
+  public update(dt: number, _playerPosition?: THREE.Vector3): void {
     this.elapsedSec += dt;
+    const t = this.elapsedSec;
+    const windDir = sharedUniforms.uWindDir.value;
+    const windStrength = sharedUniforms.uWindStrength.value;
+
+    // 1. Canopy tree crowns sway slowly in the Andean mountain breeze
     if (this.canopyInstanced) {
-      this.canopyInstanced.rotation.z = Math.sin(this.elapsedSec * 1.15) * 0.004;
+      const swayX = Math.sin(t * 1.15) * 0.008 * windStrength * windDir.x;
+      const swayZ = Math.cos(t * 0.95) * 0.008 * windStrength * windDir.y;
+      this.canopyInstanced.rotation.set(swayX, 0, swayZ);
     }
+
+    // 2. Ground ferns & understory shrubs flutter at higher wind frequencies
     if (this.fernInstanced) {
-      this.fernInstanced.rotation.x = Math.cos(this.elapsedSec * 1.85) * 0.006;
+      const flutterZ = Math.sin(t * 2.6) * 0.012 * windStrength;
+      const flutterX = Math.cos(t * 2.1) * 0.012 * windStrength;
+      this.fernInstanced.rotation.set(flutterX, 0, flutterZ);
+    }
+    if (this.bushInstanced) {
+      const bushSway = Math.sin(t * 1.8 + 0.5) * 0.009 * windStrength;
+      this.bushInstanced.rotation.set(bushSway * 0.5, 0, bushSway);
+    }
+
+    // 3. Material roughness dynamically responds to rain & mist wetness (Bible §2.6)
+    // Wet leaves develop glossy Andean rain sheen (roughness decreases from 0.62 to 0.30)
+    const wetness = sharedUniforms.uWetness.value;
+    if (this.materialsRef) {
+      const baseLeafRoughness = 0.62;
+      const baseFernRoughness = 0.58;
+      this.materialsRef.foliageLeaf.roughness = baseLeafRoughness - wetness * 0.32;
+      this.materialsRef.foliageFern.roughness = baseFernRoughness - wetness * 0.30;
     }
   }
 

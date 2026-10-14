@@ -9,6 +9,7 @@
  */
 
 import * as THREE from 'three';
+import { ActiveBackend } from './tsl';
 
 export type PhotoPresetId =
   | 'cloudForestMist'
@@ -62,13 +63,22 @@ export const PHOTO_PRESETS: Record<PhotoPresetId, PostGradeConfig> = {
 
 export class PostProcessor {
   private renderer: THREE.WebGLRenderer;
+  private backend: ActiveBackend = 'webgl2';
   private overlayEl: HTMLDivElement | null = null;
   private damageVignetteEl: HTMLDivElement | null = null;
   private currentPreset: PhotoPresetId = 'cloudForestMist';
   private damagePulse: number = 0;
 
-  constructor(renderer: THREE.WebGLRenderer) {
+  // WebGPU TSL PostProcessing Pipeline
+  private pipeline: any = null;
+  private scenePass: any = null;
+  private aoPass: any = null;
+  private bloomPass: any = null;
+  private isWebGpuPipelineActive: boolean = false;
+
+  constructor(renderer: THREE.WebGLRenderer, backend: ActiveBackend = 'webgl2') {
     this.renderer = renderer;
+    this.backend = backend;
   }
 
   public build(container: HTMLElement): void {
@@ -110,6 +120,91 @@ export class PostProcessor {
     this.applyPreset(this.currentPreset);
   }
 
+  /**
+   * Initializes the TSL WebGPU render pipeline with Ground-Truth Ambient Occlusion
+   * (GTAO) for photorealistic crevice shadowing and restrained ACES bloom for river glints.
+   * If on WebGL2 or if initialization fails, falls back gracefully to standard rendering.
+   */
+  public async setupWebGpuPipeline(scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<void> {
+    if (this.backend !== 'webgpu') return;
+
+    try {
+      const webgpuMod = await import('three/webgpu').catch(() => null);
+      const tslMod = await import('three/tsl').catch(() => null);
+      const bloomMod = await import('three/examples/jsm/tsl/display/BloomNode.js').catch(() => null);
+      const gtaoMod = await import('three/examples/jsm/tsl/display/GTAONode.js').catch(() => null);
+
+      if (!webgpuMod || !tslMod || !bloomMod || !gtaoMod) return;
+
+      const RenderPipelineClass = webgpuMod.RenderPipeline || webgpuMod.PostProcessing;
+      const passFn = tslMod.pass;
+      const bloomFn = bloomMod.bloom;
+      const aoFn = gtaoMod.ao;
+
+      if (!RenderPipelineClass || !passFn) return;
+
+      const scenePass = passFn(scene, camera);
+      const scenePassColor = scenePass.getTextureNode('output');
+      const scenePassDepth = scenePass.getTextureNode('depth');
+
+      let compositeNode: any = scenePassColor;
+
+      // Ground-Truth Ambient Occlusion (GTAO) for realistic contact shadows under boots & rock crevices
+      if (typeof aoFn === 'function') {
+        const aoPassNode = aoFn(scenePassDepth, null as any, camera);
+        if (aoPassNode) {
+          if (aoPassNode.radius) aoPassNode.radius.value = 0.38;
+          if (aoPassNode.scale) aoPassNode.scale.value = 1.0;
+          this.aoPass = aoPassNode;
+          const aoTexture = aoPassNode.getTextureNode ? aoPassNode.getTextureNode() : aoPassNode;
+          compositeNode = compositeNode.mul(aoTexture.r);
+        }
+      }
+
+      // Restrained filmic bloom per Bible §2.8 (river glints, wet stones, gold insets)
+      if (typeof bloomFn === 'function') {
+        const bloomPassNode = bloomFn(scenePassColor, 0.28, 0.42, 0.90);
+        if (bloomPassNode) {
+          this.bloomPass = bloomPassNode;
+          compositeNode = compositeNode.add(bloomPassNode);
+        }
+      }
+
+      const pipeline = new RenderPipelineClass(this.renderer as any);
+      pipeline.outputNode = compositeNode;
+      this.pipeline = pipeline;
+      this.scenePass = scenePass;
+      this.isWebGpuPipelineActive = true;
+      console.log('[Juzu Post] WebGPU TSL PostProcessing & GTAO Pipeline initialized successfully.');
+    } catch (err) {
+      console.warn('[Juzu Post] Failed to initialize WebGPU TSL pipeline, falling back to WebGL2 direct render:', err);
+      this.pipeline = null;
+      this.isWebGpuPipelineActive = false;
+    }
+  }
+
+  /**
+   * Dual-path render dispatch:
+   * Uses WebGPU RenderPipeline when active, or falls back to WebGLRenderer.
+   */
+  public render(scene: THREE.Scene, camera: THREE.PerspectiveCamera): void {
+    if (this.isWebGpuPipelineActive && this.pipeline) {
+      try {
+        if (this.scenePass && this.scenePass.camera !== camera) {
+          this.scenePass.camera = camera;
+        }
+        this.pipeline.render();
+        return;
+      } catch (err) {
+        console.warn('[Juzu Post] WebGPU render pass failed, reverting to standard renderer:', err);
+        this.isWebGpuPipelineActive = false;
+        this.pipeline = null;
+      }
+    }
+
+    this.renderer.render(scene, camera);
+  }
+
   public applyPreset(preset: PhotoPresetId): void {
     this.currentPreset = preset;
     const cfg = PHOTO_PRESETS[preset];
@@ -138,6 +233,22 @@ export class PostProcessor {
   }
 
   public dispose(): void {
+    if (this.pipeline && typeof this.pipeline.dispose === 'function') {
+      try {
+        this.pipeline.dispose();
+      } catch {
+        // Safe disposal
+      }
+      this.pipeline = null;
+    }
+    if (this.aoPass && typeof this.aoPass.dispose === 'function') {
+      try {
+        this.aoPass.dispose();
+      } catch {
+        // Safe disposal
+      }
+      this.aoPass = null;
+    }
     if (this.overlayEl) {
       this.overlayEl.remove();
       this.overlayEl = null;

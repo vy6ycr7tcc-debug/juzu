@@ -114,8 +114,9 @@ export class JuzuEngine {
     // 1. Dual-path renderer, 4-component lighting rig, and ACES post-processing
     this.gpu = await createRendererWithFallback(container, qSettings.dpr);
     this.lightRig.build(this.scene, this.gpu.renderer);
-    this.post = new PostProcessor(this.gpu.renderer);
+    this.post = new PostProcessor(this.gpu.renderer, this.gpu.backend);
     this.post.build(container);
+    await this.post.setupWebGpuPipeline(this.scene, this.cameraRig.camera);
 
     // 2. Complete PBR material library (§2.2)
     this.materials.build();
@@ -282,6 +283,18 @@ export class JuzuEngine {
         ny + 1.05,
         -4.5,
         58
+      );
+    } else if (shot === 'river') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(3.5, -2.2, -Math.PI * 0.45, 'idle');
+      this.cameraRig.snapToShot(
+        10.5,
+        1.8,
+        -1.5,
+        -12.0,
+        -2.55,
+        -6.5,
+        56
       );
     } else if (shot === 'character') {
       this.setActiveRegion('cloudForest');
@@ -622,7 +635,7 @@ export class JuzuEngine {
       this.quests.update(dt);
       this.sky.update(dt);
       this.water.update(dt);
-      this.foliage.update(dt);
+      this.foliage.update(dt, this.naira.position);
       this.cloudForest.update(dt, this.naira.position);
       this.highSierra.update(dt);
       this.jungleLowlands.update(dt);
@@ -660,7 +673,9 @@ export class JuzuEngine {
     );
 
     this.input.consumeOneShotFlags();
-    if (this.gpu) {
+    if (this.post) {
+      this.post.render(this.scene, this.cameraRig.camera);
+    } else if (this.gpu) {
       this.gpu.renderer.render(this.scene, this.cameraRig.camera);
     }
   }
