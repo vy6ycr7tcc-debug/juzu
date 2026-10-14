@@ -102,13 +102,74 @@ export class TouchControlsOverlay {
       'font-family:Georgia, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, serif',
     ].join(';');
 
+    // Inject responsive styles for compact mobile heights & notch safe-areas
+    if (!document.getElementById('juzu-touch-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'juzu-touch-styles';
+      styleEl.textContent = `
+        @media (max-height: 480px) {
+          #juzu-virtual-joystick {
+            transform: scale(0.85);
+            transform-origin: bottom left;
+          }
+          #juzu-touch-action-cluster {
+            transform: scale(0.85);
+            transform-origin: bottom right;
+          }
+        }
+        @media (max-width: 680px) and (orientation: portrait) {
+          #juzu-virtual-joystick {
+            transform: scale(0.82);
+            transform-origin: bottom left;
+          }
+          #juzu-touch-action-cluster {
+            transform: scale(0.82);
+            transform-origin: bottom right;
+          }
+        }
+        #juzu-orientation-banner {
+          display: none;
+        }
+        @media (orientation: portrait) and (max-width: 768px) {
+          #juzu-orientation-banner {
+            display: flex;
+            position: fixed;
+            top: calc(10px + env(safe-area-inset-top, 0px));
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(22, 17, 12, 0.88);
+            color: #ecd8b4;
+            border: 1px solid rgba(212, 178, 126, 0.45);
+            border-radius: 20px;
+            padding: 5px 14px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            z-index: 50;
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            white-space: nowrap;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    // Portrait orientation hint banner
+    const orientationBanner = document.createElement('div');
+    orientationBanner.id = 'juzu-orientation-banner';
+    orientationBanner.textContent = '↻ Rotate device for widescreen expedition';
+    root.appendChild(orientationBanner);
+
     // 1. Left Virtual Joystick Base & Knob
     const joyWrap = document.createElement('div');
     joyWrap.id = 'juzu-virtual-joystick';
     joyWrap.style.cssText = [
       'position:absolute',
-      'bottom:36px',
-      'left:36px',
+      'bottom:calc(24px + env(safe-area-inset-bottom, 0px))',
+      'left:calc(24px + env(safe-area-inset-left, 0px))',
       'width:136px',
       'height:136px',
       'border-radius:50%',
@@ -167,10 +228,11 @@ export class TouchControlsOverlay {
 
     // 2. Right Action Button Cluster (Ergonomic Thumb Arc)
     const actionCluster = document.createElement('div');
+    actionCluster.id = 'juzu-touch-action-cluster';
     actionCluster.style.cssText = [
       'position:absolute',
-      'bottom:20px',
-      'right:20px',
+      'bottom:calc(16px + env(safe-area-inset-bottom, 0px))',
+      'right:calc(16px + env(safe-area-inset-right, 0px))',
       'width:260px',
       'height:260px',
       'pointer-events:none',
@@ -627,20 +689,26 @@ export class TouchControlsOverlay {
     const rawDx = touchX - this.joystickOriginX;
     const rawDy = touchY - this.joystickOriginY;
     const dist = Math.hypot(rawDx, rawDy);
-    const clampedDist = Math.min(this.maxRadius, dist);
+
+    // Dynamic scale from rendered bounding box (supports CSS @media scaling)
+    const scale = (this.joystickWrapEl ? this.joystickWrapEl.getBoundingClientRect().width : 136) / 136;
+    const effMax = this.maxRadius * scale;
+    const effSprint = this.sprintRadius * scale;
+
+    const clampedDist = Math.min(effMax, dist);
     const angle = Math.atan2(rawDy, rawDx);
 
-    const stickX = Math.cos(angle) * clampedDist;
-    const stickY = Math.sin(angle) * clampedDist;
+    const stickX = (Math.cos(angle) * clampedDist) / scale;
+    const stickY = (Math.sin(angle) * clampedDist) / scale;
 
     if (this.joystickKnobEl) {
       this.joystickKnobEl.style.transform = `translate3d(${stickX}px, ${stickY}px, 0)`;
     }
 
     if (this.inputRef) {
-      const normX = stickX / this.maxRadius;
-      const normZ = stickY / this.maxRadius;
-      const isSprinting = clampedDist >= this.sprintRadius;
+      const normX = (Math.cos(angle) * clampedDist) / effMax;
+      const normZ = (Math.sin(angle) * clampedDist) / effMax;
+      const isSprinting = clampedDist >= effSprint;
       this.inputRef.setTouchMovement(normX, normZ, isSprinting);
     }
   }
