@@ -67,6 +67,7 @@ export class InputManager {
 
   public sensitivity: number = 1.0;
   public invertY: boolean = false;
+  public hasTouchOverlay: boolean = false;
 
   private keysDown: Set<string> = new Set();
   private accumMouseX: number = 0;
@@ -391,6 +392,10 @@ export class InputManager {
   }
 
   private onTouchStart(e: TouchEvent): void {
+    if (this.hasTouchOverlay) return;
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'BUTTON' || target.closest('button, a, input, select'))) return;
+
     const halfW = window.innerWidth * 0.5;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
@@ -409,6 +414,7 @@ export class InputManager {
   }
 
   private onTouchMove(e: TouchEvent): void {
+    if (this.hasTouchOverlay) return;
     const maxRadius = 56;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
@@ -429,6 +435,7 @@ export class InputManager {
   }
 
   private onTouchEnd(e: TouchEvent): void {
+    if (this.hasTouchOverlay) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
       if (t.identifier === this.moveTouchId) {

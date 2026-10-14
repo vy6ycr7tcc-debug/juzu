@@ -75,6 +75,7 @@ export class TouchControlsOverlay {
   // Bow aim state
   private isAimingTouch: boolean = false;
 
+  public onRecenterCamera: (() => void) | null = null;
   private inputRef: InputManager | null = null;
 
   public build(container: HTMLElement, input: InputManager): void {
@@ -549,6 +550,10 @@ export class TouchControlsOverlay {
     }
 
     // Touch look listener on container (right half of the screen outside buttons)
+    let lastTapTime = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
+
     container.addEventListener(
       'touchstart',
       (e: TouchEvent) => {
@@ -558,6 +563,18 @@ export class TouchControlsOverlay {
           if (t.clientX >= halfW && this.lookTouchId === -1) {
             const target = t.target as HTMLElement;
             if (target && (target.tagName === 'BUTTON' || target.closest('button'))) continue;
+
+            const now = performance.now();
+            if (now - lastTapTime < 320 && Math.hypot(t.clientX - lastTapX, t.clientY - lastTapY) < 36) {
+              triggerHaptic(22);
+              if (this.onRecenterCamera) this.onRecenterCamera();
+              lastTapTime = 0;
+            } else {
+              lastTapTime = now;
+              lastTapX = t.clientX;
+              lastTapY = t.clientY;
+            }
+
             this.lookTouchId = t.identifier;
             this.lastLookX = t.clientX;
             this.lastLookY = t.clientY;
@@ -697,6 +714,9 @@ export class TouchControlsOverlay {
 
   public setVisible(visible: boolean): void {
     this.isVisible = visible;
+    if (this.inputRef) {
+      this.inputRef.hasTouchOverlay = visible;
+    }
     if (this.rootEl) {
       this.rootEl.style.display = visible ? 'block' : 'none';
     }

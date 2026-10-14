@@ -161,6 +161,9 @@ export class JuzuEngine {
     this.journal.build(container);
     this.quipuInspect.build(container);
     this.touchControls.build(container, this.input);
+    this.touchControls.onRecenterCamera = () => {
+      this.cameraRig.recenter(this.naira.yaw);
+    };
     this.menus.build(
       container,
       this.quality,

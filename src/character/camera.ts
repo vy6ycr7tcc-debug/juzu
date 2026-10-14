@@ -31,10 +31,16 @@ export class OverTheShoulderCamera {
 
   private readonly smoothedPos: THREE.Vector3 = new THREE.Vector3(0.55, 3.3, 12.2);
   private readonly smoothedLook: THREE.Vector3 = new THREE.Vector3(0.45, 2.9, 6.0);
+  private targetRecenterYaw: number | null = null;
 
   constructor(aspect: number = 16 / 9) {
     // §2.9 FOV: 55–60 degrees vertical (58° default, 60° traversal)
     this.camera = new THREE.PerspectiveCamera(58, aspect, 0.15, 320);
+  }
+
+  public recenter(targetYaw: number): void {
+    this.targetRecenterYaw = targetYaw;
+    this.pitch = -0.06;
   }
 
   public build(initialTarget: THREE.Vector3, initialYaw: number): void {
@@ -111,6 +117,22 @@ export class OverTheShoulderCamera {
 
     if (input.orbitTogglePressed) {
       this.mode = this.mode === 'orbit' ? 'overShoulder' : 'orbit';
+    }
+
+    if (Math.abs(input.lookDeltaX) > 0.001 || Math.abs(input.lookDeltaY) > 0.001) {
+      this.targetRecenterYaw = null;
+    }
+
+    if (this.targetRecenterYaw !== null) {
+      let diff = (this.targetRecenterYaw - this.yaw) % (Math.PI * 2);
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) < 0.03) {
+        this.yaw = this.targetRecenterYaw;
+        this.targetRecenterYaw = null;
+      } else {
+        this.yaw += diff * Math.min(1.0, dt * 10.0);
+      }
     }
 
     this.yaw -= input.lookDeltaX * 0.008;
