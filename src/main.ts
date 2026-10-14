@@ -158,7 +158,18 @@ export class JuzuEngine {
       this.save,
       this.lightRig,
       this.post,
-      () => this.downloadScreenshotPng()
+      () => this.downloadScreenshotPng(),
+      () => {
+        this.audio.resumeAudioContext();
+        this.hud.showChapterBanner(
+          'Chapter I: The Quipu Fragment',
+          'Cloud Forest Valleys · Vilcabamba Ridge'
+        );
+      },
+      regionId => {
+        this.setActiveRegion(regionId as SaveData['regionId']);
+        this.placeNairaAt(0.0, 8.2, Math.PI, 'idle');
+      }
     );
 
     if (typeof window !== 'undefined') {
@@ -433,13 +444,13 @@ export class JuzuEngine {
         this.cameraRig.mode === 'overShoulder' ? 'orbit' : 'overShoulder';
     }
     if (
-      this.cameraRig.mode === 'shot' &&
+      (this.cameraRig.mode === 'shot' || this.cameraRig.mode === 'vista') &&
       Math.hypot(this.input.state.moveX, this.input.state.moveZ) > 0.08
     ) {
       this.cameraRig.mode = 'overShoulder';
     }
 
-    if (!this.menus.isPaused && !this.journal.isOpen) {
+    if (!this.menus.isPaused && !this.journal.isOpen && !this.menus.isTitleScreenOpen) {
       if (this.input.state.craftPressed) {
         if (!this.crafting.craftSelectedArrow()) {
           this.crafting.cycleArrowType();
@@ -478,7 +489,20 @@ export class JuzuEngine {
         this.input.state.aimHeld = true;
       }
 
-      this.naira.update(dt, this.input.state, this.cameraRig.yaw, this.terrain, this.audio);
+      this.naira.update(
+        dt,
+        this.input.state,
+        this.cameraRig.yaw,
+        this.terrain,
+        this.audio,
+        this.traversal,
+        damage => {
+          if (this.combat.health <= 0) return;
+          const dead = this.combat.applyDamage(damage);
+          this.hud.flashDamage(0.85);
+          if (dead) this.handlePlayerDeath();
+        }
+      );
       this.physics.update(dt, this.naira.position);
       this.cameraRig.update(
         dt,
@@ -487,7 +511,19 @@ export class JuzuEngine {
         this.naira.speed,
         this.terrain
       );
-      this.enemies.update(dt, this.naira.position, this.input.state.crouch, this.terrain);
+      this.enemies.update(
+        dt,
+        this.naira.position,
+        this.input.state.crouch,
+        this.terrain,
+        damage => {
+          if (this.combat.health <= 0) return;
+          const dead = this.combat.applyDamage(damage);
+          this.hud.flashDamage(0.85);
+          this.audio.playSfx('breath_exert', 0);
+          if (dead) this.handlePlayerDeath();
+        }
+      );
       this.combat.update(dt, this.input.state.aimHeld, this.enemies);
       this.puzzles.update(dt);
       this.quests.update(dt);
@@ -502,8 +538,10 @@ export class JuzuEngine {
       this.audio.update(dt);
 
       this.updateInteractables();
+      this.checkRegionGateways();
     }
 
+    this.hud.setVisible(!this.menus.isTitleScreenOpen && !this.menus.isPhotoMode);
     this.hud.update(
       dt,
       this.quests.getActiveObjective(),
@@ -512,7 +550,8 @@ export class JuzuEngine {
       this.naira.stamina,
       this.input.state.aimHeld,
       this.crafting.selectedArrow,
-      this.crafting.getAmmoCount()
+      this.crafting.getAmmoCount(),
+      this.combat.health
     );
 
     this.input.consumeOneShotFlags();
@@ -594,6 +633,64 @@ export class JuzuEngine {
         );
         this.quests.refreshObjectiveFromFlags(this.save, this.activeRegion);
         this.audio.playSfx('collectible_chime', 0);
+      }
+    }
+  }
+
+  private isRespawning: boolean = false;
+
+  private handlePlayerDeath(): void {
+    if (this.isRespawning) return;
+    this.isRespawning = true;
+    this.hud.showDeathScreen(true);
+    this.audio.playSfx('breath_exert', 0);
+
+    window.setTimeout(() => {
+      const state = this.save.getState();
+      this.placeNairaAt(state.position[0], state.position[2], state.yaw, 'idle');
+      this.combat.health = 100;
+      this.enemies.resetAllOperatives();
+      this.hud.showDeathScreen(false);
+      this.isRespawning = false;
+    }, 2200);
+  }
+
+  private checkRegionGateways(): void {
+    const p = this.naira.position;
+    if (this.activeRegion === 'cloudForest') {
+      if (Math.abs(p.x) <= 4.0 && p.z <= -25.2) {
+        this.setActiveRegion('highSierra');
+        this.placeNairaAt(0.0, 8.8, Math.PI, 'idle');
+        this.hud.showChapterBanner('Chapter IV: The High Sierra', 'Intihuatana Solar Pass · 3,800m');
+        this.audio.playSfx('condor_cry', 0);
+      }
+    } else if (this.activeRegion === 'highSierra') {
+      if (Math.abs(p.x) <= 4.5 && p.z <= -25.5) {
+        this.setActiveRegion('jungleLowlands');
+        this.placeNairaAt(0.0, 9.2, Math.PI, 'idle');
+        this.hud.showChapterBanner('Chapter VII: Antisuyu Rainforest', 'The Drained Cenote · Lowland Choke');
+        this.audio.playSfx('checkpoint_chime', 0);
+      } else if (p.z >= 10.8) {
+        this.setActiveRegion('cloudForest');
+        this.placeNairaAt(0.0, -24.0, 0.0, 'idle');
+        this.hud.showChapterBanner('Chapter I: Cloud Forest Valleys', 'The Ravine · South Sanctuary Trail');
+      }
+    } else if (this.activeRegion === 'jungleLowlands') {
+      if (Math.abs(p.x) <= 4.5 && p.z <= -24.5) {
+        this.setActiveRegion('paititi');
+        this.placeNairaAt(0.0, 2.5, Math.PI, 'idle');
+        this.hud.showChapterBanner('Chapter X: Paititi — The Golden Cradle', 'Plaza of the Sun · Living Quipu Archive');
+        this.audio.playSfx('collectible_chime', 0);
+      } else if (p.z >= 11.2) {
+        this.setActiveRegion('highSierra');
+        this.placeNairaAt(0.0, -24.5, 0.0, 'idle');
+        this.hud.showChapterBanner('Chapter IV: The High Sierra', 'Intihuatana Solar Pass · 3,800m');
+      }
+    } else if (this.activeRegion === 'paititi') {
+      if (p.z >= 8.5) {
+        this.setActiveRegion('jungleLowlands');
+        this.placeNairaAt(0.0, -23.5, 0.0, 'idle');
+        this.hud.showChapterBanner('Chapter VII: Antisuyu Rainforest', 'The Drained Cenote · Lowland Choke');
       }
     }
   }

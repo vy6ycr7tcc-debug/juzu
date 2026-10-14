@@ -18,6 +18,7 @@ import { InputState } from '../core/input';
 import { AudioManager } from '../core/audio';
 import { PbrMaterialLibrary } from '../world/materials';
 import { TerrainSystem } from '../world/terrain';
+import { TraversalSystem, ZiplineSpan } from '../gameplay/traversal';
 
 export type LocomotionMode = 'idle' | 'walk' | 'jog' | 'sprint' | 'crouch' | 'climb' | 'zipline' | 'aim';
 
@@ -39,6 +40,9 @@ export class NairaController {
   public modelLoaded: boolean = false;
   public ziplineActive: boolean = false;
 
+  private ziplineSpan: ZiplineSpan | null = null;
+  private ziplineT: number = 0;
+  private fallApexY: number = 0;
   private mixer: THREE.AnimationMixer | null = null;
   private actions: Partial<Record<LocomotionMode, THREE.AnimationAction>> = {};
   private activeAction: THREE.AnimationAction | null = null;
@@ -347,6 +351,28 @@ export class NairaController {
       return new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, values);
     };
 
+    const composeDirectEulerTrack = (
+      bone: THREE.Object3D | null,
+      times: number[],
+      localEulers: Array<[number, number, number]>
+    ): THREE.KeyframeTrack | null => {
+      if (!bone) return null;
+      const values = new Float32Array(times.length * 4);
+      const eul = new THREE.Euler();
+      const q = new THREE.Quaternion();
+
+      for (let i = 0; i < times.length; i++) {
+        const [rx, ry, rz] = localEulers[i];
+        eul.set(rx, ry, rz);
+        q.setFromEuler(eul);
+        values[i * 4] = q.x;
+        values[i * 4 + 1] = q.y;
+        values[i * 4 + 2] = q.z;
+        values[i * 4 + 3] = q.w;
+      }
+      return new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, values);
+    };
+
     const idleTimes = [0.0, 1.2, 2.4];
     const idleTracks: THREE.KeyframeTrack[] = [];
     const addT = (list: THREE.KeyframeTrack[], tr: THREE.KeyframeTrack | null): void => {
@@ -368,25 +394,25 @@ export class NairaController {
       [-0.02, 0.05, 0.01],
       [-0.04, -0.06, 0.0],
     ]));
-    addT(idleTracks, composeTrack(this.leftArmBone, idleTimes, [
-      [1.30, 0.04, 0.05],
-      [1.32, 0.02, 0.04],
-      [1.30, 0.04, 0.05],
+    addT(idleTracks, composeDirectEulerTrack(this.leftArmBone, idleTimes, [
+      [1.15, 0.05, -0.15],
+      [1.18, 0.04, -0.14],
+      [1.15, 0.05, -0.15],
     ]));
-    addT(idleTracks, composeTrack(this.rightArmBone, idleTimes, [
-      [1.30, -0.04, -0.05],
-      [1.32, -0.02, -0.04],
-      [1.30, -0.04, -0.05],
+    addT(idleTracks, composeDirectEulerTrack(this.rightArmBone, idleTimes, [
+      [1.15, -0.05, 0.15],
+      [1.18, -0.04, 0.14],
+      [1.15, -0.05, 0.15],
     ]));
-    addT(idleTracks, composeTrack(this.leftForeArmBone, idleTimes, [
-      [0.0, 0.0, 0.35],
-      [0.0, 0.0, 0.38],
-      [0.0, 0.0, 0.35],
+    addT(idleTracks, composeDirectEulerTrack(this.leftForeArmBone, idleTimes, [
+      [0.20, 0.0, 0.20],
+      [0.22, 0.0, 0.20],
+      [0.20, 0.0, 0.20],
     ]));
-    addT(idleTracks, composeTrack(this.rightForeArmBone, idleTimes, [
-      [0.0, 0.0, -0.35],
-      [0.0, 0.0, -0.38],
-      [0.0, 0.0, -0.35],
+    addT(idleTracks, composeDirectEulerTrack(this.rightForeArmBone, idleTimes, [
+      [0.20, 0.0, -0.20],
+      [0.22, 0.0, -0.20],
+      [0.20, 0.0, -0.20],
     ]));
     addT(idleTracks, composeTrack(this.leftUpLegBone, idleTimes, [
       [0.02, 0.0, -0.02],
@@ -430,33 +456,33 @@ export class NairaController {
         [spineLean + 0.03, 0.0, 0.0],
         [spineLean, -0.06, 0.02],
       ]));
-      addT(trs, composeTrack(this.leftArmBone, t, [
-        [1.30, 0.04, 0.05 + armSwing],
-        [1.30, 0.04, 0.05],
-        [1.30, 0.04, 0.05 - armSwing],
-        [1.30, 0.04, 0.05],
-        [1.30, 0.04, 0.05 + armSwing],
+      addT(trs, composeDirectEulerTrack(this.leftArmBone, t, [
+        [1.15 - armSwing * 0.7, 0.05, -0.15],
+        [1.15, 0.05, -0.15],
+        [1.15 + armSwing * 0.7, 0.05, -0.15],
+        [1.15, 0.05, -0.15],
+        [1.15 - armSwing * 0.7, 0.05, -0.15],
       ]));
-      addT(trs, composeTrack(this.rightArmBone, t, [
-        [1.30, -0.04, -0.05 - armSwing],
-        [1.30, -0.04, -0.05],
-        [1.30, -0.04, -0.05 + armSwing],
-        [1.30, -0.04, -0.05],
-        [1.30, -0.04, -0.05 - armSwing],
+      addT(trs, composeDirectEulerTrack(this.rightArmBone, t, [
+        [1.15 + armSwing * 0.7, -0.05, 0.15],
+        [1.15, -0.05, 0.15],
+        [1.15 - armSwing * 0.7, -0.05, 0.15],
+        [1.15, -0.05, 0.15],
+        [1.15 + armSwing * 0.7, -0.05, 0.15],
       ]));
-      addT(trs, composeTrack(this.leftForeArmBone, t, [
-        [0.0, 0.0, 0.35 + armSwing * 0.25],
-        [0.0, 0.0, 0.35],
-        [0.0, 0.0, 0.35 - armSwing * 0.15],
-        [0.0, 0.0, 0.35],
-        [0.0, 0.0, 0.35 + armSwing * 0.25],
+      addT(trs, composeDirectEulerTrack(this.leftForeArmBone, t, [
+        [0.20 + armSwing * 0.25, 0.0, 0.20],
+        [0.20, 0.0, 0.20],
+        [0.20 - armSwing * 0.15, 0.0, 0.20],
+        [0.20, 0.0, 0.20],
+        [0.20 + armSwing * 0.25, 0.0, 0.20],
       ]));
-      addT(trs, composeTrack(this.rightForeArmBone, t, [
-        [0.0, 0.0, -0.35 - armSwing * 0.25],
-        [0.0, 0.0, -0.35],
-        [0.0, 0.0, -0.35 + armSwing * 0.15],
-        [0.0, 0.0, -0.35],
-        [0.0, 0.0, -0.35 - armSwing * 0.25],
+      addT(trs, composeDirectEulerTrack(this.rightForeArmBone, t, [
+        [0.20 - armSwing * 0.25, 0.0, -0.20],
+        [0.20, 0.0, -0.20],
+        [0.20 + armSwing * 0.15, 0.0, -0.20],
+        [0.20, 0.0, -0.20],
+        [0.20 - armSwing * 0.25, 0.0, -0.20],
       ]));
       addT(trs, composeTrack(this.leftUpLegBone, t, [
         [legSwing, 0.0, 0.0],
@@ -708,20 +734,65 @@ export class NairaController {
     input: InputState,
     cameraYaw: number,
     terrain: TerrainSystem,
-    audio: AudioManager
+    audio: AudioManager,
+    traversal?: TraversalSystem,
+    onLandDamage?: (damage: number) => void
   ): void {
     this.elapsedSec += dt;
+
+    // 1. Handle active zipline descent
+    if (this.ziplineActive && this.ziplineSpan) {
+      this.ziplineT += (8.0 / Math.max(1.0, this.ziplineSpan.length)) * dt;
+      this.position.lerpVectors(this.ziplineSpan.start, this.ziplineSpan.end, Math.min(1.0, this.ziplineT));
+      this.root.position.copy(this.position);
+      const spanDx = this.ziplineSpan.end.x - this.ziplineSpan.start.x;
+      const spanDz = this.ziplineSpan.end.z - this.ziplineSpan.start.z;
+      this.yaw = Math.atan2(spanDx, spanDz);
+      this.root.rotation.set(0, this.yaw, 0);
+      if (this.contactShadowMesh) this.contactShadowMesh.visible = false;
+
+      if (this.ziplineT >= 1.0) {
+        this.ziplineActive = false;
+        this.ziplineSpan = null;
+        this.isGrounded = true;
+        this.transitionToMode('idle', true);
+        audio.playSfx('footstep', 0, 'dirt');
+      }
+
+      this.updateBraidPhysics(dt);
+      if (this.mixer && this.activeAction) {
+        this.mixer.update(dt);
+      }
+      return;
+    }
+
+    // 2. Check nearby zipline entry
+    if (traversal && !this.ziplineActive) {
+      const nearZip = traversal.findNearbyZipline(this.position, 2.2);
+      if (nearZip && (input.interactPressed || input.jumpPressed)) {
+        this.ziplineActive = true;
+        this.ziplineSpan = nearZip;
+        this.ziplineT = 0;
+        this.transitionToMode('zipline', true);
+        audio.playSfx('zipline_slide', 0);
+        return;
+      }
+    }
 
     const inputMag = Math.hypot(input.moveX, input.moveZ);
     let targetSpeed = 0;
     let nextMode: LocomotionMode = 'idle';
 
-    if (this.ziplineActive) {
-      nextMode = 'zipline';
-      targetSpeed = 0.0;
-    } else if (input.climbHeld) {
+    const nearbyCrag = traversal ? traversal.findNearbyCrag(this.position, 1.8) : null;
+    const shouldClimb = (nearbyCrag && (input.climbHeld || (!this.isGrounded && input.moveZ < -0.1))) || input.climbHeld;
+
+    if (shouldClimb) {
       nextMode = 'climb';
       targetSpeed = 0.8;
+      if (nearbyCrag) {
+        this.yaw = nearbyCrag.facingYaw;
+        this.root.rotation.set(0, this.yaw, 0);
+      }
     } else if (input.aimHeld) {
       nextMode = 'aim';
       targetSpeed = inputMag > 0.08 ? 1.0 : 0.0;
@@ -759,7 +830,7 @@ export class NairaController {
       this.stamina = Math.min(100, this.stamina + dt * 18.0);
     }
 
-    if (inputMag > 0.08 && this.speed > 0.05) {
+    if (inputMag > 0.08 && this.speed > 0.05 && nextMode !== 'climb') {
       _forward.set(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
       _right.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
 
@@ -784,27 +855,56 @@ export class NairaController {
       audio.playSfx('footstep', 0, onBridge ? 'wood' : 'dirt');
     }
 
-    if (input.jumpPressed && this.isGrounded) {
+    if (input.jumpPressed && this.isGrounded && nextMode !== 'climb') {
       this.verticalVelocity = 3.96;
       this.isGrounded = false;
+      this.fallApexY = this.position.y;
     }
 
     const groundY = terrain.sampleGroundY(this.position.x, this.position.z, this.position.y);
-    if (nextMode === 'climb' || nextMode === 'zipline') {
-      if (nextMode === 'climb' && Math.abs(input.moveZ) > 0.05) {
+    if (nextMode === 'climb') {
+      if (Math.abs(input.moveZ) > 0.05) {
         this.position.y += -input.moveZ * 0.8 * dt;
+      }
+      if (traversal) {
+        const crag = traversal.findNearbyCrag(this.position, 2.0);
+        if (crag) {
+          this.position.y = Math.max(crag.bottomY + 0.2, this.position.y);
+          // Auto mantle onto platform ledge when reaching top
+          if (this.position.y >= crag.topY - 0.22) {
+            this.position.y = crag.topY;
+            this.position.z = crag.centerZ - 0.95;
+            this.position.x = crag.centerX;
+            this.isGrounded = true;
+            this.verticalVelocity = 0;
+            input.climbHeld = false;
+            this.transitionToMode('idle', true);
+            audio.playSfx('footstep', 0, 'stone');
+          }
+        }
       }
       if (this.contactShadowMesh) this.contactShadowMesh.visible = false;
     } else if (!this.isGrounded) {
       if (this.contactShadowMesh) this.contactShadowMesh.visible = true;
       this.verticalVelocity -= 9.81 * dt;
       this.position.y += this.verticalVelocity * dt;
+      this.fallApexY = Math.max(this.fallApexY, this.position.y);
       if (this.position.y <= groundY) {
+        const fallDist = this.fallApexY - groundY;
+        this.fallApexY = groundY;
         this.position.y = groundY;
         this.verticalVelocity = 0;
         this.isGrounded = true;
+        if (traversal && onLandDamage && fallDist > 3.0) {
+          const dmg = traversal.computeFallDamage(fallDist, groundY <= 0.6);
+          if (dmg > 0) {
+            onLandDamage(dmg);
+            audio.playSfx('breath_exert', 0);
+          }
+        }
       }
     } else {
+      this.fallApexY = groundY;
       if (this.contactShadowMesh) this.contactShadowMesh.visible = true;
       this.position.y = groundY;
     }

@@ -33,10 +33,21 @@ export interface SolNegroOperative {
   awareness: number; // 0.0 to 1.0
   health: number;
   active: boolean;
+  shootCooldown: number;
+  muzzleFlashTimer: number;
+  muzzleFlashMesh: THREE.Mesh | null;
   root: THREE.Group;
   mixer: THREE.AnimationMixer | null;
   actions: Record<string, THREE.AnimationAction>;
   activeActionName: string;
+}
+
+export interface BulletTracer {
+  mesh: THREE.Mesh;
+  direction: THREE.Vector3;
+  speed: number;
+  active: boolean;
+  age: number;
 }
 
 const _toPlayer = new THREE.Vector3();
@@ -45,6 +56,9 @@ const _forward = new THREE.Vector3();
 export class EnemyManager {
   public readonly group: THREE.Group = new THREE.Group();
   public readonly operatives: SolNegroOperative[] = [];
+  public readonly tracers: BulletTracer[] = [];
+  private readonly tracerGeometries: THREE.BufferGeometry[] = [];
+  private readonly tracerMaterials: THREE.Material[] = [];
 
   public async build(
     scene: THREE.Scene,
@@ -53,6 +67,25 @@ export class EnemyManager {
   ): Promise<void> {
     this.group.name = 'SolNegroOperatives';
     scene.add(this.group);
+
+    // Bullet tracer pool
+    const tracerGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.65, 4);
+    tracerGeo.rotateX(Math.PI / 2);
+    this.tracerGeometries.push(tracerGeo);
+    const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffaa33, transparent: true, opacity: 0.88 });
+    this.tracerMaterials.push(tracerMat);
+    for (let t = 0; t < 8; t++) {
+      const mesh = new THREE.Mesh(tracerGeo, tracerMat);
+      mesh.visible = false;
+      this.group.add(mesh);
+      this.tracers.push({
+        mesh,
+        direction: new THREE.Vector3(),
+        speed: 68.0,
+        active: false,
+        age: 0,
+      });
+    }
 
     if (!materials || !terrain) return;
 
@@ -97,6 +130,9 @@ export class EnemyManager {
         awareness: 0,
         health: 100,
         active: true,
+        shootCooldown: 0.6 + i * 0.5,
+        muzzleFlashTimer: 0,
+        muzzleFlashMesh: null,
         root: opRoot,
         mixer: null,
         actions: {},
@@ -146,7 +182,8 @@ export class EnemyManager {
     });
 
     // Attach tactical weapon to right hand socket
-    if (rightHand) {
+    const handSocket = rightHand as THREE.Object3D | null;
+    if (handSocket) {
       const gunGeo = new THREE.BoxGeometry(0.05, 0.1, 0.24);
       const barrelGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6);
       barrelGeo.rotateX(Math.PI / 2);
@@ -158,11 +195,18 @@ export class EnemyManager {
       const gun = new THREE.Group();
       const receiver = new THREE.Mesh(gunGeo, gunMat);
       const barrel = new THREE.Mesh(barrelGeo, gunMat);
-      barrel.position.set(0, 0.025, -0.15);
-      gun.add(receiver, barrel);
-      gun.position.set(0.02, 0.04, -0.04);
-      gun.rotation.set(-Math.PI * 0.45, 0, Math.PI * 0.1);
-      (rightHand as THREE.Object3D).add(gun);
+      gun.add(receiver);
+      gun.add(barrel);
+      const flashGeo = new THREE.SphereGeometry(0.045, 6, 6);
+      const flashMat = new THREE.MeshBasicMaterial({ color: 0xffe688, transparent: true, opacity: 0.95 });
+      this.tracerGeometries.push(flashGeo);
+      this.tracerMaterials.push(flashMat);
+      const flash = new THREE.Mesh(flashGeo, flashMat);
+      flash.position.set(0, 0.025, -0.26);
+      flash.visible = false;
+      gun.add(flash);
+      op.muzzleFlashMesh = flash;
+      handSocket.add(gun);
     }
 
     op.root.add(model);
@@ -235,7 +279,8 @@ export class EnemyManager {
     dt: number,
     playerPosition: THREE.Vector3,
     playerCrouching: boolean,
-    terrain?: TerrainSystem
+    terrain?: TerrainSystem,
+    onPlayerHit?: (damage: number) => void
   ): void {
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
@@ -246,6 +291,23 @@ export class EnemyManager {
       if (distSq > 100 * 100) continue;
 
       const dist = Math.sqrt(distSq);
+
+      _forward.set(Math.sin(op.yaw), 0, Math.cos(op.yaw));
+      const dirDot = dist > 0.01 ? (_toPlayer.x * _forward.x + _toPlayer.z * _forward.z) / dist : 0;
+      const inSightCone = dirDot > 0.35;
+      const detectionRange = playerCrouching ? 9.5 : 20.0;
+
+      if (dist < detectionRange && (inSightCone || dist < 4.5)) {
+        op.awareness = Math.min(1.0, op.awareness + dt * (playerCrouching ? 0.22 : 0.48));
+      } else {
+        op.awareness = Math.max(0.0, op.awareness - dt * 0.18);
+      }
+
+      if (op.awareness > 0.85) op.state = 'combat';
+      else if (op.awareness > 0.6) op.state = 'alerted';
+      else if (op.awareness > 0.35) op.state = 'searching';
+      else if (op.awareness > 0.15) op.state = 'suspicious';
+      else op.state = 'unaware';
 
       if (op.state === 'unaware' || op.state === 'suspicious') {
         const patrolSpeed = op.state === 'unaware' ? 0.14 : 0.06;
@@ -269,6 +331,22 @@ export class EnemyManager {
         this.setOperativeAction(op, 'walk', op.state === 'unaware' ? 1.0 : 0.65);
       } else if (op.state === 'combat') {
         op.yaw = Math.atan2(_toPlayer.x, _toPlayer.z);
+
+        // Tactical gunfire loop
+        op.shootCooldown -= dt;
+        if (op.shootCooldown <= 0 && dist < 32.0 && inSightCone) {
+          op.shootCooldown = 1.7 + Math.random() * 0.7;
+          if (op.muzzleFlashMesh) {
+            op.muzzleFlashMesh.visible = true;
+            op.muzzleFlashTimer = 0.08;
+          }
+          this.fireTracer(op.position, playerPosition);
+          const hitChance = Math.max(0.25, 0.72 - (dist / 38.0));
+          if (Math.random() < hitChance) {
+            onPlayerHit?.(16 + Math.floor(Math.random() * 8));
+          }
+        }
+
         // Advance toward player if farther than 4.5 meters, otherwise aim from tactical cover
         if (dist > 4.5) {
           const moveSpeed = 2.4;
@@ -287,33 +365,75 @@ export class EnemyManager {
         this.setOperativeAction(op, 'idle', 1.0);
       }
 
+      if (op.muzzleFlashTimer > 0) {
+        op.muzzleFlashTimer -= dt;
+        if (op.muzzleFlashTimer <= 0 && op.muzzleFlashMesh) {
+          op.muzzleFlashMesh.visible = false;
+        }
+      }
+
       op.root.position.copy(op.position);
       op.root.rotation.set(0, op.yaw, 0);
 
       if (op.mixer) {
         op.mixer.update(dt);
       }
+    }
 
-      _forward.set(Math.sin(op.yaw), 0, Math.cos(op.yaw));
-      const dirDot = dist > 0.01 ? (_toPlayer.x * _forward.x + _toPlayer.z * _forward.z) / dist : 0;
-      const inSightCone = dirDot > 0.35;
-      const detectionRange = playerCrouching ? 9.5 : 20.0;
-
-      if (dist < detectionRange && (inSightCone || dist < 4.5)) {
-        op.awareness = Math.min(1.0, op.awareness + dt * (playerCrouching ? 0.22 : 0.48));
-      } else {
-        op.awareness = Math.max(0.0, op.awareness - dt * 0.18);
+    // Update active bullet tracers
+    for (let t = 0; t < this.tracers.length; t++) {
+      const tr = this.tracers[t];
+      if (!tr.active) continue;
+      tr.age += dt;
+      tr.mesh.position.addScaledVector(tr.direction, tr.speed * dt);
+      if (tr.age > 0.16) {
+        tr.active = false;
+        tr.mesh.visible = false;
       }
+    }
+  }
 
-      if (op.awareness > 0.85) op.state = 'combat';
-      else if (op.awareness > 0.6) op.state = 'alerted';
-      else if (op.awareness > 0.35) op.state = 'searching';
-      else if (op.awareness > 0.15) op.state = 'suspicious';
-      else op.state = 'unaware';
+  private fireTracer(from: THREE.Vector3, to: THREE.Vector3): void {
+    const tracer = this.tracers.find(t => !t.active);
+    if (!tracer) return;
+    tracer.active = true;
+    tracer.age = 0;
+    tracer.mesh.position.set(from.x, from.y + 1.25, from.z);
+    _toPlayer.set(to.x, to.y + 1.0, to.z).sub(tracer.mesh.position);
+    tracer.direction.copy(_toPlayer).normalize();
+    tracer.mesh.lookAt(to.x, to.y + 1.0, to.z);
+    tracer.mesh.visible = true;
+  }
+
+  public resetAllOperatives(): void {
+    for (let i = 0; i < this.operatives.length; i++) {
+      const op = this.operatives[i];
+      op.health = 100;
+      op.active = true;
+      op.state = 'unaware';
+      op.awareness = 0;
+      op.patrolT = i * 0.5;
+      op.position.copy(op.patrolStart);
+      op.root.position.copy(op.position);
+      op.root.visible = true;
+      if (op.muzzleFlashMesh) op.muzzleFlashMesh.visible = false;
+    }
+    for (let t = 0; t < this.tracers.length; t++) {
+      this.tracers[t].active = false;
+      this.tracers[t].mesh.visible = false;
     }
   }
 
   public dispose(): void {
+    for (let i = 0; i < this.tracerGeometries.length; i++) {
+      this.tracerGeometries[i].dispose();
+    }
+    for (let i = 0; i < this.tracerMaterials.length; i++) {
+      this.tracerMaterials[i].dispose();
+    }
+    this.tracerGeometries.length = 0;
+    this.tracerMaterials.length = 0;
+    this.tracers.length = 0;
     this.operatives.length = 0;
     this.group.removeFromParent();
   }

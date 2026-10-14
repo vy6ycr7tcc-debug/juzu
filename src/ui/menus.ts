@@ -19,6 +19,8 @@ export class MenusOverlay {
   public isPhotoMode: boolean = false;
   private rootEl: HTMLDivElement | null = null;
   private photoBarEl: HTMLDivElement | null = null;
+  public titleScreenEl: HTMLDivElement | null = null;
+  public isTitleScreenOpen: boolean = false;
 
   public build(
     container: HTMLElement,
@@ -27,9 +29,88 @@ export class MenusOverlay {
     save: SaveManager,
     lightRig: LightRig,
     post: PostProcessor,
-    onCapturePng: () => void
+    onCapturePng: () => void,
+    onBeginExpedition?: () => void,
+    onSelectRegion?: (regionId: string) => void
   ): void {
     if (typeof document === 'undefined') return;
+
+    // 0. Atmospheric Title Screen (Vista opening, bypassed in automated shot modes)
+    const isShotMode =
+      typeof window !== 'undefined' &&
+      (new URLSearchParams(window.location.search).has('shot') ||
+        new URLSearchParams(window.location.search).has('region'));
+
+    const titleScreen = document.createElement('div');
+    titleScreen.id = 'juzu-title-screen';
+    titleScreen.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'display:flex',
+      'flex-direction:column',
+      'align-items:center',
+      'justify-content:center',
+      'background:radial-gradient(ellipse at center, rgba(14,18,16,0.48) 0%, rgba(6,9,8,0.92) 100%)',
+      'z-index:45',
+      'font-family:Georgia, "Times New Roman", serif',
+      'color:#f2ece1',
+      'transition:opacity 0.85s ease',
+    ].join(';');
+
+    titleScreen.innerHTML = `
+      <div style="text-align:center;max-width:560px;padding:32px 24px;border:1px solid rgba(212,184,136,0.3);background:rgba(12,16,14,0.72);border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,0.85);">
+        <div style="font-size:11px;letter-spacing:0.32em;color:#d4b888;text-transform:uppercase;margin-bottom:10px;">Archaeological Expedition · Inca Andes</div>
+        <h1 style="font-size:46px;letter-spacing:0.18em;margin:0 0 6px 0;color:#fdfaf2;text-shadow:0 3px 14px rgba(0,0,0,0.9);font-weight:400;">J U Z U</h1>
+        <div style="font-size:15px;letter-spacing:0.1em;color:#e6c896;margin-bottom:26px;font-style:italic;">The Search for Paititi</div>
+        <div style="display:flex;flex-direction:column;gap:10px;width:240px;margin:0 auto 24px auto;">
+          <button id="juzu-btn-begin" style="padding:11px 16px;background:#384836;color:#fdfaf2;border:1px solid #c9a468;cursor:pointer;font-family:Georgia,serif;font-size:14px;letter-spacing:0.08em;transition:background 0.2s ease;">Begin Expedition</button>
+          <button id="juzu-btn-toggle-chapters" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Select Chapter</button>
+        </div>
+        <div id="juzu-chapter-list" style="display:none;flex-direction:column;gap:6px;margin-bottom:20px;font-size:12px;">
+          <button class="juzu-chap-pick" data-region="cloudForest" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter I: Cloud Forest Valleys</button>
+          <button class="juzu-chap-pick" data-region="highSierra" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter IV: High Sierra (Intihuatana)</button>
+          <button class="juzu-chap-pick" data-region="jungleLowlands" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter VII: Antisuyu Rainforest Cenote</button>
+          <button class="juzu-chap-pick" data-region="paititi" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter X: Paititi — Plaza of the Sun</button>
+        </div>
+        <div style="font-size:11px;letter-spacing:0.05em;color:#9b9487;line-height:1.6;border-top:1px solid rgba(212,184,136,0.18);padding-top:16px;">
+          WASD Move · Space Jump/Climb · Shift Sprint · C Crouch<br/>
+          R-Click Aim · L-Click Fire · Q Dodge · H Heal · J Journal · Esc Pause · P Photo Studio
+        </div>
+      </div>
+    `;
+
+    if (isShotMode) {
+      titleScreen.style.display = 'none';
+      this.isTitleScreenOpen = false;
+    } else {
+      this.isTitleScreenOpen = true;
+    }
+
+    container.appendChild(titleScreen);
+    this.titleScreenEl = titleScreen;
+
+    titleScreen.querySelector('#juzu-btn-begin')?.addEventListener('click', () => {
+      this.closeTitleScreen();
+      onBeginExpedition?.();
+    });
+
+    const chapList = titleScreen.querySelector('#juzu-chapter-list') as HTMLDivElement | null;
+    titleScreen.querySelector('#juzu-btn-toggle-chapters')?.addEventListener('click', () => {
+      if (chapList) {
+        chapList.style.display = chapList.style.display === 'none' ? 'flex' : 'none';
+      }
+    });
+
+    titleScreen.querySelectorAll('.juzu-chap-pick').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const region = (e.currentTarget as HTMLElement).getAttribute('data-region');
+        if (region) {
+          this.closeTitleScreen();
+          onSelectRegion?.(region);
+          onBeginExpedition?.();
+        }
+      });
+    });
 
     // 1. Pause / Settings Modal (Esc)
     const root = document.createElement('div');
@@ -130,6 +211,16 @@ export class MenusOverlay {
     });
   }
 
+  public closeTitleScreen(): void {
+    if (!this.titleScreenEl) return;
+    this.isTitleScreenOpen = false;
+    this.titleScreenEl.style.opacity = '0';
+    this.titleScreenEl.style.pointerEvents = 'none';
+    window.setTimeout(() => {
+      if (this.titleScreenEl) this.titleScreenEl.style.display = 'none';
+    }, 850);
+  }
+
   public setPaused(paused: boolean): void {
     this.isPaused = paused;
     if (this.rootEl) {
@@ -150,6 +241,10 @@ export class MenusOverlay {
   }
 
   public dispose(): void {
+    if (this.titleScreenEl) {
+      this.titleScreenEl.remove();
+      this.titleScreenEl = null;
+    }
     if (this.rootEl) {
       this.rootEl.remove();
       this.rootEl = null;

@@ -23,7 +23,8 @@ export type SfxId =
   | 'checkpoint_chime'
   | 'collectible_chime'
   | 'whistle_lure'
-  | 'poultice_heal';
+  | 'poultice_heal'
+  | 'zipline_slide';
 
 export class AudioManager {
   private ctx: AudioContext | null = null;
@@ -82,6 +83,12 @@ export class AudioManager {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  public resumeAudioContext(): void {
+    if (this.ensureContext() && this.ctx && this.ctx.state === 'suspended') {
+      void this.ctx.resume();
     }
   }
 
