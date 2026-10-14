@@ -690,13 +690,13 @@ export class NairaController {
     }
   }
 
-  private transitionToMode(nextMode: LocomotionMode): void {
-    if (this.mode === nextMode) return;
+  public transitionToMode(nextMode: LocomotionMode, force: boolean = false): void {
+    if (!force && this.mode === nextMode && this.activeAction === (this.actions[nextMode] || null)) return;
     this.mode = nextMode;
     const nextAction = this.actions[nextMode] || this.actions.idle || null;
-    if (nextAction && nextAction !== this.activeAction) {
+    if (nextAction && (nextAction !== this.activeAction || force)) {
       nextAction.reset().fadeIn(0.2).play();
-      if (this.activeAction) {
+      if (this.activeAction && this.activeAction !== nextAction) {
         this.activeAction.fadeOut(0.2);
       }
       this.activeAction = nextAction;

@@ -1,8 +1,8 @@
 /**
  * Module: src/character/enemies.ts
  * Responsibility: Sol Negro field operative AI, rigged GLB mesh loading (`/juzu/models/soldier.glb`),
- * patrol routes, sight-cone detection, and 5-state awareness state machine
- * (`unaware → suspicious → alerted → searching → combat`) with 100 m distance gating
+ * Mixamo animations (`Idle`, `Walk`, `Run`), tactical weapon sockets, patrol routes, sight-cone detection,
+ * and 5-state awareness state machine (`unaware → suspicious → alerted → searching → combat`) with 100 m distance gating
  * per Bible §1.4, §3.2, §3.3, and §5.2.
  * Depends on: three, three/addons/loaders/GLTFLoader.js, src/world/materials.ts, src/world/terrain.ts.
  * Exports: EnemyAwarenessState, SolNegroOperative, EnemyManager.
@@ -35,6 +35,8 @@ export interface SolNegroOperative {
   active: boolean;
   root: THREE.Group;
   mixer: THREE.AnimationMixer | null;
+  actions: Record<string, THREE.AnimationAction>;
+  activeActionName: string;
 }
 
 const _toPlayer = new THREE.Vector3();
@@ -97,6 +99,8 @@ export class EnemyManager {
         active: true,
         root: opRoot,
         mixer: null,
+        actions: {},
+        activeActionName: '',
       };
       this.operatives.push(op);
 
@@ -120,17 +124,13 @@ export class EnemyManager {
     if (!gltf) return;
 
     const model = gltf.scene;
-    let leftArm: THREE.Object3D | null = null;
-    let rightArm: THREE.Object3D | null = null;
-    let leftForeArm: THREE.Object3D | null = null;
-    let rightForeArm: THREE.Object3D | null = null;
+    let rightHand: THREE.Object3D | null = null;
 
     model.traverse(child => {
       const n = child.name.replace(/^mixamorig:?/i, '');
-      if (n === 'LeftArm') leftArm = child;
-      else if (n === 'RightArm') rightArm = child;
-      else if (n === 'LeftForeArm') leftForeArm = child;
-      else if (n === 'RightForeArm') rightForeArm = child;
+      if (n.toLowerCase().includes('righthand') && !rightHand) {
+        rightHand = child;
+      }
 
       if ((child as THREE.Mesh).isMesh) {
         const m = child as THREE.Mesh;
@@ -138,41 +138,72 @@ export class EnemyManager {
         m.receiveShadow = false;
         if (m.material) {
           const mat = m.material as THREE.MeshStandardMaterial;
-          if (mat.color) mat.color.setHex(0x4a5244);
-          mat.roughness = 0.82;
-          mat.metalness = 0.08;
+          if (mat.color) mat.color.setHex(0x3e453c); // Sol Negro dark tactical camouflage
+          mat.roughness = 0.78;
+          mat.metalness = 0.12;
         }
       }
     });
+
+    // Attach tactical weapon to right hand socket
+    if (rightHand) {
+      const gunGeo = new THREE.BoxGeometry(0.05, 0.1, 0.24);
+      const barrelGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6);
+      barrelGeo.rotateX(Math.PI / 2);
+      const gunMat = new THREE.MeshStandardMaterial({
+        color: 0x181a1c,
+        roughness: 0.35,
+        metalness: 0.85,
+      });
+      const gun = new THREE.Group();
+      const receiver = new THREE.Mesh(gunGeo, gunMat);
+      const barrel = new THREE.Mesh(barrelGeo, gunMat);
+      barrel.position.set(0, 0.025, -0.15);
+      gun.add(receiver, barrel);
+      gun.position.set(0.02, 0.04, -0.04);
+      gun.rotation.set(-Math.PI * 0.45, 0, Math.PI * 0.1);
+      (rightHand as THREE.Object3D).add(gun);
+    }
+
     op.root.add(model);
 
-    op.mixer = new THREE.AnimationMixer(model);
-    const tracks: THREE.KeyframeTrack[] = [];
-    const setQ = (
-      bone: THREE.Object3D | null,
-      qx: number,
-      qy: number,
-      qz: number,
-      qw: number
-    ): void => {
-      if (!bone) return;
-      bone.quaternion.set(qx, qy, qz, qw);
-      tracks.push(
-        new THREE.KeyframeTrack(
-          `${bone.name}.quaternion`,
-          [0, 1],
-          new Float32Array([qx, qy, qz, qw, qx, qy, qz, qw])
-        )
-      );
-    };
-    setQ(leftArm, -0.0475, -0.1166, 0.5226, 0.8432);
-    setQ(rightArm, -0.1868, 0.097, 0.4908, 0.8455);
-    setQ(leftForeArm, -0.405, 0.0579, -0.0125, 0.9124);
-    setQ(rightForeArm, 0.3595, 0.0291, 0.0447, 0.9316);
-    const clip = new THREE.AnimationClip('patrol', 1.0, tracks);
-    const act = op.mixer.clipAction(clip);
-    act.play();
-    op.mixer.update(0.1);
+    // Initialize Mixamo animation clips from soldier.glb (Idle, Walk, Run)
+    if (gltf.animations && gltf.animations.length > 0) {
+      op.mixer = new THREE.AnimationMixer(model);
+      for (const clip of gltf.animations) {
+        const lower = clip.name.toLowerCase();
+        const action = op.mixer.clipAction(clip);
+        if (lower.includes('idle')) {
+          op.actions['idle'] = action;
+        } else if (lower.includes('walk')) {
+          op.actions['walk'] = action;
+        } else if (lower.includes('run')) {
+          op.actions['run'] = action;
+        }
+      }
+
+      // Default start state: walk along patrol route
+      const startAnim = op.actions['walk'] || op.actions['idle'];
+      if (startAnim) {
+        startAnim.play();
+        op.activeActionName = op.actions['walk'] ? 'walk' : 'idle';
+      }
+    }
+  }
+
+  public setOperativeAction(op: SolNegroOperative, target: string, timeScale: number = 1.0): void {
+    if (!op.actions[target]) return;
+    if (op.activeActionName === target) {
+      op.actions[target].timeScale = timeScale;
+      return;
+    }
+    const prev = op.actions[op.activeActionName];
+    const next = op.actions[target];
+    next.reset().setEffectiveTimeScale(timeScale).setEffectiveWeight(1).play();
+    if (prev) {
+      prev.crossFadeTo(next, 0.25, true);
+    }
+    op.activeActionName = target;
   }
 
   public applyHitAt(
@@ -214,6 +245,8 @@ export class EnemyManager {
       const distSq = _toPlayer.lengthSq();
       if (distSq > 100 * 100) continue;
 
+      const dist = Math.sqrt(distSq);
+
       if (op.state === 'unaware' || op.state === 'suspicious') {
         const patrolSpeed = op.state === 'unaware' ? 0.14 : 0.06;
         op.patrolT += dt * patrolSpeed * op.patrolDir;
@@ -230,9 +263,28 @@ export class EnemyManager {
         }
         const dx = op.patrolEnd.x - op.patrolStart.x;
         const dz = op.patrolEnd.z - op.patrolStart.z;
-        op.yaw = Math.atan2(dx * op.patrolDir, dz * op.patrolDir);
-      } else {
+        if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+          op.yaw = Math.atan2(dx * op.patrolDir, dz * op.patrolDir);
+        }
+        this.setOperativeAction(op, 'walk', op.state === 'unaware' ? 1.0 : 0.65);
+      } else if (op.state === 'combat') {
         op.yaw = Math.atan2(_toPlayer.x, _toPlayer.z);
+        // Advance toward player if farther than 4.5 meters, otherwise aim from tactical cover
+        if (dist > 4.5) {
+          const moveSpeed = 2.4;
+          op.position.x += (_toPlayer.x / dist) * moveSpeed * dt;
+          op.position.z += (_toPlayer.z / dist) * moveSpeed * dt;
+          if (terrain) {
+            op.position.y = terrain.sampleGroundY(op.position.x, op.position.z, op.position.y);
+          }
+          this.setOperativeAction(op, 'run', 1.0);
+        } else {
+          this.setOperativeAction(op, 'idle', 1.0);
+        }
+      } else {
+        // Alerted / searching
+        op.yaw = THREE.MathUtils.lerp(op.yaw, Math.atan2(_toPlayer.x, _toPlayer.z), dt * 3.0);
+        this.setOperativeAction(op, 'idle', 1.0);
       }
 
       op.root.position.copy(op.position);
@@ -242,7 +294,6 @@ export class EnemyManager {
         op.mixer.update(dt);
       }
 
-      const dist = Math.sqrt(distSq);
       _forward.set(Math.sin(op.yaw), 0, Math.cos(op.yaw));
       const dirDot = dist > 0.01 ? (_toPlayer.x * _forward.x + _toPlayer.z * _forward.z) / dist : 0;
       const inSightCone = dirDot > 0.35;

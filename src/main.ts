@@ -87,6 +87,7 @@ export class JuzuEngine {
   public gpu: GpuContext | null = null;
   public post: PostProcessor | null = null;
   public activeRegion: SaveData['regionId'] = 'cloudForest';
+  public activeShotPreset: string | null = null;
 
   private lastFrameTimeMs: number = 0;
   private rafId: number = 0;
@@ -207,7 +208,7 @@ export class JuzuEngine {
       this.post?.applyPreset('jungleGreen');
       this.save.getState().chapter = 7;
     } else if (isPT) {
-      this.lightRig.applyGrade('dawn', this.gpu?.renderer);
+      this.lightRig.applyGrade('noon', this.gpu?.renderer);
       this.post?.applyPreset('paititiDawn');
       this.save.getState().chapter = 10;
     } else {
@@ -215,6 +216,7 @@ export class JuzuEngine {
       this.post?.applyPreset('cloudForestMist');
       this.save.getState().chapter = 1;
     }
+    this.quests.refreshObjectiveFromFlags(this.save, regionId);
   }
 
   public applyUrlShotPresetIfPresent(): void {
@@ -231,6 +233,7 @@ export class JuzuEngine {
   }
 
   public applyShotPreset(shot: string): void {
+    this.activeShotPreset = shot;
     if (shot === 'valley') {
       this.setActiveRegion('cloudForest');
       this.placeNairaAt(0.0, 9.2, Math.PI, 'idle');
@@ -271,58 +274,65 @@ export class JuzuEngine {
       this.setActiveRegion('cloudForest');
       const crag = this.traversal.crags[0];
       const cx = crag ? crag.centerX : -4.2;
-      const cz = crag ? crag.centerZ + 0.28 : -14.52;
-      const cy = (crag ? crag.bottomY : 1.8) + 0.85;
+      const cz = crag ? crag.centerZ + 0.12 : -14.68;
+      const baseY = this.terrain.sampleGroundY(cx, cz, 3.0);
+      const cy = baseY + 2.15;
       this.naira.position.set(cx, cy, cz);
       this.naira.yaw = Math.PI;
       this.naira.root.position.set(cx, cy, cz);
       this.naira.root.rotation.set(0, Math.PI, 0);
-      this.naira.mode = 'idle';
+      this.naira.mode = 'climb';
+      this.naira.isGrounded = false;
       this.input.state.climbHeld = true;
-      this.naira.update(0.25, this.input.state, Math.PI, this.terrain, this.audio);
-      this.input.state.climbHeld = false;
+      this.naira.transitionToMode('climb', true);
       this.cameraRig.snapToShot(
         cx + 1.45,
-        cy + 0.92,
-        cz + 1.85,
-        cx - 0.05,
-        cy + 0.95,
-        cz - 0.25,
-        58
+        cy + 0.55,
+        cz + 2.35,
+        cx,
+        cy + 0.65,
+        cz,
+        54
       );
     } else if (shot === 'combat') {
       this.setActiveRegion('cloudForest');
-      this.placeNairaAt(-0.55, 8.2, Math.PI - 0.18, 'aim');
+      this.placeNairaAt(-0.35, 7.2, Math.PI, 'aim');
+      this.input.state.aimHeld = true;
       const ny = this.naira.position.y;
       if (this.enemies.operatives[0]) {
         const op = this.enemies.operatives[0];
-        const oy = this.terrain.sampleGroundY(0.35, 3.8, 2.5);
-        op.position.set(0.35, oy, 3.8);
+        const oy = this.terrain.sampleGroundY(0.0, 1.2, 2.5);
+        op.patrolStart.set(0.0, oy, 1.2);
+        op.patrolEnd.set(0.0, oy, 1.2);
+        op.position.set(0.0, oy, 1.2);
+        op.yaw = 0.0;
         op.root.position.copy(op.position);
-        op.root.rotation.set(0, -0.15, 0);
-        if (op.mixer) op.mixer.update(0.05);
+        op.root.rotation.set(0, op.yaw, 0);
+        op.state = 'combat';
+        op.awareness = 1.0;
+        this.enemies.setOperativeAction(op, 'idle', 1.0);
       }
       this.cameraRig.snapToShot(
-        -1.35,
-        ny + 1.38,
-        10.1,
-        0.2,
-        ny + 1.15,
-        3.8,
-        52
+        -0.85,
+        ny + 1.42,
+        9.1,
+        0.0,
+        ny + 1.25,
+        1.2,
+        50
       );
     } else if (shot === 'highSierra') {
       this.setActiveRegion('highSierra');
       this.placeNairaAt(-0.2, 8.2, Math.PI, 'idle');
       const ny = this.naira.position.y;
       this.cameraRig.snapToShot(
-        1.05,
+        1.15,
         ny + 1.62,
-        11.6,
+        11.5,
         -0.2,
         ny + 1.85,
         -12.0,
-        58
+        56
       );
     } else if (shot === 'jungleLowlands') {
       this.setActiveRegion('jungleLowlands');
@@ -339,15 +349,15 @@ export class JuzuEngine {
       );
     } else if (shot === 'paititi') {
       this.setActiveRegion('paititi');
-      this.placeNairaAt(-0.1, 8.8, Math.PI, 'idle');
+      this.placeNairaAt(0.0, 1.2, Math.PI, 'idle');
       const ny = this.naira.position.y;
       this.cameraRig.snapToShot(
-        1.05,
-        ny + 1.55,
-        12.1,
-        -0.2,
+        1.15,
         ny + 1.65,
-        -12.5,
+        5.2,
+        0.0,
+        ny + 4.2,
+        -14.3,
         56
       );
     }
@@ -460,6 +470,14 @@ export class JuzuEngine {
         }
       }
 
+      if (this.activeShotPreset === 'climb') {
+        this.input.state.climbHeld = true;
+        this.naira.mode = 'climb';
+        this.naira.isGrounded = false;
+      } else if (this.activeShotPreset === 'combat') {
+        this.input.state.aimHeld = true;
+      }
+
       this.naira.update(dt, this.input.state, this.cameraRig.yaw, this.terrain, this.audio);
       this.physics.update(dt, this.naira.position);
       this.cameraRig.update(
@@ -551,15 +569,22 @@ export class JuzuEngine {
         this.audio.playSfx('checkpoint_chime', 0);
       } else if (id === 'sierra_solar_mirror') {
         this.puzzles.markSolved('hs_solar_alignment');
+        this.save.setQuestFlag('q_hs_solar_aligned', true);
+        this.save.getState().chapter = 5;
         this.save.addJournalEntry(
           'Intihuatana Solar Observatory: Reflecting the high-altitude sun across the gnomon pillar reveals the eastern descent into Antisuyu.'
         );
+        this.quests.refreshObjectiveFromFlags(this.save, this.activeRegion);
         this.audio.playSfx('collectible_chime', 0);
       } else if (id === 'jungle_hydraulic_sluice') {
+        this.jungleLowlands.setSluiceOpen(true);
         this.puzzles.markSolved('jl_hydraulic_sluice');
+        this.save.setQuestFlag('q_jl_sluice_opened', true);
+        this.save.getState().chapter = 8;
         this.save.addJournalEntry(
           'Antisuyu Cenote Sluice: Opening the bronze sluice drains the upper terrace channel and unseals the River Road to Paititi.'
         );
+        this.quests.refreshObjectiveFromFlags(this.save, this.activeRegion);
         this.audio.playSfx('collectible_chime', 0);
       } else if (id === 'paititi_quipu_archive') {
         this.save.setQuestFlag('q_exp_sanctum_claimed', true);
@@ -567,6 +592,7 @@ export class JuzuEngine {
         this.save.addJournalEntry(
           'Paititi Living Archive (Chapter 12 — Home): The master quipus record four centuries of living stewardship. Some knowledge belongs to the valley, not the museum case.'
         );
+        this.quests.refreshObjectiveFromFlags(this.save, this.activeRegion);
         this.audio.playSfx('collectible_chime', 0);
       }
     }

@@ -54,6 +54,8 @@ export class SaveManager {
         q_cf_bridge_crossed: false,
         q_cf_stele_read: false,
         q_cf_viewpoint_synced: false,
+        q_hs_solar_aligned: false,
+        q_jl_sluice_opened: false,
         q_exp_vilcabamba_trail: false,
         q_exp_condor_synced: false,
         q_exp_braziers_lit: false,

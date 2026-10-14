@@ -105,8 +105,8 @@ export class HighSierraRegion {
       id: 'sierra_solar_mirror',
       label: 'Intihuatana Solar Mirror',
       promptText: '[E] Align Bronze Solar Mirror with Intihuatana Gnomon',
-      position: new THREE.Vector3(0.0, hAt(0.0, 8.2), 8.2),
-      radius: 4.2,
+      position: new THREE.Vector3(mirX, mirY + 0.8, mirZ),
+      radius: 3.2,
     });
 
     // 5. Stacked Apacheta Stone Cairns flanking the high-altitude stone road
@@ -117,7 +117,8 @@ export class HighSierraRegion {
       [3.9, -3.8],
     ];
     const stoneGeo = new THREE.DodecahedronGeometry(0.36, 1);
-    this.geometries.push(stoneGeo);
+    const capStoneGeo = new THREE.DodecahedronGeometry(0.18, 1);
+    this.geometries.push(stoneGeo, capStoneGeo);
 
     for (let c = 0; c < cairnCoords.length; c++) {
       const [cx, cz] = cairnCoords[c];
@@ -132,11 +133,13 @@ export class HighSierraRegion {
         st.receiveShadow = true;
         this.group.add(st);
       }
-      const clothGeo = new THREE.PlaneGeometry(0.36, 0.68);
-      this.geometries.push(clothGeo);
-      const cloth = new THREE.Mesh(clothGeo, materials.clothQuechuaRed);
-      cloth.position.set(cx, cy + 0.78, cz + 0.26);
-      this.group.add(cloth);
+      // Top offering stone (traditional Andean white quartz / river pebble placed on cairn summit)
+      const topStone = new THREE.Mesh(capStoneGeo, materials.andesiteCut);
+      topStone.position.set(cx, cy + 5 * 0.26 + 0.12, cz);
+      topStone.scale.set(0.9, 0.7, 0.9);
+      topStone.castShadow = true;
+      topStone.receiveShadow = true;
+      this.group.add(topStone);
     }
 
     // 6. True Multi-Blade 3D Golden Ichu Grass Tussocks (zero barrel/sphere primitives, zero uninitialized instances)
