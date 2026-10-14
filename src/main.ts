@@ -45,6 +45,7 @@ import { HudOverlay } from './ui/hud';
 import { JournalOverlay } from './ui/journal';
 import { MenusOverlay } from './ui/menus';
 import { QuipuInspectOverlay } from './ui/quipuInspect';
+import { TouchControlsOverlay } from './ui/touchControls';
 
 declare global {
   interface Window {
@@ -87,6 +88,7 @@ export class JuzuEngine {
   public readonly menus: MenusOverlay = new MenusOverlay();
   public readonly weather: WeatherSystem = new WeatherSystem();
   public readonly quipuInspect: QuipuInspectOverlay = new QuipuInspectOverlay();
+  public readonly touchControls: TouchControlsOverlay = new TouchControlsOverlay();
 
   public gpu: GpuContext | null = null;
   public post: PostProcessor | null = null;
@@ -157,6 +159,7 @@ export class JuzuEngine {
     this.hud.build(container);
     this.journal.build(container);
     this.quipuInspect.build(container);
+    this.touchControls.build(container, this.input);
     this.menus.build(
       container,
       this.quality,
@@ -248,11 +251,21 @@ export class JuzuEngine {
     if (shot) {
       this.applyShotPreset(shot);
     }
+    const touch = params.get('touch');
+    if (touch === '1' || touch === 'true') {
+      this.touchControls.setVisible(true);
+    }
   }
 
   public applyShotPreset(shot: string): void {
     this.activeShotPreset = shot;
-    if (shot === 'valley') {
+    if (shot === 'touch' || shot === 'mobile') {
+      this.setActiveRegion('cloudForest');
+      this.touchControls.setVisible(true);
+      this.placeNairaAt(0.0, 9.2, Math.PI, 'idle');
+      this.cameraRig.mode = 'overShoulder';
+      this.cameraRig.build(this.naira.position, this.naira.yaw);
+    } else if (shot === 'valley') {
       this.setActiveRegion('cloudForest');
       this.placeNairaAt(0.0, 9.2, Math.PI, 'idle');
       this.cameraRig.mode = 'overShoulder';
@@ -621,9 +634,19 @@ export class JuzuEngine {
 
       this.updateInteractables();
       this.checkRegionGateways();
+      this.touchControls.updateContextualAction(
+        this.activeInteractable ? this.activeInteractable.promptText : ''
+      );
     }
 
+    const isGameplayActive =
+      !this.menus.isTitleScreenOpen &&
+      !this.menus.isPhotoMode &&
+      !this.menus.isPaused &&
+      !this.journal.isOpen &&
+      !this.quipuInspect.isOpen;
     this.hud.setVisible(!this.menus.isTitleScreenOpen && !this.menus.isPhotoMode);
+    this.touchControls.setGameplayActive(isGameplayActive);
     this.hud.update(
       dt,
       this.quests.getActiveObjective(),

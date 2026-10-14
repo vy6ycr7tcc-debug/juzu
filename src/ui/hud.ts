@@ -47,7 +47,7 @@ export class HudOverlay {
     const obj = document.createElement('div');
     obj.style.cssText = [
       'position:absolute',
-      'top:22px',
+      'top:60px',
       'left:26px',
       'max-width:440px',
       'font-size:14px',
@@ -64,7 +64,7 @@ export class HudOverlay {
     const prompt = document.createElement('div');
     prompt.style.cssText = [
       'position:absolute',
-      'bottom:36px',
+      'bottom:54px',
       'left:50%',
       'transform:translateX(-50%)',
       'padding:6px 14px',

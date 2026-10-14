@@ -214,11 +214,24 @@ export class InputManager {
     this.accumMouseX = 0;
     this.accumMouseY = 0;
 
-    this.state.sprint = this.keysDown.has('ShiftLeft') || this.keysDown.has('ShiftRight') || gpSprint;
+    this.state.sprint = this.keysDown.has('ShiftLeft') || this.keysDown.has('ShiftRight') || gpSprint || this.state.sprint;
     this.state.walkToggle = this.keysDown.has('AltLeft') || this.keysDown.has('ControlLeft');
-    this.state.climbHeld = this.keysDown.has('KeyC');
+    this.state.climbHeld = this.keysDown.has('KeyC') || this.state.climbHeld;
     this.state.radialOpen = this.keysDown.has('Tab');
     this.state.aimHeld = this.state.aimHeld || gpAim;
+  }
+
+  public setTouchMovement(x: number, z: number, sprint: boolean = false): void {
+    this.touchMoveX = x;
+    this.touchMoveZ = z;
+    if (sprint) {
+      this.state.sprint = true;
+    }
+  }
+
+  public addTouchLookDelta(dx: number, dy: number): void {
+    this.accumMouseX += dx;
+    this.accumMouseY += dy;
   }
 
   public consumeOneShotFlags(): void {
