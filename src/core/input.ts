@@ -17,6 +17,7 @@ export interface InputState {
   crouch: boolean;
   dodgePressed: boolean;
   interactPressed: boolean;
+  takedownPressed: boolean;
   climbHeld: boolean;
   aimHeld: boolean;
   shootPressed: boolean;
@@ -45,6 +46,7 @@ export class InputManager {
     crouch: false,
     dodgePressed: false,
     interactPressed: false,
+    takedownPressed: false,
     climbHeld: false,
     aimHeld: false,
     shootPressed: false,
@@ -223,6 +225,7 @@ export class InputManager {
     this.state.jumpPressed = false;
     this.state.dodgePressed = false;
     this.state.interactPressed = false;
+    this.state.takedownPressed = false;
     this.state.shootPressed = false;
     this.state.craftPressed = false;
     this.state.poulticePressed = false;
@@ -276,6 +279,7 @@ export class InputManager {
         this.state.pausePressed = true;
         break;
       case 'KeyF':
+        this.state.takedownPressed = true;
         this.state.interactPressed = true;
         break;
       case 'KeyO':

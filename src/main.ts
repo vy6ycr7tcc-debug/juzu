@@ -40,9 +40,11 @@ import { PuzzleSystem } from './gameplay/puzzles';
 import { CraftingSystem } from './gameplay/crafting';
 import { QuestManager } from './gameplay/quests';
 import { ExpansionSystem } from './gameplay/expansion';
+import { WeatherSystem } from './world/weather';
 import { HudOverlay } from './ui/hud';
 import { JournalOverlay } from './ui/journal';
 import { MenusOverlay } from './ui/menus';
+import { QuipuInspectOverlay } from './ui/quipuInspect';
 
 declare global {
   interface Window {
@@ -83,6 +85,8 @@ export class JuzuEngine {
   public readonly hud: HudOverlay = new HudOverlay();
   public readonly journal: JournalOverlay = new JournalOverlay();
   public readonly menus: MenusOverlay = new MenusOverlay();
+  public readonly weather: WeatherSystem = new WeatherSystem();
+  public readonly quipuInspect: QuipuInspectOverlay = new QuipuInspectOverlay();
 
   public gpu: GpuContext | null = null;
   public post: PostProcessor | null = null;
@@ -119,6 +123,7 @@ export class JuzuEngine {
     this.terrain.build(this.scene, this.materials);
     this.foliage.build(this.scene, this.materials, this.terrain, qSettings.foliageDensityMultiplier);
     this.water.build(this.scene, this.materials);
+    this.weather.build(this.scene);
 
     this.cloudForest.build(this.scene, this.materials, this.terrain);
     this.highSierra.build(this.scene, this.materials, this.terrain);
@@ -151,6 +156,7 @@ export class JuzuEngine {
 
     this.hud.build(container);
     this.journal.build(container);
+    this.quipuInspect.build(container);
     this.menus.build(
       container,
       this.quality,
@@ -200,6 +206,7 @@ export class JuzuEngine {
 
     this.terrain.setBiomeMode(regionId, this.materials);
     this.sky.setBiomeMode(regionId);
+    this.weather.setBiome(regionId);
     this.cloudForest.group.visible = isCF;
     this.traversal.group.visible = isCF;
     this.puzzles.group.visible = isCF;
@@ -371,6 +378,77 @@ export class JuzuEngine {
         -14.3,
         56
       );
+    } else if (shot === 'stealth') {
+      this.setActiveRegion('cloudForest');
+      // Place Sol Negro operative facing away (North towards negative Z)
+      if (this.enemies.operatives[0]) {
+        const op = this.enemies.operatives[0];
+        const oy = this.terrain.sampleGroundY(-0.4, 1.8, 2.5);
+        op.patrolStart.set(-0.4, oy, 1.8);
+        op.patrolEnd.set(-0.4, oy, 1.8);
+        op.position.set(-0.4, oy, 1.8);
+        op.yaw = 0.0;
+        op.root.position.copy(op.position);
+        op.root.rotation.set(0, op.yaw, 0);
+        op.state = 'unaware';
+        op.awareness = 0.0;
+        this.enemies.setOperativeAction(op, 'patrol', 0.6);
+      }
+      // Place Naira directly behind in sneak distance (facing North towards operative's back)
+      this.placeNairaAt(-0.4, 3.2, 0.0, 'idle');
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        0.35,
+        ny + 1.35,
+        5.2,
+        -0.4,
+        ny + 1.1,
+        1.8,
+        50
+      );
+    } else if (shot === 'puzzle') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(-1.1, -13.6, Math.PI, 'idle');
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        -0.1,
+        ny + 1.25,
+        -11.5,
+        -0.95,
+        ny + 1.05,
+        -15.8,
+        54
+      );
+    } else if (shot === 'quipu') {
+      this.setActiveRegion('cloudForest');
+      this.quipuInspect.open(this.save);
+    } else if (shot === 'sierra_weather') {
+      this.setActiveRegion('highSierra');
+      this.placeNairaAt(-0.2, 8.2, Math.PI, 'idle');
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        1.25,
+        ny + 1.55,
+        12.0,
+        -0.2,
+        ny + 1.85,
+        -12.0,
+        55
+      );
+    } else if (shot === 'cavern_torch') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(0.15, -17.6, 0.55, 'idle');
+      this.weather.setTorchManual(true, 3.2);
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        0.95,
+        ny + 1.25,
+        -19.4,
+        0.15,
+        ny + 1.05,
+        -17.2,
+        50
+      );
     }
   }
 
@@ -418,7 +496,9 @@ export class JuzuEngine {
       this.audio.playSfx('journal_turn', 0);
     }
     if (this.input.state.pausePressed) {
-      if (this.journal.isOpen) {
+      if (this.quipuInspect.isOpen) {
+        this.quipuInspect.close();
+      } else if (this.journal.isOpen) {
         this.journal.toggle(this.save, this.quests);
       } else {
         this.menus.setPaused(!this.menus.isPaused);
@@ -535,6 +615,8 @@ export class JuzuEngine {
       this.jungleLowlands.update(dt);
       this.paititi.update(dt);
       this.lightRig.update(dt, this.naira.position);
+      this.weather.updateTorch(this.naira.position);
+      this.weather.update(dt, this.cameraRig.camera.position);
       this.audio.update(dt);
 
       this.updateInteractables();
@@ -562,6 +644,28 @@ export class JuzuEngine {
 
   private updateInteractables(): void {
     this.activeInteractable = null;
+
+    // Check for stealth takedown opportunity on nearby Sol Negro guards
+    const takedownTarget = this.enemies.getStealthTakedownTarget(this.naira.position, 2.4);
+    if (takedownTarget) {
+      this.activeInteractable = {
+        id: 'stealth_takedown',
+        label: 'Takedown',
+        promptText: '[F] Silent Takedown',
+        position: takedownTarget.position,
+        radius: 2.4,
+      };
+      if (this.input.state.takedownPressed || this.input.state.interactPressed) {
+        this.enemies.executeStealthTakedown(takedownTarget);
+        this.combat.triggerAxeSwing(this.naira.position);
+        this.audio.playSfx('cloth_rustle', 0);
+        this.audio.playSfx('breath_exert', 0);
+        this.activeInteractable = null;
+        return;
+      }
+      return;
+    }
+
     const regionInteractables =
       this.activeRegion === 'highSierra'
         ? this.highSierra.interactables
@@ -586,12 +690,20 @@ export class JuzuEngine {
     if (this.input.state.interactPressed || this.input.state.condorPressed) {
       const id = this.activeInteractable.id;
       if (id === 'stele_cloud_forest') {
-        this.puzzles.markSolved('cf_water_stele_channel');
-        this.save.setQuestFlag('q_cf_stele_read', true);
-        this.save.addJournalEntry(
-          'Inca Water-Reckoning Stele: Turning the bronze sluice wheel divides mountain runoff into the counterweight basin, raising the sanctuary portal.'
-        );
-        this.quests.refreshObjectiveFromFlags(this.save);
+        if (!this.puzzles.isSolved('cf_water_stele_channel')) {
+          const res = this.puzzles.turnWheel('cf_water_stele_channel', 0.45);
+          this.audio.playSfx('stone_grind', 0);
+          if (res.newlySolved) {
+            this.save.setQuestFlag('q_cf_stele_read', true);
+            this.save.addJournalEntry(
+              'Inca Water-Reckoning Stele: Turning the bronze sluice wheel divides mountain runoff into the counterweight basin, raising the sanctuary portal.'
+            );
+            this.quests.refreshObjectiveFromFlags(this.save);
+            this.audio.playSfx('puzzle_solved', 0);
+          }
+        }
+      } else if (id === 'quipu_cloud_forest_archive') {
+        this.quipuInspect.open(this.save);
         this.audio.playSfx('collectible_chime', 0);
       } else if (id === 'viewpoint_cloud_forest') {
         this.expansion.synchronizeViewpoint(id, this.save);

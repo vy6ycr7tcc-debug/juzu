@@ -279,6 +279,30 @@ export class CloudForestRegion {
       this.group.add(beam);
     }
 
+    // Stone offering niche & hanging quipu record inside the shelter
+    const nicheGeo = this.createChippedBlockGeometry(0.75, 0.85, 0.45);
+    const quipuDowelGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.45, 8);
+    quipuDowelGeo.rotateZ(Math.PI / 2);
+    this.geometries.push(nicheGeo, quipuDowelGeo);
+
+    const niche = new THREE.Mesh(nicheGeo, materials.andesiteCut);
+    niche.position.set(shX, shY + 0.42, shZ - 0.7);
+    niche.castShadow = true;
+    niche.receiveShadow = true;
+    this.group.add(niche);
+
+    const quipuDowel = new THREE.Mesh(quipuDowelGeo, materials.woodAged);
+    quipuDowel.position.set(shX, shY + 0.95, shZ - 0.7);
+    this.group.add(quipuDowel);
+
+    this.interactables.push({
+      id: 'quipu_cloud_forest_archive',
+      label: 'Ancient Inca Quipu Knot Fragment',
+      promptText: '[E] Decipher Inca Quipu',
+      position: new THREE.Vector3(shX, shY + 0.9, shZ - 0.5),
+      radius: 2.6,
+    });
+
     // 2. Carved Inca Stele & Flowing Water Channel at (x = -2.6, z = -16.2)
     const stX = -2.6;
     const stZ = -16.2;
@@ -323,8 +347,8 @@ export class CloudForestRegion {
 
     this.interactables.push({
       id: 'stele_cloud_forest',
-      label: 'Inca Water-Reckoning Stele',
-      promptText: '[E] Read Carved Stele',
+      label: 'Inca Water-Reckoning Stele & Sluice Wheel',
+      promptText: '[E] Turn Bronze Sluice Wheel',
       position: new THREE.Vector3(stX, stY + 1.0, stZ + 0.8),
       radius: 3.2,
     });

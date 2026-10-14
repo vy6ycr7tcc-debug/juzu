@@ -59,6 +59,13 @@ export class WaterSystem {
 
     const riverMat = materials.water.clone();
     riverMat.vertexColors = true;
+    if (riverMat.normalMap) {
+      riverMat.normalMap = riverMat.normalMap.clone();
+      riverMat.normalMap.wrapS = THREE.RepeatWrapping;
+      riverMat.normalMap.wrapT = THREE.RepeatWrapping;
+      riverMat.normalMap.repeat.set(12, 3);
+      this.textures.push(riverMat.normalMap);
+    }
     this.materials.push(riverMat);
 
     this.riverMesh = new THREE.Mesh(riverGeo, riverMat);
@@ -74,7 +81,7 @@ export class WaterSystem {
       roughness: 0.24,
       metalness: 0.0,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.58,
       side: THREE.DoubleSide,
     });
     this.materials.push(fallMat);
@@ -104,35 +111,70 @@ export class WaterSystem {
       this.group.add(ringMesh);
     }
 
-    // 3. Waterfall base spray & mist particles (§2.5)
-    const sprayCount = 120;
+    // 3. Ravine river gorge spray & rising mist particles under the bridge & plunge pools (§2.5)
+    const sprayCount = 180;
     const sprayPositions = new Float32Array(sprayCount * 3);
     for (let i = 0; i < sprayCount; i++) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const baseX = side < 0 ? -14.2 : 15.2;
-      const baseZ = side < 0 ? -3.6 : -2.4;
-      const angle = (i * 1.618) * Math.PI * 2;
-      const rad = (i % 11) * 0.35;
-      sprayPositions[i * 3] = baseX + Math.cos(angle) * rad;
-      sprayPositions[i * 3 + 1] = -2.2 + (i % 15) * 0.28;
-      sprayPositions[i * 3 + 2] = baseZ + Math.sin(angle) * rad;
+      let bx: number;
+      let bz: number;
+      if (i < 60) {
+        // West waterfall plunge
+        bx = -22.0 + (Math.sin(i * 1.7) * 3.5);
+        bz = -11.5 + (Math.cos(i * 2.1) * 3.0);
+      } else if (i < 120) {
+        // East waterfall plunge
+        bx = 20.5 + (Math.sin(i * 1.7) * 3.5);
+        bz = -10.5 + (Math.cos(i * 2.1) * 3.0);
+      } else {
+        // Gorge river mist under the hanging bridge
+        bx = -14.0 + ((i - 120) / 60) * 28.0;
+        bz = Math.sin(i * 0.8) * 3.2;
+      }
+      sprayPositions[i * 3] = bx;
+      sprayPositions[i * 3 + 1] = -2.4 + (i % 20) * 0.24;
+      sprayPositions[i * 3 + 2] = bz;
     }
     const sprayGeo = new THREE.BufferGeometry();
     sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPositions, 3));
     this.geometries.push(sprayGeo);
 
+    const sprayTex = this.createSoftSprayTexture(64);
     const sprayMat = new THREE.PointsMaterial({
+      map: sprayTex,
       color: new THREE.Color(0xe6f4f0),
-      size: 0.85,
+      size: 1.35,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.32,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     this.materials.push(sprayMat);
     this.sprayPoints = new THREE.Points(sprayGeo, sprayMat);
     this.group.add(this.sprayPoints);
 
     scene.add(this.group);
+  }
+
+  private createSoftSprayTexture(size: number): THREE.DataTexture {
+    const data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      const ny = (y / size) * 2 - 1;
+      for (let x = 0; x < size; x++) {
+        const nx = (x / size) * 2 - 1;
+        const idx = (y * size + x) * 4;
+        const r2 = nx * nx + ny * ny;
+        const falloff = Math.max(0, 1.0 - r2);
+        const alpha = falloff * falloff * 0.45;
+        data[idx] = 225;
+        data[idx + 1] = 240;
+        data[idx + 2] = 238;
+        data[idx + 3] = Math.round(alpha * 255);
+      }
+    }
+    const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    tex.needsUpdate = true;
+    this.textures.push(tex);
+    return tex;
   }
 
   private createWaterfallTexture(size: number): THREE.DataTexture {
@@ -166,15 +208,29 @@ export class WaterSystem {
     if (this.riverMesh) {
       const mat = this.riverMesh.material as THREE.MeshStandardMaterial;
       if (mat.normalMap) {
-        mat.normalMap.offset.x = (this.elapsedSec * 0.08) % 1.0;
-        mat.normalMap.offset.y = (this.elapsedSec * 0.03) % 1.0;
+        mat.normalMap.offset.x = (this.elapsedSec * 0.045) % 1.0;
+        mat.normalMap.offset.y = (this.elapsedSec * 0.018) % 1.0;
       }
     }
     for (let i = 0; i < this.waterfallMeshes.length; i++) {
       const mat = this.waterfallMeshes[i].material as THREE.MeshStandardMaterial;
       if (mat.map) {
-        mat.map.offset.y = (this.elapsedSec * 0.65) % 1.0;
+        mat.map.offset.y = (this.elapsedSec * 0.68) % 1.0;
       }
+    }
+
+    if (this.sprayPoints) {
+      const pos = this.sprayPoints.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        let py = pos.getY(i) + dt * (0.65 + (i % 6) * 0.2);
+        if (py > 2.6) {
+          py = -2.4 - (i % 5) * 0.12;
+        }
+        pos.setY(i, py);
+        const px = pos.getX(i) + Math.sin(this.elapsedSec * 1.2 + i) * dt * 0.15;
+        pos.setX(i, px);
+      }
+      pos.needsUpdate = true;
     }
   }
 

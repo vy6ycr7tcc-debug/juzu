@@ -180,6 +180,7 @@ export class CombatSystem {
           1.15
         );
         if (hitOp) {
+          enemies.alertToNoise(p.position, p.type === 'sonicLure' ? 45.0 : 22.0);
           p.active = false;
           p.mesh.visible = false;
           continue;
@@ -187,6 +188,9 @@ export class CombatSystem {
       }
 
       if (p.ageSec > 3.5 || p.position.y < -12.0) {
+        if (enemies && p.type === 'sonicLure') {
+          enemies.alertToNoise(p.position, 45.0);
+        }
         p.active = false;
         p.mesh.visible = false;
       }

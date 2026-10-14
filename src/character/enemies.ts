@@ -275,6 +275,54 @@ export class EnemyManager {
     return null;
   }
 
+  public getStealthTakedownTarget(
+    playerPos: THREE.Vector3,
+    radius: number = 2.4
+  ): SolNegroOperative | null {
+    for (let i = 0; i < this.operatives.length; i++) {
+      const op = this.operatives[i];
+      if (!op.active || op.state === 'combat') continue;
+
+      const dx = playerPos.x - op.position.x;
+      const dz = playerPos.z - op.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist <= radius) {
+        // Check if player is behind operative (negative dot with operative forward)
+        _forward.set(-Math.sin(op.yaw), 0, -Math.cos(op.yaw));
+        const behindDot = (dx * _forward.x + dz * _forward.z) / dist;
+        if (behindDot < -0.12) {
+          return op;
+        }
+      }
+    }
+    return null;
+  }
+
+  public executeStealthTakedown(op: SolNegroOperative): void {
+    op.health = 0;
+    op.active = false;
+    op.state = 'unaware';
+    op.awareness = 0;
+    op.root.visible = false;
+  }
+
+  public alertToNoise(origin: THREE.Vector3, radius: number = 32.0): void {
+    for (let i = 0; i < this.operatives.length; i++) {
+      const op = this.operatives[i];
+      if (!op.active || op.state === 'combat') continue;
+
+      const dx = origin.x - op.position.x;
+      const dz = origin.z - op.position.z;
+      if (dx * dx + dz * dz <= radius * radius) {
+        op.state = 'searching';
+        op.awareness = Math.max(op.awareness, 0.55);
+        op.yaw = Math.atan2(dx, dz);
+        op.root.rotation.set(0, op.yaw, 0);
+        this.setOperativeAction(op, 'walk', 0.85);
+      }
+    }
+  }
+
   public update(
     dt: number,
     playerPosition: THREE.Vector3,

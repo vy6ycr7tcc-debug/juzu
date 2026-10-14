@@ -24,7 +24,9 @@ export type SfxId =
   | 'collectible_chime'
   | 'whistle_lure'
   | 'poultice_heal'
-  | 'zipline_slide';
+  | 'zipline_slide'
+  | 'stone_grind'
+  | 'puzzle_solved';
 
 export class AudioManager {
   private ctx: AudioContext | null = null;
@@ -181,6 +183,36 @@ export class AudioManager {
       gain.connect(this.sfxGain);
       osc.start(now);
       osc.stop(now + 0.72);
+      return;
+    }
+
+    if (id === 'stone_grind') {
+      osc.type = 'sawtooth';
+      filter.frequency.value = 350;
+      osc.frequency.setValueAtTime(110, now);
+      osc.frequency.exponentialRampToValueAtTime(75, now + 0.35);
+      gain.gain.setValueAtTime(0.18 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.4);
+      return;
+    }
+
+    if (id === 'puzzle_solved') {
+      osc.type = 'sine';
+      filter.frequency.value = 2200;
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.6);
+      gain.gain.setValueAtTime(0.24 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.78);
       return;
     }
 
