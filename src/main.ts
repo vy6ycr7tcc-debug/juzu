@@ -193,6 +193,47 @@ export class JuzuEngine {
       window.__juzuEngine = this;
       window.__juzuReady = true;
       (window as any).__shotReady = true;
+
+      // Resume Web Audio on first user gesture across mobile & desktop
+      const resumeAudio = () => {
+        this.audio.resumeAudioContext();
+        window.removeEventListener('pointerdown', resumeAudio);
+        window.removeEventListener('keydown', resumeAudio);
+        window.removeEventListener('touchstart', resumeAudio);
+      };
+      window.addEventListener('pointerdown', resumeAudio, { once: true });
+      window.addEventListener('keydown', resumeAudio, { once: true });
+      window.addEventListener('touchstart', resumeAudio, { once: true });
+
+      // Handle WebGL context recovery on device sleep/wake or mobile task switch
+      if (this.gpu) {
+        const canvas = this.gpu.renderer.domElement;
+        canvas.addEventListener('webglcontextlost', (e: Event) => {
+          e.preventDefault();
+          console.warn('[Juzu Engine] WebGL context lost. Pausing loop.');
+          if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = 0;
+          }
+        });
+        canvas.addEventListener('webglcontextrestored', () => {
+          console.log('[Juzu Engine] WebGL context restored. Resuming loop.');
+          this.startLoop();
+        });
+      }
+    }
+
+    // Pre-warm shaders and pipelines per Standing Performance Directive #7 (no first-frame hitching)
+    if (this.gpu) {
+      try {
+        if ('compileAsync' in this.gpu.renderer && typeof (this.gpu.renderer as any).compileAsync === 'function') {
+          await (this.gpu.renderer as any).compileAsync(this.scene, this.cameraRig.camera);
+        } else if (typeof this.gpu.renderer.compile === 'function') {
+          this.gpu.renderer.compile(this.scene, this.cameraRig.camera);
+        }
+      } catch (err) {
+        console.warn('[Juzu Engine] Shader pre-warm warning (continuing to loop):', err);
+      }
     }
 
     this.lastFrameTimeMs = typeof performance !== 'undefined' ? performance.now() : 0;

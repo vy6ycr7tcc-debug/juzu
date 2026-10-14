@@ -10,6 +10,11 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from './materials';
 
+const _deepCol = new THREE.Color(0x123d38);
+const _shallowCol = new THREE.Color(0x2d6b63);
+const _foamCol = new THREE.Color(0xdceee8);
+const _tmpCol = new THREE.Color();
+
 export class WaterSystem {
   public readonly group: THREE.Group = new THREE.Group();
   private riverMesh: THREE.Mesh | null = null;
@@ -224,11 +229,6 @@ export class WaterSystem {
       const colors = this.riverGeo.attributes.color as THREE.BufferAttribute;
       const base = this.riverBasePositions;
 
-      const deepCol = new THREE.Color(0x123d38);
-      const shallowCol = new THREE.Color(0x2d6b63);
-      const foamCol = new THREE.Color(0xdceee8);
-      const tmpCol = new THREE.Color();
-
       const t = this.elapsedSec;
       for (let i = 0; i < pos.count; i++) {
         const bx = base[i * 3];
@@ -248,12 +248,12 @@ export class WaterSystem {
         const rapidSurge = Math.sin(bx * 0.6 + t * 2.0) * Math.cos(bz * 0.85);
 
         if (edgeRatio > 0.78 || crest > 0.58 || rapidSurge > 0.68) {
-          tmpCol.copy(shallowCol).lerp(foamCol, Math.min(1.0, Math.max(0.45, crest * 0.8 + 0.3)));
+          _tmpCol.copy(_shallowCol).lerp(_foamCol, Math.min(1.0, Math.max(0.45, crest * 0.8 + 0.3)));
         } else {
-          tmpCol.copy(deepCol).lerp(shallowCol, edgeRatio * 0.7 + Math.max(0, crest * 0.3));
+          _tmpCol.copy(_deepCol).lerp(_shallowCol, edgeRatio * 0.7 + Math.max(0, crest * 0.3));
         }
 
-        colors.setXYZ(i, tmpCol.r, tmpCol.g, tmpCol.b);
+        colors.setXYZ(i, _tmpCol.r, _tmpCol.g, _tmpCol.b);
       }
 
       pos.needsUpdate = true;
