@@ -845,14 +845,18 @@ export class NairaController {
       this.root.quaternion.slerp(_targetQuat, Math.min(1.0, dt * 10.5));
       this.yaw = targetYaw;
 
-      this.position.x += _moveVec.x * this.speed * dt;
-      this.position.z += _moveVec.z * this.speed * dt;
+      const inWater = this.position.y <= -2.1;
+      const speedMult = inWater ? 0.72 : 1.0;
+      this.position.x += _moveVec.x * this.speed * speedMult * dt;
+      this.position.z += _moveVec.z * this.speed * speedMult * dt;
 
       this.position.x = Math.max(-28, Math.min(28, this.position.x));
       this.position.z = Math.max(-32, Math.min(24, this.position.z));
 
       const onBridge = Math.abs(this.position.x) <= 1.35 && Math.abs(this.position.z) <= 5.85;
-      audio.playSfx('footstep', 0, onBridge ? 'wood' : 'dirt');
+      const onStone = this.position.z < -10.0 || (Math.abs(this.position.x) <= 3.5 && this.position.z > 6.0);
+      const surface = inWater ? 'water' : onBridge ? 'wood' : onStone ? 'stone' : 'dirt';
+      audio.playSfx('footstep', 0, surface);
     }
 
     if (input.jumpPressed && this.isGrounded && nextMode !== 'climb') {
