@@ -285,28 +285,33 @@ export class TerrainSystem {
       color: new THREE.Color(0xffffff),
       map: materials.highSierraSnow.map,
       normalMap: materials.fieldstoneRough.normalMap,
-      normalScale: new THREE.Vector2(0.85, 0.85),
-      roughness: 0.78,
-      metalness: 0.0,
+      normalScale: new THREE.Vector2(1.2, 1.2),
+      roughness: 0.82,
+      metalness: 0.02,
       vertexColors: true,
+      side: THREE.DoubleSide,
     });
 
     const peakSpecs = [
-      { x: -68, z: -88, rx: 38, ry: 50, rz: 28, seed: 1.1 },
-      { x: -42, z: -94, rx: 32, ry: 46, rz: 26, seed: 1.8 },
-      { x: -18, z: -98, rx: 36, ry: 58, rz: 28, seed: 2.3 },
-      { x: 4, z: -104, rx: 34, ry: 52, rz: 26, seed: 3.0 },
-      { x: 26, z: -96, rx: 38, ry: 62, rz: 28, seed: 3.7 },
-      { x: 48, z: -92, rx: 32, ry: 47, rz: 26, seed: 4.3 },
-      { x: 70, z: -86, rx: 38, ry: 50, rz: 28, seed: 4.9 },
-      { x: -78, z: -46, rx: 32, ry: 44, rz: 36, seed: 5.5 },
-      { x: 78, z: -42, rx: 34, ry: 46, rz: 36, seed: 6.8 },
+      // Central iconic Andean horn rising beyond the gorge gap
+      { x: 0, z: -95, rx: 80, ry: 48, rz: 65, seed: 1.4, snow: 0.40 },
+      // Left and right peaks framing the central gap
+      { x: -45, z: -105, rx: 75, ry: 44, rz: 65, seed: 2.7, snow: 0.42 },
+      { x: 45, z: -102, rx: 75, ry: 42, rz: 65, seed: 3.9, snow: 0.42 },
+      // Far left and right horns
+      { x: -85, z: -125, rx: 90, ry: 55, rz: 75, seed: 4.5, snow: 0.38 },
+      { x: 85, z: -125, rx: 90, ry: 52, rz: 75, seed: 5.2, snow: 0.38 },
+      // Colossal backdrop summits piercing the upper sky
+      { x: -25, z: -155, rx: 110, ry: 74, rz: 85, seed: 6.3, snow: 0.32 },
+      { x: 30, z: -160, rx: 110, ry: 76, rz: 85, seed: 7.1, snow: 0.32 },
+      { x: -115, z: -175, rx: 120, ry: 82, rz: 90, seed: 8.2, snow: 0.30 },
+      { x: 115, z: -175, rx: 120, ry: 80, rz: 90, seed: 9.0, snow: 0.30 },
     ];
 
     for (let i = 0; i < peakSpecs.length; i++) {
       const p = peakSpecs[i];
       const massifGeo = this.createSculptedMassifGeometry(p.rx, p.ry, p.rz, p.seed);
-      this.populateMassifColors(massifGeo, 0.44);
+      this.populateMassifColors(massifGeo, p.snow);
       this.geometries.push(massifGeo);
 
       const massifMesh = new THREE.Mesh(massifGeo, this.peakMat);
@@ -318,95 +323,93 @@ export class TerrainSystem {
   }
 
   private createSculptedMassifGeometry(
-    rx: number,
-    ry: number,
-    rz: number,
+    width: number,
+    maxHeight: number,
+    depth: number,
     seed: number
   ): THREE.BufferGeometry {
-    const radialSegs = 36;
-    const ringSegs = 18;
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    const normHeights: number[] = [];
-    const angles: number[] = [];
-    const indices: number[] = [];
+    const segs = 40;
+    const geo = new THREE.PlaneGeometry(width, depth, segs, segs);
+    geo.rotateX(-Math.PI / 2);
 
-    for (let rIdx = 0; rIdx <= ringSegs; rIdx++) {
-      const t = rIdx / ringSegs; // 0 = summit point, 1 = base skirt
-      const baseElev = Math.pow(1.0 - t, 1.18);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const uv = geo.attributes.uv as THREE.BufferAttribute;
+    const count = pos.count;
+    const rawH = new Float32Array(count);
+    let maxRaw = 0.001;
 
-      for (let aIdx = 0; aIdx <= radialSegs; aIdx++) {
-        const u = aIdx / radialSegs;
-        const ang = u * Math.PI * 2;
+    for (let i = 0; i < count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
 
-        // Multi-arête glacial ridge modulation (0 at t=0 so summit closes cleanly with zero crown spikes)
-        const arête =
-          1.0 +
-          t * (0.24 * Math.cos(ang * 3.0 + seed) +
-               0.14 * Math.sin(ang * 5.0 - seed * 1.6) +
-               0.07 * Math.cos(ang * 7.0 + t * 3.0));
+      uv.setXY(i, (x / width + 0.5) * 8.0, (z / depth + 0.5) * 8.0);
 
-        const rad = t * arête;
-        const wx = Math.cos(ang) * rad * rx;
-        const wz = Math.sin(ang) * rad * rz;
-        // Asymmetric shoulder ridges (zero at t=0 so summit is a natural peak, not a flat line or needle)
-        const subPeak =
-          Math.sin(t * Math.PI) * (0.14 * Math.cos(ang * 2.0 + seed) + 0.09 * Math.sin(ang * 3.0 - seed));
-        const crag =
-          Math.sin(t * Math.PI) *
-          (Math.sin(ang * 5.0 + seed) * 0.08 + Math.cos(t * 9.0 + ang * 3.0) * 0.05);
-        const hNorm = Math.max(0, Math.min(1.18, baseElev + subPeak + crag));
-        const wy = hNorm * ry;
+      const nx = x / (width * 0.5);
+      const nz = z / (depth * 0.5);
+      const dist = Math.hypot(nx, nz);
 
-        positions.push(wx, wy, wz);
-        uvs.push(u * 4.0, t * 4.0);
-        normHeights.push(hNorm);
-        angles.push(ang + seed);
+      if (dist >= 1.0) {
+        rawH[i] = 0;
+        continue;
       }
+
+      // Linear fault-line mountain spine running diagonally across the massif
+      const ridgeZ = Math.sin(nx * 1.8 + seed) * (depth * 0.22);
+      const distToRidge = Math.abs(z - ridgeZ) / (depth * 0.5);
+      const ridgeShape = Math.exp(-Math.pow(distToRidge * 2.4, 1.5));
+      const spineProfile = Math.cos(nx * Math.PI * 0.5) * (1.0 + 0.28 * Math.cos(nx * 3.5 + seed));
+
+      // Asymmetric slope: steep sheer granite cliff face vs stepped alpine couloir
+      const asym = z > ridgeZ ? 0.72 : 1.28;
+
+      // Multi-octave geological rock crags and stepped fracture planes
+      const fbm =
+        Math.sin(x * 0.14 + z * 0.11 + seed) * 0.14 +
+        Math.cos(x * 0.32 - z * 0.26 + seed * 2.1) * 0.07 +
+        Math.sin(x * 0.72 + z * 0.65) * 0.03;
+
+      const falloff = Math.cos(Math.min(1.0, dist) * Math.PI * 0.5);
+      const h = Math.max(0, (ridgeShape * spineProfile * asym + fbm) * Math.pow(falloff, 1.3));
+      rawH[i] = h;
+      if (h > maxRaw) maxRaw = h;
     }
 
-    const stride = radialSegs + 1;
-    for (let rIdx = 0; rIdx < ringSegs; rIdx++) {
-      for (let aIdx = 0; aIdx < radialSegs; aIdx++) {
-        const a = rIdx * stride + aIdx;
-        const b = a + stride;
-        // Outward CCW winding so vertex normals point strictly UP (+Y) and OUTWARD!
-        indices.push(a, a + 1, b, b, a + 1, b + 1);
-      }
+    const normHeights = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const hNorm = rawH[i] / maxRaw;
+      normHeights[i] = hNorm;
+      pos.setY(i, hNorm * maxHeight);
     }
 
-    const geo = new THREE.BufferGeometry();
-    geo.setIndex(indices);
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(normHeights.length * 3), 3));
-    (geo as unknown as { _normHeights: number[]; _angles: number[] })._normHeights = normHeights;
-    (geo as unknown as { _normHeights: number[]; _angles: number[] })._angles = angles;
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    (geo as unknown as { _normHeights: Float32Array })._normHeights = normHeights;
     geo.computeVertexNormals();
     return geo;
   }
 
   private populateMassifColors(geo: THREE.BufferGeometry, snowlineNorm: number): void {
     const colAttr = geo.attributes.color as THREE.BufferAttribute;
-    const meta = geo as unknown as { _normHeights?: number[]; _angles?: number[] };
-    if (!colAttr || !meta._normHeights || !meta._angles) return;
+    const normAttr = geo.attributes.normal as THREE.BufferAttribute;
+    const meta = geo as unknown as { _normHeights?: Float32Array };
+    if (!colAttr || !meta._normHeights || !normAttr) return;
 
-    const cRock = new THREE.Color(0.58, 0.60, 0.66);
-    const cSnow = new THREE.Color(2.45, 2.55, 2.75);
+    // Physically accurate PBR Andean rock and snow albedos
+    const cRock = new THREE.Color(0.20, 0.22, 0.26);
+    const cSnow = new THREE.Color(0.92, 0.95, 0.98);
+    const cIce = new THREE.Color(0.68, 0.82, 0.88);
     const cScratch = new THREE.Color();
 
     for (let i = 0; i < meta._normHeights.length; i++) {
       const h = meta._normHeights[i];
-      const ang = meta._angles[i];
-      // Glacial couloirs extend snow fingers lower down into the gullies
-      const couloir = Math.sin(ang * 5.0) * 0.09 + Math.cos(ang * 3.0) * 0.06;
-      const localSnowline = snowlineNorm + couloir;
+      const ny = normAttr.getY(i);
 
-      if (h > localSnowline + 0.14) {
-        cScratch.copy(cSnow);
-      } else if (h > localSnowline) {
-        const t = (h - localSnowline) / 0.14;
-        cScratch.copy(cRock).lerp(cSnow, t);
+      // Vertical cliff faces (ny < 0.38) shed snow, revealing dark rock
+      const slopeFactor = Math.max(0, Math.min(1.0, (ny - 0.38) / 0.28));
+
+      if (h > snowlineNorm && slopeFactor > 0.15) {
+        const tSnow = Math.min(1.0, (h - snowlineNorm) / 0.18) * slopeFactor;
+        const snowShade = cIce.clone().lerp(cSnow, Math.min(1.0, (h - snowlineNorm) / 0.12));
+        cScratch.copy(cRock).lerp(snowShade, tSnow);
       } else {
         cScratch.copy(cRock);
       }

@@ -93,16 +93,7 @@ export class CloudForestRegion {
         cap.receiveShadow = true;
         this.group.add(cap);
 
-        // Woven Quechua red/ochre trail marker cloth tied to the south entrance posts (§1.7 warm accents)
-        if (ez > 0) {
-          const bannerGeo = new THREE.PlaneGeometry(0.32, 0.95, 2, 5);
-          this.geometries.push(bannerGeo);
-          const banner = new THREE.Mesh(bannerGeo, materials.clothQuechuaRed);
-          banner.position.set(sx * 1.14, baseY + 1.45, ez + 0.36);
-          banner.rotation.y = sx < 0 ? -0.35 : 0.35;
-          banner.castShadow = true;
-          this.group.add(banner);
-        }
+        // Stone anchor pillar capped with mountain moss
       }
     }
 

@@ -362,22 +362,24 @@ export class PbrMaterialLibrary {
     // 11. Foliage (volumetric cloud-forest tree crowns & 3D fern rosettes) — §2.2
     this.foliageLeaf = new THREE.MeshStandardMaterial({
       name: 'CloudForestCanopyLeaf',
-      color: new THREE.Color(0xd2eab8),
+      color: new THREE.Color(0xb2d688),
+      emissive: new THREE.Color(0x0c1a08),
       map: foliageCanopyAlbedo,
       normalMap: foliageNormal,
       normalScale: new THREE.Vector2(0.65, 0.65),
-      roughness: 0.7,
+      roughness: 0.62,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
 
     this.foliageFern = new THREE.MeshStandardMaterial({
       name: 'CloudForestFernFrond',
-      color: new THREE.Color(0xd8f0be),
+      color: new THREE.Color(0xbce090),
+      emissive: new THREE.Color(0x0a1806),
       map: foliageFernAlbedo,
       normalMap: foliageNormal,
       normalScale: new THREE.Vector2(0.55, 0.55),
-      roughness: 0.66,
+      roughness: 0.58,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });

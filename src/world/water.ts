@@ -69,19 +69,19 @@ export class WaterSystem {
     // 2. Twin High-Cliff Waterfalls cascading into the ravine (§1.7 "Waterfalls everywhere", §2.5)
     const fallTex = this.createWaterfallTexture(128);
     const fallMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(0xdcf0ec),
+      color: new THREE.Color(0xd0e8e4),
       map: fallTex,
-      roughness: 0.18,
+      roughness: 0.24,
       metalness: 0.0,
       transparent: true,
-      opacity: 0.86,
+      opacity: 0.55,
       side: THREE.DoubleSide,
     });
     this.materials.push(fallMat);
 
     const fallSpecs = [
-      { x: -16.5, y: 8.5, z: -4.2, width: 3.4, height: 23.0, rotY: 0.35, tiltX: 0.14 },
-      { x: 18.0, y: 9.5, z: -2.8, width: 3.8, height: 25.0, rotY: -0.38, tiltX: 0.15 },
+      { x: -26.0, y: 7.5, z: -14.0, width: 2.8, height: 21.0, rotY: 0.48, tiltX: 0.12 },
+      { x: 24.0, y: 8.5, z: -12.5, width: 3.2, height: 23.0, rotY: -0.44, tiltX: 0.14 },
     ];
 
     for (let i = 0; i < fallSpecs.length; i++) {

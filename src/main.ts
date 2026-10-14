@@ -170,6 +170,7 @@ export class JuzuEngine {
       this.applyUrlShotPresetIfPresent();
       window.__juzuEngine = this;
       window.__juzuReady = true;
+      (window as any).__shotReady = true;
     }
 
     this.lastFrameTimeMs = typeof performance !== 'undefined' ? performance.now() : 0;

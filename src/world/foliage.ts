@@ -242,8 +242,10 @@ export class FoliageSystem {
     const bromGeo = this.createFernRosetteGeometry(7, 0.45, 0.38);
     const bromMat = new THREE.MeshStandardMaterial({
       name: 'AndeanBromeliadAccent',
-      color: new THREE.Color(0xc84628),
-      roughness: 0.58,
+      color: new THREE.Color(0x8a3826),
+      map: materials.foliageFern.map,
+      normalMap: materials.foliageFern.normalMap,
+      roughness: 0.82,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
@@ -266,7 +268,7 @@ export class FoliageSystem {
       _dummy.updateMatrix();
       this.bromeliadInstanced.setMatrixAt(brIdx, _dummy.matrix);
 
-      _color.setHSL(0.02 + rand() * 0.04, 0.74, 0.44 + rand() * 0.12);
+      _color.setHSL(0.04 + rand() * 0.04, 0.32, 0.40 + rand() * 0.12);
       this.bromeliadInstanced.setColorAt(brIdx, _color);
       brIdx++;
     }
@@ -340,93 +342,90 @@ export class FoliageSystem {
   }
 
   /**
-   * Builds a multi-cluster 3D volumetric tree canopy from 7 overlapping billowing
-   * foliage sub-crowns + 24 radiating 3D leaf-spray cards (zero flat saucer discs!).
+   * Builds a dense 3D volumetric tree canopy from intersecting angled leaf cards
+   * with spherical normal smoothing (zero solid polygon blobs, authentic AAA foliage).
    */
   private createVolumetricCanopyGeometry(): THREE.BufferGeometry {
     const positions: number[] = [];
+    const normals: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
     let vOff = 0;
 
-    // 7 overlapping 3D foliage sub-crowns arranged in a natural billowing cloud-forest dome
-    const clusters: Array<[number, number, number, number, number]> = [
-      [0.0, 1.35, 0.0, 2.15, 0.92],     // Upper central crown
-      [-1.75, 0.45, 1.05, 1.85, 0.88],  // Front-left bough cluster
-      [1.82, 0.52, 0.92, 1.80, 0.88],   // Front-right bough cluster
-      [-1.45, 0.35, -1.48, 1.75, 0.86], // Back-left bough cluster
-      [1.52, 0.40, -1.42, 1.72, 0.86],  // Back-right bough cluster
-      [0.12, -0.18, 1.95, 1.55, 0.84],  // Lower front skirt cluster
-      [-0.18, -0.15, -1.92, 1.52, 0.84] // Lower back skirt cluster
+    // 12 bough clusters arranged in a broad Andean cloud-forest umbrella crown
+    const boughs: Array<[number, number, number, number]> = [
+      [0.0, 1.45, 0.0, 2.4],       // High central dome
+      [-1.65, 0.75, 1.15, 2.0],    // Front-left upper bough
+      [1.72, 0.82, 0.95, 2.0],     // Front-right upper bough
+      [-1.52, 0.65, -1.35, 1.9],   // Back-left upper bough
+      [1.58, 0.70, -1.28, 1.9],    // Back-right upper bough
+      [0.0, 0.35, 2.15, 1.8],      // Front low skirt
+      [-0.15, 0.30, -2.10, 1.8],   // Back low skirt
+      [-2.35, -0.15, 0.25, 1.7],   // Far-left drooping bough
+      [2.38, -0.10, -0.20, 1.7],   // Far-right drooping bough
+      [1.42, -0.25, 1.65, 1.6],    // Low front-right skirt
+      [-1.38, -0.28, -1.62, 1.6],  // Low back-left skirt
+      [0.10, 2.25, -0.20, 1.7],    // Topmost crest cluster
     ];
 
-    for (let c = 0; c < clusters.length; c++) {
-      const [cx, cy, cz, rad, yScale] = clusters[c];
-      const sub = new THREE.IcosahedronGeometry(rad, 2);
-      const pos = sub.attributes.position as THREE.BufferAttribute;
-      const uv = sub.attributes.uv as THREE.BufferAttribute;
+    const crownCenter = new THREE.Vector3(0, 0.8, 0);
 
-      for (let i = 0; i < pos.count; i++) {
-        const lx = pos.getX(i);
-        const ly = pos.getY(i) * yScale;
-        const lz = pos.getZ(i);
-        // High-frequency 3D leaf-clump displacement so edges are billowy and leafy
-        const ruffle =
-          1.0 +
-          0.22 * Math.sin(lx * 2.7 + ly * 3.1 + c * 1.3) +
-          0.18 * Math.cos(lz * 2.9 - lx * 2.4 + c * 0.7) +
-          0.12 * Math.sin((lx + lz) * 4.5);
-        positions.push(cx + lx * ruffle, cy + ly * ruffle, cz + lz * ruffle);
-        uvs.push(uv ? uv.getX(i) * 2.0 : 0.5, uv ? uv.getY(i) * 2.0 : 0.5);
-      }
+    for (let b = 0; b < boughs.length; b++) {
+      const [bx, by, bz, bRad] = boughs[b];
+      // 8 crossed foliage cards per bough cluster at diverse 3D angles
+      const cardCount = 8;
+      for (let k = 0; k < cardCount; k++) {
+        const yaw = (k / cardCount) * Math.PI + (b * 0.47);
+        const pitch = ((k % 3) - 1.0) * 0.42;
+        const roll = (((k * 5) % 4) - 1.5) * 0.25;
 
-      if (sub.index) {
-        const idxArr = sub.index.array;
-        for (let i = 0; i < idxArr.length; i++) {
-          indices.push(vOff + idxArr[i]);
+        const hw = bRad * (0.62 + ((k * 3) % 4) * 0.12);
+        const hh = bRad * (0.58 + ((k * 5) % 4) * 0.12);
+
+        // Sub-cluster jitter within the bough
+        const jx = Math.sin(k * 2.3 + b) * bRad * 0.32;
+        const jy = Math.cos(k * 1.9 + b) * bRad * 0.24;
+        const jz = Math.sin(k * 3.1 - b) * bRad * 0.32;
+
+        const cx = bx + jx;
+        const cy = by + jy;
+        const cz = bz + jz;
+
+        // Basis vectors for the oriented quad
+        const euler = new THREE.Euler(pitch, yaw, roll, 'YXZ');
+        const q = new THREE.Quaternion().setFromEuler(euler);
+
+        const rVec = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+        const uVec = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+
+        const p0 = new THREE.Vector3(cx, cy, cz).addScaledVector(rVec, -hw).addScaledVector(uVec, -hh);
+        const p1 = new THREE.Vector3(cx, cy, cz).addScaledVector(rVec,  hw).addScaledVector(uVec, -hh);
+        const p2 = new THREE.Vector3(cx, cy, cz).addScaledVector(rVec,  hw).addScaledVector(uVec,  hh);
+        const p3 = new THREE.Vector3(cx, cy, cz).addScaledVector(rVec, -hw).addScaledVector(uVec,  hh);
+
+        const quadPts = [p0, p1, p2, p3];
+        for (let pIdx = 0; pIdx < 4; pIdx++) {
+          const pt = quadPts[pIdx];
+          positions.push(pt.x, pt.y, pt.z);
+
+          // Spherical outward normal from crown center for soft, voluminous lighting
+          const sNorm = pt.clone().sub(crownCenter).normalize();
+          normals.push(sNorm.x, sNorm.y, sNorm.z);
         }
-      } else {
-        for (let i = 0; i < pos.count; i++) {
-          indices.push(vOff + i);
-        }
+
+        uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+        indices.push(vOff, vOff + 1, vOff + 2, vOff, vOff + 2, vOff + 3);
+        // Double-sided backfaces
+        indices.push(vOff, vOff + 2, vOff + 1, vOff, vOff + 3, vOff + 2);
+        vOff += 4;
       }
-      vOff += pos.count;
-      sub.dispose();
-    }
-
-    // Add 24 radiating 3D arched leaf-spray cards around the perimeter for crisp leaf silhouettes
-    for (let k = 0; k < 24; k++) {
-      const ang = (k / 24) * Math.PI * 2 + (k % 3) * 0.21;
-      const ringR = 2.1 + (k % 3) * 0.55;
-      const cardY = -0.25 + ((k * 7) % 5) * 0.42;
-      const cosA = Math.cos(ang);
-      const sinA = Math.sin(ang);
-      const px = -sinA;
-      const pz = cosA;
-
-      const bx = cosA * ringR;
-      const bz = sinA * ringR;
-      const tx = cosA * (ringR + 1.15);
-      const tz = sinA * (ringR + 1.15);
-      const ty = cardY + 0.35 - (k % 2) * 0.55;
-      const hw = 0.58;
-
-      positions.push(
-        bx - px * hw, cardY, bz - pz * hw,
-        bx + px * hw, cardY, bz + pz * hw,
-        tx + px * (hw * 0.65), ty, tz + pz * (hw * 0.65),
-        tx - px * (hw * 0.65), ty, tz - pz * (hw * 0.65)
-      );
-      uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
-      indices.push(vOff, vOff + 1, vOff + 2, vOff, vOff + 2, vOff + 3);
-      vOff += 4;
     }
 
     const geo = new THREE.BufferGeometry();
     geo.setIndex(indices);
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
-    geo.computeVertexNormals();
     return geo;
   }
 

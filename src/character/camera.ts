@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { InputState } from '../core/input';
 import { TerrainSystem } from '../world/terrain';
 
-export type CameraMode = 'overShoulder' | 'orbit' | 'photo' | 'vista';
+export type CameraMode = 'overShoulder' | 'orbit' | 'photo' | 'vista' | 'shot';
 
 // Preallocated module-scope vectors — zero per-frame allocations (§5.2 #1)
 const _desiredPos = new THREE.Vector3();

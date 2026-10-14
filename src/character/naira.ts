@@ -150,19 +150,20 @@ export class NairaController {
     model.position.set(0, 0, 0);
 
     model.traverse(child => {
-      if (child.name === 'mixamorig:Hips') this.hipsBone = child;
-      else if (child.name === 'mixamorig:Spine') this.spineBone = child;
-      else if (child.name === 'mixamorig:Spine1') this.spine1Bone = child;
-      else if (child.name === 'mixamorig:Spine2') this.spine2Bone = child;
-      else if (child.name === 'mixamorig:Head') this.headBone = child;
-      else if (child.name === 'mixamorig:LeftArm') this.leftArmBone = child;
-      else if (child.name === 'mixamorig:RightArm') this.rightArmBone = child;
-      else if (child.name === 'mixamorig:LeftForeArm') this.leftForeArmBone = child;
-      else if (child.name === 'mixamorig:RightForeArm') this.rightForeArmBone = child;
-      else if (child.name === 'mixamorig:LeftUpLeg') this.leftUpLegBone = child;
-      else if (child.name === 'mixamorig:RightUpLeg') this.rightUpLegBone = child;
-      else if (child.name === 'mixamorig:LeftLeg') this.leftLegBone = child;
-      else if (child.name === 'mixamorig:RightLeg') this.rightLegBone = child;
+      const n = child.name;
+      if (n === 'mixamorigHips' || n === 'mixamorig:Hips') this.hipsBone = child;
+      else if (n === 'mixamorigSpine' || n === 'mixamorig:Spine') this.spineBone = child;
+      else if (n === 'mixamorigSpine1' || n === 'mixamorig:Spine1') this.spine1Bone = child;
+      else if (n === 'mixamorigSpine2' || n === 'mixamorig:Spine2') this.spine2Bone = child;
+      else if (n === 'mixamorigHead' || n === 'mixamorig:Head') this.headBone = child;
+      else if (n === 'mixamorigLeftArm' || n === 'mixamorig:LeftArm') this.leftArmBone = child;
+      else if (n === 'mixamorigRightArm' || n === 'mixamorig:RightArm') this.rightArmBone = child;
+      else if (n === 'mixamorigLeftForeArm' || n === 'mixamorig:LeftForeArm') this.leftForeArmBone = child;
+      else if (n === 'mixamorigRightForeArm' || n === 'mixamorig:RightForeArm') this.rightForeArmBone = child;
+      else if (n === 'mixamorigLeftUpLeg' || n === 'mixamorig:LeftUpLeg') this.leftUpLegBone = child;
+      else if (n === 'mixamorigRightUpLeg' || n === 'mixamorig:RightUpLeg') this.rightUpLegBone = child;
+      else if (n === 'mixamorigLeftLeg' || n === 'mixamorig:LeftLeg') this.leftLegBone = child;
+      else if (n === 'mixamorigRightLeg' || n === 'mixamorig:RightLeg') this.rightLegBone = child;
 
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh) {
@@ -260,19 +261,7 @@ export class NairaController {
       let vy = pos.getY(v);
       let vz = pos.getZ(v);
 
-      // Midriff component (233 verts): map to olive field-shirt region
-      if (compSize[r] === 233) {
-        uv.setX(v, 0.56);
-        uv.setY(v, 0.52);
-      }
-
-      // Upper arms out to the elbows: map to faded olive field shirt with rolled cuff (§1.3)
-      if (vy > 1.12 && vy < 1.40 && Math.abs(vx) > 0.12 && Math.abs(vx) < 0.34) {
-        uv.setX(v, 0.55 + vx * 0.08);
-        uv.setY(v, 0.48 + (vy - 1.25) * 0.08);
-      }
-
-      // Taper flared lower pant leg cuffs (y in [0.14, 0.56]) into straight-cut field trousers (§1.3)
+      // Taper flared lower pant leg cuffs into straight-cut field trousers (§1.3)
       if (vy >= 0.14 && vy <= 0.56) {
         const legCx = vx >= 0 ? 0.098 : -0.098;
         const legCz = -0.002;
@@ -288,17 +277,6 @@ export class NairaController {
           pos.setXYZ(v, vx, vy, vz);
         }
       }
-
-      // Refine head above neck pivot (y > 1.38) to realistic 1:7.5 adult proportions (§2.7)
-      if (vy > 1.38) {
-        const tHead = Math.min(1.0, (vy - 1.38) / 0.06);
-        const sXZ = 1.0 - 0.19 * tHead;
-        const sY = 1.0 - 0.13 * tHead;
-        vx = vx * sXZ;
-        vz = 0.005 + (vz - 0.005) * sXZ;
-        vy = 1.38 + (vy - 1.38) * sY;
-        pos.setXYZ(v, vx, vy, vz);
-      }
     }
     pos.needsUpdate = true;
     uv.needsUpdate = true;
@@ -313,16 +291,16 @@ export class NairaController {
 
       let remove = false;
       if (minY[r] > 1.35) {
-        // Headphones (400–900 verts, minY > 1.40, maxZ <= 0.055)
-        if (compSize[r] >= 400 && maxZ[r] <= 0.055) {
+        // Sunglasses (all frames, bridge, and lenses have UV in top strip maxUvY < 0.15)
+        if (maxUvY[r] < 0.15) {
           remove = true;
         }
-        // Sunglasses (minZ >= 0.03, UV in top strip maxUvY < 0.14 or bridge at minZ >= 0.095)
-        if (minZ[r] >= 0.025 && maxUvY[r] < 0.15) {
+        // Headphones (earcups at sides minX < -0.10 or maxX > 0.10 with compSize >= 400)
+        if (compSize[r] >= 400 && (maxZ[r] <= 0.06 && minZ[r] >= -0.06)) {
           remove = true;
         }
-        // Side pigtail hair-puff balls (compSize <= 95, maxZ <= 0.025)
-        if (compSize[r] <= 95 && maxZ[r] <= 0.025) {
+        // Side pigtail hair-puff balls (outside natural head silhouette: |X| > 0.11, Z < 0.02)
+        if (compSize[r] <= 120 && maxZ[r] <= 0.03 && (minY[r] > 1.38)) {
           remove = true;
         }
       }
@@ -360,15 +338,13 @@ export class NairaController {
         const [rx, ry, rz] = localEulers[i];
         eul.set(rx, ry, rz);
         dq.setFromEuler(eul);
-        outQ.copy(bindQ);
-        const ax = outQ.x, ay = outQ.y, az = outQ.z, aw = outQ.w;
-        const bx = dq.x, by = dq.y, bz = dq.z, bw = dq.w;
-        values[i * 4] = ax * bw + aw * bx + ay * bz - az * by;
-        values[i * 4 + 1] = ay * bw + aw * by + az * bx - ax * bz;
-        values[i * 4 + 2] = az * bw + aw * bz + ax * by - ay * bx;
-        values[i * 4 + 3] = aw * bw - ax * bx - ay * by - az * bz;
+        outQ.copy(bindQ).multiply(dq);
+        values[i * 4] = outQ.x;
+        values[i * 4 + 1] = outQ.y;
+        values[i * 4 + 2] = outQ.z;
+        values[i * 4 + 3] = outQ.w;
       }
-      return new THREE.KeyframeTrack(`${bone.name}.quaternion`, times, values);
+      return new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, values);
     };
 
     const idleTimes = [0.0, 1.2, 2.4];
@@ -378,14 +354,14 @@ export class NairaController {
     };
 
     addT(idleTracks, composeTrack(this.spineBone, idleTimes, [
-      [0.04, 0.03, 0.01],
-      [0.07, -0.02, -0.01],
-      [0.04, 0.03, 0.01],
+      [0.03, 0.02, 0.0],
+      [0.05, -0.01, 0.0],
+      [0.03, 0.02, 0.0],
     ]));
     addT(idleTracks, composeTrack(this.spine2Bone, idleTimes, [
-      [0.03, 0.04, 0.0],
-      [0.06, -0.03, 0.0],
-      [0.03, 0.04, 0.0],
+      [0.02, 0.03, 0.0],
+      [0.04, -0.02, 0.0],
+      [0.02, 0.03, 0.0],
     ]));
     addT(idleTracks, composeTrack(this.headBone, idleTimes, [
       [-0.04, -0.06, 0.0],
@@ -393,44 +369,44 @@ export class NairaController {
       [-0.04, -0.06, 0.0],
     ]));
     addT(idleTracks, composeTrack(this.leftArmBone, idleTimes, [
-      [1.24, 0.05, 0.08],
-      [1.21, 0.02, 0.11],
-      [1.24, 0.05, 0.08],
+      [1.30, 0.04, 0.05],
+      [1.32, 0.02, 0.04],
+      [1.30, 0.04, 0.05],
     ]));
     addT(idleTracks, composeTrack(this.rightArmBone, idleTimes, [
-      [1.24, -0.05, -0.08],
-      [1.21, -0.02, -0.11],
-      [1.24, -0.05, -0.08],
+      [1.30, -0.04, -0.05],
+      [1.32, -0.02, -0.04],
+      [1.30, -0.04, -0.05],
     ]));
     addT(idleTracks, composeTrack(this.leftForeArmBone, idleTimes, [
-      [0.08, 0.0, 0.34],
-      [0.1, 0.0, 0.38],
-      [0.08, 0.0, 0.34],
+      [0.0, 0.0, 0.35],
+      [0.0, 0.0, 0.38],
+      [0.0, 0.0, 0.35],
     ]));
     addT(idleTracks, composeTrack(this.rightForeArmBone, idleTimes, [
-      [0.08, 0.0, -0.34],
-      [0.1, 0.0, -0.38],
-      [0.08, 0.0, -0.34],
+      [0.0, 0.0, -0.35],
+      [0.0, 0.0, -0.38],
+      [0.0, 0.0, -0.35],
     ]));
     addT(idleTracks, composeTrack(this.leftUpLegBone, idleTimes, [
-      [0.06, 0.0, -0.02],
-      [0.03, 0.0, 0.01],
-      [0.06, 0.0, -0.02],
+      [0.02, 0.0, -0.02],
+      [0.03, 0.0, -0.02],
+      [0.02, 0.0, -0.02],
     ]));
     addT(idleTracks, composeTrack(this.rightUpLegBone, idleTimes, [
-      [-0.04, 0.0, 0.02],
-      [-0.06, 0.0, -0.01],
-      [-0.04, 0.0, 0.02],
+      [-0.02, 0.0, 0.02],
+      [-0.03, 0.0, 0.02],
+      [-0.02, 0.0, 0.02],
     ]));
     addT(idleTracks, composeTrack(this.leftLegBone, idleTimes, [
-      [-0.1, 0.0, 0.0],
-      [-0.06, 0.0, 0.0],
-      [-0.1, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
+      [-0.03, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
     ]));
     addT(idleTracks, composeTrack(this.rightLegBone, idleTimes, [
-      [-0.08, 0.0, 0.0],
-      [-0.11, 0.0, 0.0],
-      [-0.08, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
+      [-0.03, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
     ]));
 
     const idleClip = new THREE.AnimationClip('idle', 2.4, idleTracks);
@@ -455,32 +431,32 @@ export class NairaController {
         [spineLean, -0.06, 0.02],
       ]));
       addT(trs, composeTrack(this.leftArmBone, t, [
-        [1.22, 0.0, -armSwing],
-        [1.22, 0.0, 0.0],
-        [1.22, 0.0, armSwing],
-        [1.22, 0.0, 0.0],
-        [1.22, 0.0, -armSwing],
+        [1.30, 0.04, 0.05 + armSwing],
+        [1.30, 0.04, 0.05],
+        [1.30, 0.04, 0.05 - armSwing],
+        [1.30, 0.04, 0.05],
+        [1.30, 0.04, 0.05 + armSwing],
       ]));
       addT(trs, composeTrack(this.rightArmBone, t, [
-        [1.22, 0.0, -armSwing],
-        [1.22, 0.0, 0.0],
-        [1.22, 0.0, armSwing],
-        [1.22, 0.0, 0.0],
-        [1.22, 0.0, -armSwing],
+        [1.30, -0.04, -0.05 - armSwing],
+        [1.30, -0.04, -0.05],
+        [1.30, -0.04, -0.05 + armSwing],
+        [1.30, -0.04, -0.05],
+        [1.30, -0.04, -0.05 - armSwing],
       ]));
       addT(trs, composeTrack(this.leftForeArmBone, t, [
-        [0.12, 0.0, 0.42],
-        [0.12, 0.0, 0.52],
-        [0.12, 0.0, 0.62],
-        [0.12, 0.0, 0.52],
-        [0.12, 0.0, 0.42],
+        [0.0, 0.0, 0.35 + armSwing * 0.25],
+        [0.0, 0.0, 0.35],
+        [0.0, 0.0, 0.35 - armSwing * 0.15],
+        [0.0, 0.0, 0.35],
+        [0.0, 0.0, 0.35 + armSwing * 0.25],
       ]));
       addT(trs, composeTrack(this.rightForeArmBone, t, [
-        [0.12, 0.0, -0.62],
-        [0.12, 0.0, -0.52],
-        [0.12, 0.0, -0.42],
-        [0.12, 0.0, -0.52],
-        [0.12, 0.0, -0.62],
+        [0.0, 0.0, -0.35 - armSwing * 0.25],
+        [0.0, 0.0, -0.35],
+        [0.0, 0.0, -0.35 + armSwing * 0.15],
+        [0.0, 0.0, -0.35],
+        [0.0, 0.0, -0.35 - armSwing * 0.25],
       ]));
       addT(trs, composeTrack(this.leftUpLegBone, t, [
         [legSwing, 0.0, 0.0],
@@ -582,14 +558,6 @@ export class NairaController {
   private attachFieldKitAndBraid(pbr: PbrMaterialLibrary, cmScale: number): void {
     // 1. Physics Hair Braid attached to Head bone (§1.3 "single thick braid down her back")
     if (this.headBone) {
-      const crownGeo = new THREE.SphereGeometry(0.084 * cmScale, 14, 10);
-      crownGeo.scale(0.95, 0.88, 1.04);
-      this.geometries.push(crownGeo);
-      const crownMesh = new THREE.Mesh(crownGeo, pbr.hair);
-      crownMesh.position.set(0, 0.092 * cmScale, -0.028 * cmScale);
-      crownMesh.castShadow = true;
-      this.headBone.add(crownMesh);
-
       const braidRoot = new THREE.Group();
       braidRoot.position.set(0, 0.05 * cmScale, -0.095 * cmScale);
       this.headBone.add(braidRoot);
