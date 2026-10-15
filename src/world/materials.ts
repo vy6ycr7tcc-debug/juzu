@@ -360,28 +360,41 @@ export class PbrMaterialLibrary {
     });
 
     // 11. Foliage (volumetric cloud-forest tree crowns & 3D fern rosettes) — §2.2
+    const leafAlphaTex = this.createFoliageLeafAlphaTexture();
+    const fernAlphaTex = this.createFoliageFernAlphaTexture();
+
     this.foliageLeaf = new THREE.MeshStandardMaterial({
       name: 'CloudForestCanopyLeaf',
-      color: new THREE.Color(0xb2d688),
-      emissive: new THREE.Color(0x0c1a08),
+      color: new THREE.Color(0x8ebc58),
+      emissive: new THREE.Color(0x0e1c0a),
       map: foliageCanopyAlbedo,
+      alphaMap: leafAlphaTex,
+      alphaTest: 0.35,
+      transparent: false,
+      depthWrite: true,
       normalMap: foliageNormal,
-      normalScale: new THREE.Vector2(0.65, 0.65),
-      roughness: 0.62,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughness: 0.58,
       metalness: 0.0,
       side: THREE.DoubleSide,
+      shadowSide: THREE.DoubleSide,
     });
 
     this.foliageFern = new THREE.MeshStandardMaterial({
       name: 'CloudForestFernFrond',
-      color: new THREE.Color(0xbce090),
+      color: new THREE.Color(0x96c860),
       emissive: new THREE.Color(0x0a1806),
       map: foliageFernAlbedo,
+      alphaMap: fernAlphaTex,
+      alphaTest: 0.35,
+      transparent: false,
+      depthWrite: true,
       normalMap: foliageNormal,
-      normalScale: new THREE.Vector2(0.55, 0.55),
+      normalScale: new THREE.Vector2(0.75, 0.75),
       roughness: 0.58,
       metalness: 0.0,
       side: THREE.DoubleSide,
+      shadowSide: THREE.DoubleSide,
     });
 
     // 12. Gold (ornamental) — §2.2
@@ -467,6 +480,145 @@ export class PbrMaterialLibrary {
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(repeatX, repeatY);
     tex.colorSpace = isSRGB ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    tex.generateMipmaps = true;
+    this.textures.push(tex);
+    return tex;
+  }
+
+  private createFoliageLeafAlphaTexture(): THREE.CanvasTexture {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      const fallback = new THREE.CanvasTexture(canvas);
+      this.textures.push(fallback);
+      return fallback;
+    }
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+
+    const drawLeaf = (cx: number, cy: number, length: number, width: number, angle: number) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-width * 0.5, length * 0.25, -width * 0.6, length * 0.65, 0, length);
+      ctx.bezierCurveTo(width * 0.6, length * 0.65, width * 0.5, length * 0.25, 0, 0);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(size * 0.5, size * 0.95);
+    ctx.bezierCurveTo(size * 0.5, size * 0.6, size * 0.48, size * 0.35, size * 0.5, size * 0.1);
+    ctx.stroke();
+
+    const leafConfigs = [
+      { x: 0.50, y: 0.12, len: 90, w: 38, ang: 0 },
+      { x: 0.48, y: 0.18, len: 80, w: 36, ang: -0.35 },
+      { x: 0.52, y: 0.18, len: 80, w: 36, ang: 0.35 },
+      { x: 0.44, y: 0.30, len: 95, w: 42, ang: -0.7 },
+      { x: 0.56, y: 0.30, len: 95, w: 42, ang: 0.7 },
+      { x: 0.40, y: 0.25, len: 75, w: 34, ang: -1.0 },
+      { x: 0.60, y: 0.25, len: 75, w: 34, ang: 1.0 },
+      { x: 0.35, y: 0.45, len: 110, w: 48, ang: -1.2 },
+      { x: 0.65, y: 0.45, len: 110, w: 48, ang: 1.2 },
+      { x: 0.46, y: 0.42, len: 90, w: 40, ang: -0.4 },
+      { x: 0.54, y: 0.42, len: 90, w: 40, ang: 0.4 },
+      { x: 0.28, y: 0.40, len: 85, w: 38, ang: -1.45 },
+      { x: 0.72, y: 0.40, len: 85, w: 38, ang: 1.45 },
+      { x: 0.38, y: 0.62, len: 105, w: 46, ang: -1.3 },
+      { x: 0.62, y: 0.62, len: 105, w: 46, ang: 1.3 },
+      { x: 0.25, y: 0.58, len: 90, w: 40, ang: -1.6 },
+      { x: 0.75, y: 0.58, len: 90, w: 40, ang: 1.6 },
+      { x: 0.48, y: 0.58, len: 85, w: 38, ang: -0.2 },
+      { x: 0.52, y: 0.58, len: 85, w: 38, ang: 0.2 },
+      { x: 0.32, y: 0.78, len: 95, w: 42, ang: -1.5 },
+      { x: 0.68, y: 0.78, len: 95, w: 42, ang: 1.5 },
+      { x: 0.42, y: 0.75, len: 80, w: 36, ang: -0.8 },
+      { x: 0.58, y: 0.75, len: 80, w: 36, ang: 0.8 },
+    ];
+
+    for (let i = 0; i < leafConfigs.length; i++) {
+      const cfg = leafConfigs[i];
+      drawLeaf(cfg.x * size, cfg.y * size, cfg.len, cfg.w, cfg.ang);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.generateMipmaps = true;
+    this.textures.push(tex);
+    return tex;
+  }
+
+  private createFoliageFernAlphaTexture(): THREE.CanvasTexture {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      const fallback = new THREE.CanvasTexture(canvas);
+      this.textures.push(fallback);
+      return fallback;
+    }
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(size * 0.5, size * 0.98);
+    ctx.quadraticCurveTo(size * 0.51, size * 0.45, size * 0.49, size * 0.04);
+    ctx.stroke();
+
+    const pinnaeCount = 24;
+    for (let p = 0; p < pinnaeCount; p++) {
+      const t = p / pinnaeCount;
+      const y = size * (0.92 - t * 0.86);
+      const curveX = size * (0.5 + Math.sin(t * Math.PI) * 0.01);
+      const maxW = 180 * Math.sin(t * Math.PI * 0.85 + 0.15);
+      const pinnaLen = Math.max(16, maxW);
+      const pWidth = Math.max(6, 14 * (1.0 - t * 0.5));
+
+      ctx.save();
+      ctx.translate(curveX, y);
+      ctx.rotate(-Math.PI * 0.5 + 0.25 - t * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-pWidth * 0.5, pinnaLen * 0.3, -pWidth * 0.4, pinnaLen * 0.7, 0, pinnaLen);
+      ctx.bezierCurveTo(pWidth * 0.4, pinnaLen * 0.7, pWidth * 0.5, pinnaLen * 0.3, 0, 0);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(curveX, y);
+      ctx.rotate(Math.PI * 0.5 - 0.25 + t * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-pWidth * 0.5, pinnaLen * 0.3, -pWidth * 0.4, pinnaLen * 0.7, 0, pinnaLen);
+      ctx.bezierCurveTo(pWidth * 0.4, pinnaLen * 0.7, pWidth * 0.5, pinnaLen * 0.3, 0, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.generateMipmaps = true;
     this.textures.push(tex);
     return tex;
