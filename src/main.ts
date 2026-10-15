@@ -133,6 +133,10 @@ export class JuzuEngine {
     this.jungleLowlands.build(this.scene, this.materials, this.terrain);
     this.paititi.build(this.scene, this.materials, this.terrain);
 
+    // Place sanctuary brazier flickering torch light (index 0)
+    const cpY = this.terrain.getTerrainHeightAt(-2.2, 8.4);
+    this.lightRig.placeTorchLight(0, -2.2, cpY + 1.25, 8.4, 2.5);
+
     // 4. Naira Quispe rigged GLB character + Sol Negro operatives + camera
     await this.physics.build();
     this.input.build();
@@ -792,14 +796,29 @@ export class JuzuEngine {
         this.quests.refreshObjectiveFromFlags(this.save);
         this.audio.playSfx('condor_cry', 0);
       } else if (id === 'checkpoint_south_trail') {
+        const grades: Array<'dawn' | 'noon' | 'afternoon' | 'dusk' | 'night'> = [
+          'dawn',
+          'noon',
+          'afternoon',
+          'dusk',
+          'night',
+        ];
+        const currentGrade = this.lightRig.getGrade();
+        const nextIdx = (grades.indexOf(currentGrade) + 1) % grades.length;
+        const nextGrade = grades[nextIdx];
+        this.lightRig.applyGrade(nextGrade, this.gpu?.renderer);
         this.save.saveCheckpoint(
           this.naira.position.x,
           this.naira.position.y,
           this.naira.position.z,
           this.naira.yaw,
-          this.lightRig.getGrade()
+          nextGrade
         );
         this.audio.playSfx('checkpoint_chime', 0);
+        this.hud.showChapterBanner(
+          `Sanctuary Rest · ${nextGrade.charAt(0).toUpperCase() + nextGrade.slice(1)}`,
+          'Progress recorded · Sun position shifted'
+        );
       } else if (id === 'sierra_solar_mirror') {
         this.puzzles.markSolved('hs_solar_alignment');
         this.save.setQuestFlag('q_hs_solar_aligned', true);

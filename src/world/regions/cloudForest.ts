@@ -566,6 +566,20 @@ export class CloudForestRegion {
     marker.receiveShadow = true;
     this.group.add(marker);
 
+    // Bronze ceremonial brazier and glowing ember atop the sanctuary marker
+    const brazierGeo = new THREE.CylinderGeometry(0.24, 0.16, 0.18, 12);
+    const emberGeo = new THREE.SphereGeometry(0.14, 12, 8);
+    this.geometries.push(brazierGeo, emberGeo);
+
+    const brazier = new THREE.Mesh(brazierGeo, materials.metalBronze);
+    brazier.position.set(cpX, cpY + 1.15, cpZ);
+    brazier.castShadow = true;
+    this.group.add(brazier);
+
+    const ember = new THREE.Mesh(emberGeo, materials.goldOrnamental);
+    ember.position.set(cpX, cpY + 1.25, cpZ);
+    this.group.add(ember);
+
     this.interactables.push({
       id: 'checkpoint_south_trail',
       label: 'Sanctuary Checkpoint',
