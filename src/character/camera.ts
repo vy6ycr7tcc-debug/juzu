@@ -13,7 +13,7 @@ import { InputState } from '../core/input';
 import { TerrainSystem } from '../world/terrain';
 import { LocomotionMode } from './naira';
 
-export type CameraMode = 'overShoulder' | 'orbit' | 'photo' | 'vista' | 'shot';
+export type CameraMode = 'overShoulder' | 'orbit' | 'photo' | 'vista' | 'shot' | 'cinematic';
 
 // Preallocated module-scope vectors — zero per-frame allocations (§5.2 #1)
 const _desiredPos = new THREE.Vector3();
@@ -32,6 +32,11 @@ export class OverTheShoulderCamera {
 
   private readonly smoothedPos: THREE.Vector3 = new THREE.Vector3(0.55, 3.3, 12.2);
   private readonly smoothedLook: THREE.Vector3 = new THREE.Vector3(0.45, 2.9, 6.0);
+  private readonly cinematicFromPos: THREE.Vector3 = new THREE.Vector3();
+  private readonly cinematicFromLook: THREE.Vector3 = new THREE.Vector3();
+  private cinematicDuration: number = 2.5;
+  private cinematicElapsed: number = 0;
+  private cinematicOnComplete: (() => void) | null = null;
   private targetRecenterYaw: number | null = null;
   private elapsedSec: number = 0;
 
@@ -126,6 +131,24 @@ export class OverTheShoulderCamera {
     this.camera.lookAt(this.smoothedLook);
   }
 
+  public startCinematic(
+    fromPos: THREE.Vector3,
+    fromLook: THREE.Vector3,
+    durationSec: number = 2.5,
+    onComplete?: () => void
+  ): void {
+    this.mode = 'cinematic';
+    this.cinematicFromPos.copy(fromPos);
+    this.cinematicFromLook.copy(fromLook);
+    this.cinematicDuration = Math.max(0.1, durationSec);
+    this.cinematicElapsed = 0;
+    this.cinematicOnComplete = onComplete ?? null;
+    this.smoothedPos.copy(fromPos);
+    this.smoothedLook.copy(fromLook);
+    this.camera.position.copy(fromPos);
+    this.camera.lookAt(fromLook);
+  }
+
   public update(
     dt: number,
     input: InputState,
@@ -135,6 +158,25 @@ export class OverTheShoulderCamera {
     locoMode: LocomotionMode = 'idle'
   ): void {
     if (this.mode === 'vista') {
+      return;
+    }
+    if (this.mode === 'cinematic') {
+      this.cinematicElapsed += dt;
+      const progress = Math.min(1.0, this.cinematicElapsed / this.cinematicDuration);
+      const t = progress * progress * (3 - 2 * progress);
+
+      this.computeOverShoulderRig(targetFootPos, targetSpeed, locoMode);
+      this.smoothedPos.copy(this.cinematicFromPos).lerp(_desiredPos, t);
+      this.smoothedLook.copy(this.cinematicFromLook).lerp(_desiredLookAt, t);
+      this.camera.position.copy(this.smoothedPos);
+      this.camera.lookAt(this.smoothedLook);
+
+      if (progress >= 1.0) {
+        this.mode = 'overShoulder';
+        const cb = this.cinematicOnComplete;
+        this.cinematicOnComplete = null;
+        if (cb) cb();
+      }
       return;
     }
     this.elapsedSec += dt;

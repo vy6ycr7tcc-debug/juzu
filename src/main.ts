@@ -108,6 +108,13 @@ export class JuzuEngine {
   }
 
   public async build(container: HTMLElement): Promise<void> {
+    THREE.DefaultLoadingManager.onProgress = (_url, itemsLoaded, itemsTotal) => {
+      const pct = itemsTotal > 0 ? (itemsLoaded / itemsTotal) * 100 : 100;
+      if (typeof window !== 'undefined' && typeof (window as any).__setLoadingProgress === 'function') {
+        (window as any).__setLoadingProgress(pct, `Loading Andean Assets (${itemsLoaded}/${itemsTotal})`);
+      }
+    };
+
     this.quality.build();
     const qSettings = this.quality.getSettings();
 
@@ -178,10 +185,17 @@ export class JuzuEngine {
       () => this.downloadScreenshotPng(),
       () => {
         this.audio.resumeAudioContext();
-        this.hud.showChapterBanner(
-          'Chapter I: The Quipu Fragment',
-          'Cloud Forest Valleys · Vilcabamba Ridge'
-        );
+        // 2.35:1 Cinematic establishing sweep over Vilcabamba ridge upon beginning journey
+        this.hud.setLetterbox(true);
+        const vistaCamPos = new THREE.Vector3(0.0, 15.5, 21.0);
+        const vistaLookAt = new THREE.Vector3(0.0, 3.2, 0.0);
+        this.cameraRig.startCinematic(vistaCamPos, vistaLookAt, 2.8, () => {
+          this.hud.setLetterbox(false);
+          this.hud.showChapterBanner(
+            'Chapter I: The Quipu Fragment',
+            'Cloud Forest Valleys · Vilcabamba Ridge'
+          );
+        });
       },
       regionId => {
         this.setActiveRegion(regionId as SaveData['regionId']);
@@ -245,6 +259,10 @@ export class JuzuEngine {
 
     this.lastFrameTimeMs = typeof performance !== 'undefined' ? performance.now() : 0;
     this.startLoop();
+
+    if (this.activeShotPreset !== 'loading' && typeof window !== 'undefined' && typeof (window as any).__hideLoadingScreen === 'function') {
+      (window as any).__hideLoadingScreen();
+    }
   }
 
   public setActiveRegion(regionId: SaveData['regionId']): void {
@@ -607,6 +625,43 @@ export class JuzuEngine {
         -17.2,
         50
       );
+    } else if (shot === 'loading') {
+      const el = document.getElementById('juzu-loading-screen');
+      if (el) {
+        el.style.display = 'flex';
+        el.style.opacity = '1';
+        el.style.pointerEvents = 'auto';
+        if (typeof (window as any).__setLoadingProgress === 'function') {
+          (window as any).__setLoadingProgress(68, 'Loading Andean Terraces');
+        }
+      }
+    } else if (shot === 'cinematic') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(0.0, 9.2, Math.PI, 'idle');
+      this.hud.setLetterbox(true);
+      this.cameraRig.snapToShot(
+        0.0,
+        15.5,
+        21.0,
+        0.0,
+        3.2,
+        0.0,
+        54
+      );
+    } else if (shot === 'victory') {
+      this.setActiveRegion('paititi');
+      this.placeNairaAt(0.0, 2.5, Math.PI, 'idle');
+      this.menus.showVictoryScreen({
+        quipusFound: 5,
+        totalQuipus: 5,
+        relicsFound: 4,
+        timePlayedSec: 540,
+      });
+    } else if (shot === 'onboarding') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(0.0, 6.4, Math.PI, 'idle');
+      this.cameraRig.mode = 'overShoulder';
+      this.cameraRig.build(this.naira.position, this.naira.yaw);
     }
   }
 
@@ -856,7 +911,47 @@ export class JuzuEngine {
       }
     }
 
-    if (!this.activeInteractable) return;
+    if (!this.activeInteractable) {
+      if (this.naira.position.y <= -2.1) {
+        this.activeInteractable = {
+          id: 'prompt_swim',
+          label: 'Swim',
+          promptText: '[Shift] Fast Stroke · [C] Dive',
+          position: this.naira.position,
+          radius: 0,
+        };
+      } else if (this.traversal.findNearbyCrag(this.naira.position, 2.2)) {
+        this.activeInteractable = {
+          id: 'prompt_climb',
+          label: 'Climb',
+          promptText: '[Space] Scale Inca Wall',
+          position: this.naira.position,
+          radius: 2.2,
+        };
+      } else if (this.traversal.findNearbyZipline(this.naira.position, 2.8)) {
+        this.activeInteractable = {
+          id: 'prompt_zipline',
+          label: 'Zipline',
+          promptText: '[Space] Grab Zipline Cable',
+          position: this.naira.position,
+          radius: 2.8,
+        };
+      } else if (
+        this.activeRegion === 'cloudForest' &&
+        Math.abs(this.naira.position.x) < 2.0 &&
+        this.naira.position.z >= 5.8 &&
+        this.naira.position.z <= 7.8
+      ) {
+        this.activeInteractable = {
+          id: 'prompt_bridge',
+          label: 'Bridge',
+          promptText: '[W] Cross Q\'eswachaka Bridge · [Shift] Sprint',
+          position: this.naira.position,
+          radius: 2.0,
+        };
+      }
+      return;
+    }
 
     if (this.input.state.interactPressed || this.input.state.condorPressed) {
       const id = this.activeInteractable.id;
@@ -932,6 +1027,12 @@ export class JuzuEngine {
         );
         this.quests.refreshObjectiveFromFlags(this.save, this.activeRegion);
         this.audio.playSfx('collectible_chime', 0);
+        this.menus.showVictoryScreen({
+          quipusFound: 5,
+          totalQuipus: 5,
+          relicsFound: 4,
+          timePlayedSec: 540,
+        });
       }
     }
   }

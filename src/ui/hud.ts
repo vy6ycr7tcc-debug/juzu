@@ -19,6 +19,8 @@ export class HudOverlay {
   private staminaWrapEl: HTMLDivElement | null = null;
   private staminaFillEl: HTMLDivElement | null = null;
   private ammoEl: HTMLDivElement | null = null;
+  private letterboxTopEl: HTMLDivElement | null = null;
+  private letterboxBottomEl: HTMLDivElement | null = null;
 
   private lastObjective: string = '';
   private lastObjectiveVisible: boolean = false;
@@ -30,6 +32,43 @@ export class HudOverlay {
 
   public build(container: HTMLElement): void {
     if (typeof document === 'undefined') return;
+
+    // Cinematic 2.35:1 Letterbox Bars for establishing vista sweeps
+    const topBar = document.createElement('div');
+    topBar.id = 'juzu-letterbox-top';
+    topBar.style.cssText = [
+      'position:fixed',
+      'top:0',
+      'left:0',
+      'right:0',
+      'height:9.5vh',
+      'background:#070908',
+      'z-index:22',
+      'pointer-events:none',
+      'transform:translateY(-100%)',
+      'transition:transform 0.75s cubic-bezier(0.16, 1, 0.3, 1)',
+      'box-shadow:0 2px 20px rgba(0,0,0,0.85)',
+    ].join(';');
+    container.appendChild(topBar);
+    this.letterboxTopEl = topBar;
+
+    const bottomBar = document.createElement('div');
+    bottomBar.id = 'juzu-letterbox-bottom';
+    bottomBar.style.cssText = [
+      'position:fixed',
+      'bottom:0',
+      'left:0',
+      'right:0',
+      'height:9.5vh',
+      'background:#070908',
+      'z-index:22',
+      'pointer-events:none',
+      'transform:translateY(100%)',
+      'transition:transform 0.75s cubic-bezier(0.16, 1, 0.3, 1)',
+      'box-shadow:0 -2px 20px rgba(0,0,0,0.85)',
+    ].join(';');
+    container.appendChild(bottomBar);
+    this.letterboxBottomEl = bottomBar;
 
     const root = document.createElement('div');
     root.id = 'juzu-hud-root';
@@ -321,7 +360,24 @@ export class HudOverlay {
     }
   }
 
+  public setLetterbox(active: boolean): void {
+    if (this.letterboxTopEl) {
+      this.letterboxTopEl.style.transform = active ? 'translateY(0)' : 'translateY(-100%)';
+    }
+    if (this.letterboxBottomEl) {
+      this.letterboxBottomEl.style.transform = active ? 'translateY(0)' : 'translateY(100%)';
+    }
+  }
+
   public dispose(): void {
+    if (this.letterboxTopEl) {
+      this.letterboxTopEl.remove();
+      this.letterboxTopEl = null;
+    }
+    if (this.letterboxBottomEl) {
+      this.letterboxBottomEl.remove();
+      this.letterboxBottomEl = null;
+    }
     if (this.rootEl) {
       this.rootEl.remove();
       this.rootEl = null;
