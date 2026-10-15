@@ -73,15 +73,48 @@ export class PaititiRegion {
       this.group.add(st);
     }
 
-    // Firmly Grounded Monumental Sun Portal atop the upper temple terrace
+    // Flanking solid stone stepped balustrades
+    for (let s = 0; s < stairStepCount; s++) {
+      const tz = -4.2 - s * 0.72;
+      const stepGroundY = terrain.getTerrainHeightAt(0, tz);
+      const topY = Math.max(stepGroundY + 0.25, ptY + 0.35 + s * 0.28);
+      const balH = Math.max(1.1, topY - stepGroundY + 0.95);
+      const balGeo = new THREE.BoxGeometry(0.48, balH, 0.76);
+      this.geometries.push(balGeo);
+
+      for (let side = -1; side <= 1; side += 2) {
+        const bal = new THREE.Mesh(balGeo, materials.andesiteCut);
+        bal.position.set(side * 2.05, topY - balH * 0.5 + 0.32, tz);
+        bal.castShadow = true;
+        bal.receiveShadow = true;
+        this.group.add(bal);
+      }
+    }
+
+    // Sacred Imperial Double-Jamb Sun Portal (Doble Jamba) atop the upper temple terrace
     const portalFloorY = ptY + 4.1; // Surface of upper terrace
-    const plinthGeo = new THREE.BoxGeometry(6.6, 2.8, 4.2);
-    const jambGeo = new THREE.BoxGeometry(1.05, 4.4, 1.05);
-    const lintelGeo = new THREE.BoxGeometry(4.2, 0.92, 1.15);
-    const goldBandGeo = new THREE.BoxGeometry(4.25, 0.28, 1.18);
-    const sunDiscGeo = new THREE.CylinderGeometry(1.05, 1.05, 0.15, 28);
-    sunDiscGeo.rotateX(Math.PI / 2);
-    this.geometries.push(plinthGeo, jambGeo, lintelGeo, goldBandGeo, sunDiscGeo);
+    const plinthGeo = new THREE.BoxGeometry(7.2, 2.8, 4.2);
+    
+    // Outer battered jambs
+    const outerJambGeo = new THREE.BoxGeometry(0.92, 4.4, 1.15);
+    // Inner recessed jambs creating the authentic double-jamb Inca recess
+    const innerJambGeo = new THREE.BoxGeometry(0.45, 3.9, 0.85);
+
+    // Stepped imperial lintels & Chakana pediment
+    const lintelLowerGeo = new THREE.BoxGeometry(4.4, 0.55, 1.25);
+    const lintelUpperGeo = new THREE.BoxGeometry(5.2, 0.45, 1.35);
+    const pedimentGeo = new THREE.BoxGeometry(3.6, 0.65, 1.15);
+    const chakanaCrestGeo = new THREE.BoxGeometry(2.2, 0.55, 1.05);
+
+    this.geometries.push(
+      plinthGeo,
+      outerJambGeo,
+      innerJambGeo,
+      lintelLowerGeo,
+      lintelUpperGeo,
+      pedimentGeo,
+      chakanaCrestGeo
+    );
 
     // Solid ashlar masonry plinth under the Sun Portal
     const plinth = new THREE.Mesh(plinthGeo, materials.andesiteCut);
@@ -90,34 +123,106 @@ export class PaititiRegion {
     plinth.receiveShadow = true;
     this.group.add(plinth);
 
-    const leftJamb = new THREE.Mesh(jambGeo, materials.andesiteCut);
-    leftJamb.position.set(-1.45, portalFloorY + 2.1, portalZ);
-    leftJamb.rotation.z = -0.06;
-    leftJamb.castShadow = true;
-    leftJamb.receiveShadow = true;
-    this.group.add(leftJamb);
+    // Left & Right Outer Battered Jambs
+    const leftOuterJamb = new THREE.Mesh(outerJambGeo, materials.andesiteCut);
+    leftOuterJamb.position.set(-1.62, portalFloorY + 2.1, portalZ);
+    leftOuterJamb.rotation.z = -0.06;
+    leftOuterJamb.castShadow = true;
+    leftOuterJamb.receiveShadow = true;
+    this.group.add(leftOuterJamb);
 
-    const rightJamb = new THREE.Mesh(jambGeo, materials.andesiteCut);
-    rightJamb.position.set(1.45, portalFloorY + 2.1, portalZ);
-    rightJamb.rotation.z = 0.06;
-    rightJamb.castShadow = true;
-    rightJamb.receiveShadow = true;
-    this.group.add(rightJamb);
+    const rightOuterJamb = new THREE.Mesh(outerJambGeo, materials.andesiteCut);
+    rightOuterJamb.position.set(1.62, portalFloorY + 2.1, portalZ);
+    rightOuterJamb.rotation.z = 0.06;
+    rightOuterJamb.castShadow = true;
+    rightOuterJamb.receiveShadow = true;
+    this.group.add(rightOuterJamb);
 
-    const lintel = new THREE.Mesh(lintelGeo, materials.andesiteCut);
-    lintel.position.set(0, portalFloorY + 4.3 + 0.44, portalZ);
-    lintel.castShadow = true;
-    lintel.receiveShadow = true;
-    this.group.add(lintel);
+    // Left & Right Inner Recessed Jambs (Sacred Imperial Doble Jamba)
+    const leftInnerJamb = new THREE.Mesh(innerJambGeo, materials.andesiteCut);
+    leftInnerJamb.position.set(-1.18, portalFloorY + 1.9, portalZ + 0.08);
+    leftInnerJamb.rotation.z = -0.06;
+    leftInnerJamb.castShadow = true;
+    leftInnerJamb.receiveShadow = true;
+    this.group.add(leftInnerJamb);
 
-    const goldBand = new THREE.Mesh(goldBandGeo, materials.goldOrnamental);
-    goldBand.position.set(0, portalFloorY + 4.3 + 0.05, portalZ + 0.05);
-    this.group.add(goldBand);
+    const rightInnerJamb = new THREE.Mesh(innerJambGeo, materials.andesiteCut);
+    rightInnerJamb.position.set(1.18, portalFloorY + 1.9, portalZ + 0.08);
+    rightInnerJamb.rotation.z = 0.06;
+    rightInnerJamb.castShadow = true;
+    rightInnerJamb.receiveShadow = true;
+    this.group.add(rightInnerJamb);
 
-    this.sunDiscMesh = new THREE.Mesh(sunDiscGeo, materials.goldOrnamental);
-    this.sunDiscMesh.position.set(0, portalFloorY + 5.85, portalZ + 0.15);
-    this.sunDiscMesh.castShadow = true;
-    this.group.add(this.sunDiscMesh);
+    // Stepped Imperial Lintel
+    const lintelLower = new THREE.Mesh(lintelLowerGeo, materials.andesiteCut);
+    lintelLower.position.set(0, portalFloorY + 4.2, portalZ);
+    lintelLower.castShadow = true;
+    lintelLower.receiveShadow = true;
+    this.group.add(lintelLower);
+
+    const lintelUpper = new THREE.Mesh(lintelUpperGeo, materials.andesiteCut);
+    lintelUpper.position.set(0, portalFloorY + 4.7, portalZ);
+    lintelUpper.castShadow = true;
+    lintelUpper.receiveShadow = true;
+    this.group.add(lintelUpper);
+
+    // Chakana stepped stone pediment crest
+    const pediment = new THREE.Mesh(pedimentGeo, materials.andesiteCut);
+    pediment.position.set(0, portalFloorY + 5.25, portalZ);
+    pediment.castShadow = true;
+    this.group.add(pediment);
+
+    const crest = new THREE.Mesh(chakanaCrestGeo, materials.andesiteCut);
+    crest.position.set(0, portalFloorY + 5.85, portalZ);
+    crest.castShadow = true;
+    this.group.add(crest);
+
+    // Imperial Golden Sun Disc (Punchao) Assembly
+    const sunGroup = new THREE.Group();
+    sunGroup.position.set(0, portalFloorY + 6.35, portalZ + 0.24);
+
+    const discRimGeo = new THREE.CylinderGeometry(1.22, 1.22, 0.12, 36);
+    discRimGeo.rotateX(Math.PI * 0.5);
+    const discFaceGeo = new THREE.CylinderGeometry(1.08, 1.08, 0.15, 36);
+    discFaceGeo.rotateX(Math.PI * 0.5);
+    const bossGeo = new THREE.SphereGeometry(0.32, 24, 16);
+    const rayGeo = new THREE.ConeGeometry(0.09, 0.38, 4);
+    rayGeo.rotateX(Math.PI * 0.5);
+    const bracketGeo = new THREE.BoxGeometry(0.22, 0.85, 0.45);
+    this.geometries.push(discRimGeo, discFaceGeo, bossGeo, rayGeo, bracketGeo);
+
+    const discRim = new THREE.Mesh(discRimGeo, materials.metalBronze);
+    discRim.castShadow = true;
+    sunGroup.add(discRim);
+
+    const discFace = new THREE.Mesh(discFaceGeo, materials.goldOrnamental);
+    discFace.castShadow = true;
+    sunGroup.add(discFace);
+
+    const boss = new THREE.Mesh(bossGeo, materials.goldOrnamental);
+    boss.position.set(0, 0, 0.08);
+    boss.castShadow = true;
+    sunGroup.add(boss);
+
+    for (let r = 0; r < 16; r++) {
+      const ang = (r / 16) * Math.PI * 2;
+      const ray = new THREE.Mesh(rayGeo, materials.goldOrnamental);
+      const rad = 1.34;
+      ray.position.set(Math.cos(ang) * rad, Math.sin(ang) * rad, 0);
+      ray.rotation.z = ang - Math.PI * 0.5;
+      ray.castShadow = true;
+      sunGroup.add(ray);
+    }
+
+    for (let b = -1; b <= 1; b += 2) {
+      const br = new THREE.Mesh(bracketGeo, materials.metalBronze);
+      br.position.set(b * 0.65, -0.65, -0.15);
+      br.castShadow = true;
+      sunGroup.add(br);
+    }
+
+    this.sunDiscMesh = sunGroup as unknown as THREE.Mesh;
+    this.group.add(sunGroup);
 
     // 2. Twin Golden Aqueduct Channels & Fountains flanking the Central Esplanade
     const aqY = terrain.getTerrainHeightAt(0, 7.2);
