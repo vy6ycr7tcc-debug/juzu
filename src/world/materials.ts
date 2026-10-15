@@ -8,6 +8,7 @@
  */
 
 import * as THREE from 'three';
+import { applyNanoHexagonRelief } from '../rendering/nanoHex';
 
 export class PbrMaterialLibrary {
   public andesiteCut!: THREE.MeshStandardMaterial;
@@ -452,6 +453,35 @@ export class PbrMaterialLibrary {
       normalScale: new THREE.Vector2(1.8, 1.8),
       roughness: 0.92,
       metalness: 0.0,
+    });
+
+    // Apply nano-hexagonal stochastic micro-relief and non-repeating hex-tiling
+    applyNanoHexagonRelief(this.andesiteCut, {
+      scale: 68.0,
+      reliefStrength: 0.32,
+      grooveDepth: 0.20,
+      hexTiling: false, // preserve coursed masonry direction while adding hand-pecked mineral relief
+    });
+
+    applyNanoHexagonRelief(this.fieldstoneRough, {
+      scale: 54.0,
+      reliefStrength: 0.44,
+      grooveDepth: 0.28,
+      hexTiling: true, // break repeating square patterns on rough rock and boulders
+    });
+
+    applyNanoHexagonRelief(this.groundForestFloor, {
+      scale: 48.0,
+      reliefStrength: 0.38,
+      grooveDepth: 0.26,
+      hexTiling: true, // break 28x28 square grid repetition on valley terrain
+    });
+
+    applyNanoHexagonRelief(this.highSierraPuna, {
+      scale: 52.0,
+      reliefStrength: 0.40,
+      grooveDepth: 0.25,
+      hexTiling: true, // break 18x18 repetition across puna steppe
     });
 
     this.materials.push(

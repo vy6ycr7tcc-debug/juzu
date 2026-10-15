@@ -366,7 +366,7 @@ export class JuzuEngine {
       this.setActiveRegion('cloudForest');
       const crag = this.traversal.crags[0];
       const cx = crag ? crag.centerX : -4.2;
-      const cz = crag ? crag.centerZ + 0.12 : -14.68;
+      const cz = crag ? crag.centerZ + 0.38 : -14.42;
       const baseY = this.terrain.sampleGroundY(cx, cz, 3.0);
       const cy = baseY + 2.15;
       this.naira.position.set(cx, cy, cz);
@@ -378,7 +378,7 @@ export class JuzuEngine {
       this.input.state.climbHeld = true;
       this.naira.transitionToMode('climb', true);
       this.cameraRig.snapToShot(
-        cx + 1.45,
+        cx + 1.55,
         cy + 0.55,
         cz + 2.35,
         cx,

@@ -524,6 +524,13 @@ export class NairaController {
     // Phase 2 Rock Climbing clip (reaching upward toward stone handholds on crag wall)
     const climbT = [0, 0.35, 0.7, 1.05, 1.4];
     const climbTracks: THREE.KeyframeTrack[] = [];
+    addT(climbTracks, composeTrack(this.spineBone, climbT, [
+      [-0.08, 0.03, 0.0],
+      [-0.12, -0.03, 0.0],
+      [-0.08, 0.03, 0.0],
+      [-0.05, 0.05, 0.0],
+      [-0.08, 0.03, 0.0],
+    ]));
     addT(climbTracks, composeTrack(this.leftArmBone, climbT, [
       [1.15, 0.0, 1.85], [1.15, 0.0, 2.05], [1.15, 0.0, 1.85], [1.15, 0.0, 1.35], [1.15, 0.0, 1.85]
     ]));
@@ -536,17 +543,19 @@ export class NairaController {
     addT(climbTracks, composeTrack(this.rightForeArmBone, climbT, [
       [0.15, 0.0, -0.95], [0.15, 0.0, -0.75], [0.15, 0.0, -0.55], [0.15, 0.0, -0.75], [0.15, 0.0, -0.95]
     ]));
+    // Hip abduction and controlled pitch prevent thighs/knees from sinking inside stone geometry
     addT(climbTracks, composeTrack(this.leftUpLegBone, climbT, [
-      [0.65, 0.0, 0.08], [0.25, 0.0, 0.08], [0.65, 0.0, 0.08], [0.85, 0.0, 0.08], [0.65, 0.0, 0.08]
+      [0.28, 0.10, 0.30], [0.18, 0.06, 0.24], [0.28, 0.10, 0.30], [0.38, 0.12, 0.34], [0.28, 0.10, 0.30]
     ]));
     addT(climbTracks, composeTrack(this.rightUpLegBone, climbT, [
-      [0.25, 0.0, -0.08], [0.65, 0.0, -0.08], [0.85, 0.0, -0.08], [0.25, 0.0, -0.08], [0.25, 0.0, -0.08]
+      [0.18, -0.06, -0.24], [0.28, -0.10, -0.30], [0.38, -0.12, -0.34], [0.18, -0.06, -0.24], [0.18, -0.06, -0.24]
     ]));
+    // Natural knee flex keeping feet planted on wall holds
     addT(climbTracks, composeTrack(this.leftLegBone, climbT, [
-      [-0.75, 0.0, 0.0], [-0.35, 0.0, 0.0], [-0.75, 0.0, 0.0], [-0.95, 0.0, 0.0], [-0.75, 0.0, 0.0]
+      [-0.42, 0.0, 0.0], [-0.22, 0.0, 0.0], [-0.42, 0.0, 0.0], [-0.58, 0.0, 0.0], [-0.42, 0.0, 0.0]
     ]));
     addT(climbTracks, composeTrack(this.rightLegBone, climbT, [
-      [-0.35, 0.0, 0.0], [-0.75, 0.0, 0.0], [-0.95, 0.0, 0.0], [-0.35, 0.0, 0.0], [-0.35, 0.0, 0.0]
+      [-0.22, 0.0, 0.0], [-0.42, 0.0, 0.0], [-0.58, 0.0, 0.0], [-0.22, 0.0, 0.0], [-0.22, 0.0, 0.0]
     ]));
     this.actions.climb = this.mixer.clipAction(new THREE.AnimationClip('climb', 1.4, climbTracks));
 
@@ -792,6 +801,8 @@ export class NairaController {
       if (nearbyCrag) {
         this.yaw = nearbyCrag.facingYaw;
         this.root.rotation.set(0, this.yaw, 0);
+        const targetZ = nearbyCrag.centerZ + 0.38;
+        this.position.z = THREE.MathUtils.lerp(this.position.z, targetZ, 0.25);
       }
     } else if (input.aimHeld) {
       nextMode = 'aim';
@@ -873,6 +884,9 @@ export class NairaController {
       if (traversal) {
         const crag = traversal.findNearbyCrag(this.position, 2.0);
         if (crag) {
+          // Maintain physical standoff distance from crag wall so body and legs never sink
+          const targetZ = crag.centerZ + 0.38;
+          this.position.z = THREE.MathUtils.lerp(this.position.z, targetZ, dt * 10.0);
           this.position.y = Math.max(crag.bottomY + 0.2, this.position.y);
           // Auto mantle onto platform ledge when reaching top
           if (this.position.y >= crag.topY - 0.22) {
