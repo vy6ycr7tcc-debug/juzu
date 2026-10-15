@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { InputState } from '../core/input';
 import { TerrainSystem } from '../world/terrain';
+import { LocomotionMode } from './naira';
 
 export type CameraMode = 'overShoulder' | 'orbit' | 'photo' | 'vista' | 'shot';
 
@@ -32,6 +33,7 @@ export class OverTheShoulderCamera {
   private readonly smoothedPos: THREE.Vector3 = new THREE.Vector3(0.55, 3.3, 12.2);
   private readonly smoothedLook: THREE.Vector3 = new THREE.Vector3(0.45, 2.9, 6.0);
   private targetRecenterYaw: number | null = null;
+  private elapsedSec: number = 0;
 
   constructor(aspect: number = 16 / 9) {
     // §2.9 FOV: 55–60 degrees vertical (58° default, 60° traversal)
@@ -72,13 +74,33 @@ export class OverTheShoulderCamera {
    * - Never shows Naira's back filling the frame (distance ~ 3.2 m)
    * - Never cuts off her feet awkwardly
    */
-  private computeOverShoulderRig(targetFootPos: THREE.Vector3, speed: number): void {
+  private computeOverShoulderRig(targetFootPos: THREE.Vector3, speed: number, locoMode: LocomotionMode = 'idle'): void {
     _rotQuat.setFromAxisAngle(_yAxis, this.yaw);
+
+    if (locoMode === 'zipline') {
+      // High-velocity zipline camera: pulled back with subtle aerodynamic wind shake
+      const windShakeY = Math.sin(this.elapsedSec * 28.0) * 0.016;
+      const windShakeX = Math.cos(this.elapsedSec * 22.0) * 0.014;
+      _shoulderOffset.set(-0.92, 1.25 + windShakeY, -3.85 + windShakeX).applyQuaternion(_rotQuat);
+      _desiredPos.copy(targetFootPos).add(_shoulderOffset);
+      _lookOffset.set(-0.25, 1.25, 4.8).applyQuaternion(_rotQuat);
+      _desiredLookAt.copy(targetFootPos).add(_lookOffset);
+      return;
+    }
+
+    if (locoMode === 'climb' || locoMode === 'mantle') {
+      // Intimate rock climbing framing
+      _shoulderOffset.set(-0.65, 1.35, -2.45).applyQuaternion(_rotQuat);
+      _desiredPos.copy(targetFootPos).add(_shoulderOffset);
+      _lookOffset.set(-0.15, 1.55, 3.2).applyQuaternion(_rotQuat);
+      _desiredLookAt.copy(targetFootPos).add(_lookOffset);
+      return;
+    }
 
     // Behind Naira (-Z in character local space) and offset to her right shoulder (-X in character local space)
     // so Naira sits in the left third of the frame while the world fills the right two-thirds (§2.9 & R1).
     const dist = 3.15 + (speed / 5.5) * 0.35;
-    const height = 1.42 - Math.sin(this.pitch) * dist * 0.6;
+    const height = 1.42 - Math.sin(this.pitch) * dist * 0.6 - (locoMode === 'vault' ? 0.16 : 0.0);
     _shoulderOffset.set(-0.78, height, -dist).applyQuaternion(_rotQuat);
     _desiredPos.copy(targetFootPos).add(_shoulderOffset);
 
@@ -109,11 +131,13 @@ export class OverTheShoulderCamera {
     input: InputState,
     targetFootPos: THREE.Vector3,
     targetSpeed: number,
-    terrain: TerrainSystem
+    terrain: TerrainSystem,
+    locoMode: LocomotionMode = 'idle'
   ): void {
     if (this.mode === 'vista') {
       return;
     }
+    this.elapsedSec += dt;
 
     if (input.orbitTogglePressed) {
       this.mode = this.mode === 'orbit' ? 'overShoulder' : 'orbit';
@@ -138,7 +162,14 @@ export class OverTheShoulderCamera {
     this.yaw -= input.lookDeltaX * 0.008;
     this.pitch = Math.max(-0.55, Math.min(0.48, this.pitch - input.lookDeltaY * 0.006));
 
-    const targetFov = targetSpeed > 3.5 ? 60 : 58;
+    const targetFov =
+      locoMode === 'zipline'
+        ? 68
+        : locoMode === 'climb' || locoMode === 'mantle'
+        ? 55
+        : targetSpeed > 3.5
+        ? 60
+        : 58;
     this.setFov(this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 5));
 
     if (this.mode === 'orbit' || this.mode === 'photo') {
@@ -151,7 +182,7 @@ export class OverTheShoulderCamera {
       );
       _desiredLookAt.set(targetFootPos.x, targetFootPos.y + 1.05, targetFootPos.z);
     } else {
-      this.computeOverShoulderRig(targetFootPos, targetSpeed);
+      this.computeOverShoulderRig(targetFootPos, targetSpeed, locoMode);
     }
 
     const minGroundY = terrain.getTerrainHeightAt(_desiredPos.x, _desiredPos.z) + 0.45;

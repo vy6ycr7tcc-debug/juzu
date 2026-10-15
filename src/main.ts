@@ -386,6 +386,74 @@ export class JuzuEngine {
         cz,
         54
       );
+    } else if (shot === 'mantle') {
+      this.setActiveRegion('cloudForest');
+      const crag = this.traversal.crags[0];
+      const cx = crag ? crag.centerX : -4.2;
+      const cz = crag ? crag.centerZ + 0.38 : -14.42;
+      const topY = crag ? crag.topY : 7.4;
+      this.naira.position.set(cx, topY - 0.28, cz);
+      this.naira.yaw = Math.PI;
+      this.naira.root.position.copy(this.naira.position);
+      this.naira.root.rotation.set(0, Math.PI, 0);
+      this.naira.startMantle(topY, (crag ? crag.centerZ : -14.8) - 0.95);
+      this.cameraRig.snapToShot(
+        cx + 1.25,
+        topY + 0.65,
+        cz + 2.1,
+        cx,
+        topY + 0.35,
+        cz - 0.8,
+        55
+      );
+    } else if (shot === 'zipline') {
+      this.setActiveRegion('cloudForest');
+      const zip = this.traversal.ziplines[0];
+      if (zip) {
+        const spanT = 0.72;
+        const mid = zip.start.clone().lerp(zip.end, spanT);
+        this.naira.position.copy(mid);
+        this.naira.position.y -= 1.68;
+        const spanDx = zip.end.x - zip.start.x;
+        const spanDz = zip.end.z - zip.start.z;
+        this.naira.yaw = Math.atan2(spanDx, spanDz);
+        this.naira.root.position.copy(this.naira.position);
+        this.naira.root.rotation.set(0, this.naira.yaw, 0);
+        this.naira.mode = 'zipline';
+        this.naira.ziplineActive = true;
+        (this.naira as any).ziplineSpan = zip;
+        (this.naira as any).ziplineT = spanT;
+        this.naira.transitionToMode('zipline', true);
+        this.cameraRig.snapToShot(
+          this.naira.position.x + 2.2,
+          this.naira.position.y - 0.25,
+          this.naira.position.z + 4.2,
+          this.naira.position.x,
+          this.naira.position.y + 1.25,
+          this.naira.position.z - 1.5,
+          62
+        );
+      }
+    } else if (shot === 'vault') {
+      this.setActiveRegion('cloudForest');
+      const vx = -2.8;
+      const vz = -11.5;
+      const vy = this.terrain.sampleGroundY(vx, vz, 3.0);
+      this.naira.position.set(vx, vy, vz);
+      this.naira.yaw = Math.PI;
+      this.naira.root.position.set(vx, vy, vz);
+      this.naira.root.rotation.set(0, Math.PI, 0);
+      this.naira.speed = 4.2;
+      this.naira.startVault(vx, vy + 0.45, vz - 1.8);
+      this.cameraRig.snapToShot(
+        vx + 1.65,
+        vy + 0.85,
+        vz + 1.45,
+        vx,
+        vy + 0.55,
+        vz - 1.2,
+        56
+      );
     } else if (shot === 'combat') {
       this.setActiveRegion('cloudForest');
       this.placeNairaAt(-0.35, 7.2, Math.PI, 'aim');
@@ -663,7 +731,8 @@ export class JuzuEngine {
         this.input.state,
         this.naira.position,
         this.naira.speed,
-        this.terrain
+        this.terrain,
+        this.naira.mode
       );
       this.enemies.update(
         dt,

@@ -20,7 +20,17 @@ import { PbrMaterialLibrary } from '../world/materials';
 import { TerrainSystem } from '../world/terrain';
 import { TraversalSystem, ZiplineSpan } from '../gameplay/traversal';
 
-export type LocomotionMode = 'idle' | 'walk' | 'jog' | 'sprint' | 'crouch' | 'climb' | 'zipline' | 'aim';
+export type LocomotionMode =
+  | 'idle'
+  | 'walk'
+  | 'jog'
+  | 'sprint'
+  | 'crouch'
+  | 'climb'
+  | 'zipline'
+  | 'aim'
+  | 'vault'
+  | 'mantle';
 
 // Preallocated module-scope scratch objects — zero per-frame allocations (§5.2 #1)
 const _moveVec = new THREE.Vector3();
@@ -39,6 +49,19 @@ export class NairaController {
   public isGrounded: boolean = true;
   public modelLoaded: boolean = false;
   public ziplineActive: boolean = false;
+  public isMantling: boolean = false;
+  public isVaulting: boolean = false;
+
+  private mantleTimer: number = 0;
+  private readonly mantleDuration: number = 0.55;
+  private readonly mantleStartPos: THREE.Vector3 = new THREE.Vector3();
+  private readonly mantleTargetPos: THREE.Vector3 = new THREE.Vector3();
+
+  private vaultTimer: number = 0;
+  private readonly vaultDuration: number = 0.48;
+  private readonly vaultStartPos: THREE.Vector3 = new THREE.Vector3();
+  private readonly vaultTargetPos: THREE.Vector3 = new THREE.Vector3();
+  private vaultApexY: number = 0;
 
   private ziplineSpan: ZiplineSpan | null = null;
   private ziplineT: number = 0;
@@ -559,15 +582,18 @@ export class NairaController {
     ]));
     this.actions.climb = this.mixer.clipAction(new THREE.AnimationClip('climb', 1.4, climbTracks));
 
-    // Phase 2 Zipline clip (arms overhead gripping pulley, knees bent)
+    // Phase 2 Zipline clip (arms overhead gripping pulley, knees bent and tucked)
     const zipT = [0, 0.5, 1.0];
     const zipTracks: THREE.KeyframeTrack[] = [];
-    addT(zipTracks, composeTrack(this.leftArmBone, zipT, [[0.35, 0.65, -1.05], [0.35, 0.65, -1.05], [0.35, 0.65, -1.05]]));
-    addT(zipTracks, composeTrack(this.rightArmBone, zipT, [[0.35, -0.65, 1.05], [0.35, -0.65, 1.05], [0.35, -0.65, 1.05]]));
-    addT(zipTracks, composeTrack(this.leftUpLegBone, zipT, [[0.55, 0, 0], [0.62, 0, 0], [0.55, 0, 0]]));
-    addT(zipTracks, composeTrack(this.rightUpLegBone, zipT, [[0.48, 0, 0], [0.56, 0, 0], [0.48, 0, 0]]));
-    addT(zipTracks, composeTrack(this.leftLegBone, zipT, [[-0.85, 0, 0], [-0.92, 0, 0], [-0.85, 0, 0]]));
-    addT(zipTracks, composeTrack(this.rightLegBone, zipT, [[-0.78, 0, 0], [-0.85, 0, 0], [-0.78, 0, 0]]));
+    addT(zipTracks, composeTrack(this.spineBone, zipT, [[-0.08, 0, 0], [-0.08, 0, 0], [-0.08, 0, 0]]));
+    addT(zipTracks, composeTrack(this.leftArmBone, zipT, [[1.15, 0.1, 1.95], [1.15, 0.1, 1.95], [1.15, 0.1, 1.95]]));
+    addT(zipTracks, composeTrack(this.rightArmBone, zipT, [[1.15, -0.1, -1.95], [1.15, -0.1, -1.95], [1.15, -0.1, -1.95]]));
+    addT(zipTracks, composeTrack(this.leftForeArmBone, zipT, [[0.35, 0.0, 0.65], [0.35, 0.0, 0.65], [0.35, 0.0, 0.65]]));
+    addT(zipTracks, composeTrack(this.rightForeArmBone, zipT, [[0.35, 0.0, -0.65], [0.35, 0.0, -0.65], [0.35, 0.0, -0.65]]));
+    addT(zipTracks, composeTrack(this.leftUpLegBone, zipT, [[0.65, 0.12, 0.22], [0.72, 0.12, 0.22], [0.65, 0.12, 0.22]]));
+    addT(zipTracks, composeTrack(this.rightUpLegBone, zipT, [[0.55, -0.12, -0.22], [0.62, -0.12, -0.22], [0.55, -0.12, -0.22]]));
+    addT(zipTracks, composeTrack(this.leftLegBone, zipT, [[-0.92, 0, 0], [-0.98, 0, 0], [-0.92, 0, 0]]));
+    addT(zipTracks, composeTrack(this.rightLegBone, zipT, [[-0.82, 0, 0], [-0.88, 0, 0], [-0.82, 0, 0]]));
     this.actions.zipline = this.mixer.clipAction(new THREE.AnimationClip('zipline', 1.0, zipTracks));
 
     // Phase 3 Recurve Bow Aim clip (left arm extended forward holding bow, right hand drawn to cheek)
@@ -583,6 +609,100 @@ export class NairaController {
     addT(aimTracks, composeTrack(this.leftLegBone, aimT, [[-0.28, 0, 0], [-0.28, 0, 0], [-0.28, 0, 0]]));
     addT(aimTracks, composeTrack(this.rightLegBone, aimT, [[-0.22, 0, 0], [-0.22, 0, 0], [-0.22, 0, 0]]));
     this.actions.aim = this.mixer.clipAction(new THREE.AnimationClip('aim', 1.0, aimTracks));
+
+    // Milestone 3: Mantle clip (pulling up onto stone platform ledge)
+    const manT = [0, 0.18, 0.36, 0.55];
+    const manTracks: THREE.KeyframeTrack[] = [];
+    addT(manTracks, composeTrack(this.spineBone, manT, [
+      [-0.08, 0.0, 0.0],
+      [0.24, 0.0, 0.0],
+      [0.18, 0.0, 0.0],
+      [0.02, 0.0, 0.0],
+    ]));
+    addT(manTracks, composeTrack(this.leftArmBone, manT, [
+      [1.15, 0.0, 1.85],
+      [0.45, 0.1, 0.35],
+      [0.65, 0.08, 0.25],
+      [1.15, 0.05, -0.15],
+    ]));
+    addT(manTracks, composeTrack(this.rightArmBone, manT, [
+      [1.15, 0.0, -1.85],
+      [0.45, -0.1, -0.35],
+      [0.65, -0.08, -0.25],
+      [1.15, -0.05, 0.15],
+    ]));
+    addT(manTracks, composeTrack(this.leftUpLegBone, manT, [
+      [0.28, 0.10, 0.30],
+      [0.68, 0.08, 0.14],
+      [0.42, 0.04, 0.08],
+      [0.02, 0.0, -0.02],
+    ]));
+    addT(manTracks, composeTrack(this.rightUpLegBone, manT, [
+      [0.18, -0.06, -0.24],
+      [0.32, -0.08, -0.12],
+      [0.18, -0.04, -0.06],
+      [-0.02, 0.0, 0.02],
+    ]));
+    addT(manTracks, composeTrack(this.leftLegBone, manT, [
+      [-0.42, 0.0, 0.0],
+      [-0.85, 0.0, 0.0],
+      [-0.32, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
+    ]));
+    addT(manTracks, composeTrack(this.rightLegBone, manT, [
+      [-0.22, 0.0, 0.0],
+      [-0.48, 0.0, 0.0],
+      [-0.20, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
+    ]));
+    this.actions.mantle = this.mixer.clipAction(new THREE.AnimationClip('mantle', 0.55, manTracks));
+
+    // Milestone 3: Low-obstacle vault clip (one hand planted, hips tuck and legs clear stone wall)
+    const vltT = [0, 0.16, 0.32, 0.48];
+    const vltTracks: THREE.KeyframeTrack[] = [];
+    addT(vltTracks, composeTrack(this.spineBone, vltT, [
+      [0.12, 0.08, -0.16],
+      [0.22, 0.12, -0.22],
+      [0.14, 0.06, -0.08],
+      [0.05, 0.0, 0.0],
+    ]));
+    addT(vltTracks, composeTrack(this.rightArmBone, vltT, [
+      [0.65, -0.15, -0.35],
+      [0.45, -0.25, -0.55],
+      [0.85, -0.12, -0.15],
+      [1.15, -0.05, 0.15],
+    ]));
+    addT(vltTracks, composeTrack(this.leftArmBone, vltT, [
+      [1.25, 0.25, 0.45],
+      [1.45, 0.35, 0.65],
+      [1.20, 0.15, 0.15],
+      [1.15, 0.05, -0.15],
+    ]));
+    addT(vltTracks, composeTrack(this.leftUpLegBone, vltT, [
+      [0.72, 0.12, -0.24],
+      [0.95, 0.18, -0.32],
+      [0.45, 0.08, -0.10],
+      [0.08, 0.0, -0.02],
+    ]));
+    addT(vltTracks, composeTrack(this.rightUpLegBone, vltT, [
+      [0.55, -0.08, -0.18],
+      [0.82, -0.12, -0.26],
+      [0.38, -0.04, -0.08],
+      [-0.04, 0.0, 0.02],
+    ]));
+    addT(vltTracks, composeTrack(this.leftLegBone, vltT, [
+      [-0.82, 0.0, 0.0],
+      [-1.05, 0.0, 0.0],
+      [-0.38, 0.0, 0.0],
+      [-0.08, 0.0, 0.0],
+    ]));
+    addT(vltTracks, composeTrack(this.rightLegBone, vltT, [
+      [-0.72, 0.0, 0.0],
+      [-0.92, 0.0, 0.0],
+      [-0.28, 0.0, 0.0],
+      [-0.06, 0.0, 0.0],
+    ]));
+    this.actions.vault = this.mixer.clipAction(new THREE.AnimationClip('vault', 0.48, vltTracks));
   }
 
   /**
@@ -749,10 +869,69 @@ export class NairaController {
   ): void {
     this.elapsedSec += dt;
 
+    // Handle active mantle progression (Milestone 3: Assassin's Creed parkour ledge pull-up)
+    if (this.isMantling) {
+      this.mantleTimer += dt;
+      const t = Math.min(1.0, this.mantleTimer / this.mantleDuration);
+      // Hermite curve: vertical rise first, then forward translation onto ledge
+      const yProg = Math.sin(Math.min(1.0, t * 1.6) * Math.PI * 0.5);
+      const zProg = Math.max(0, (t - 0.25) / 0.75);
+      const smoothZ = zProg * zProg * (3 - 2 * zProg);
+      this.position.y = THREE.MathUtils.lerp(this.mantleStartPos.y, this.mantleTargetPos.y, yProg);
+      this.position.z = THREE.MathUtils.lerp(this.mantleStartPos.z, this.mantleTargetPos.z, smoothZ);
+      this.position.x = this.mantleTargetPos.x;
+      this.root.position.copy(this.position);
+
+      if (this.contactShadowMesh) this.contactShadowMesh.visible = t > 0.6;
+
+      if (t >= 1.0) {
+        this.isMantling = false;
+        this.isGrounded = true;
+        this.verticalVelocity = 0;
+        input.climbHeld = false;
+        this.transitionToMode('idle', true);
+        audio.playSfx('footstep', 0, 'stone');
+      }
+
+      this.updateBraidPhysics(dt);
+      if (this.mixer && this.activeAction) {
+        this.mixer.update(dt);
+      }
+      return;
+    }
+
+    // Handle active low-obstacle vault progression (Milestone 3)
+    if (this.isVaulting) {
+      this.vaultTimer += dt;
+      const t = Math.min(1.0, this.vaultTimer / this.vaultDuration);
+      this.position.x = THREE.MathUtils.lerp(this.vaultStartPos.x, this.vaultTargetPos.x, t);
+      this.position.z = THREE.MathUtils.lerp(this.vaultStartPos.z, this.vaultTargetPos.z, t);
+      const baseHeight = THREE.MathUtils.lerp(this.vaultStartPos.y, this.vaultTargetPos.y, t);
+      const arc = Math.sin(t * Math.PI) * 0.28;
+      this.position.y = baseHeight + arc;
+      this.root.position.copy(this.position);
+
+      if (t >= 1.0) {
+        this.isVaulting = false;
+        this.isGrounded = true;
+        this.position.copy(this.vaultTargetPos);
+        const exitMode = input.sprint ? 'sprint' : 'jog';
+        this.transitionToMode(exitMode, true);
+        audio.playSfx('footstep', 0, 'stone');
+      }
+
+      this.updateBraidPhysics(dt);
+      if (this.mixer && this.activeAction) {
+        this.mixer.update(dt);
+      }
+      return;
+    }
+
     // 1. Handle active zipline descent
     if (this.ziplineActive && this.ziplineSpan) {
       this.ziplineT += (8.0 / Math.max(1.0, this.ziplineSpan.length)) * dt;
       this.position.lerpVectors(this.ziplineSpan.start, this.ziplineSpan.end, Math.min(1.0, this.ziplineT));
+      this.position.y -= 1.68;
       this.root.position.copy(this.position);
       const spanDx = this.ziplineSpan.end.x - this.ziplineSpan.start.x;
       const spanDz = this.ziplineSpan.end.z - this.ziplineSpan.start.z;
@@ -760,12 +939,19 @@ export class NairaController {
       this.root.rotation.set(0, this.yaw, 0);
       if (this.contactShadowMesh) this.contactShadowMesh.visible = false;
 
+      // Deceleration flare near landing
+      if (this.ziplineT > 0.82 && this.leftUpLegBone && this.rightUpLegBone) {
+        this.leftUpLegBone.rotation.x = THREE.MathUtils.lerp(this.leftUpLegBone.rotation.x, 0.78, dt * 10.0);
+        this.rightUpLegBone.rotation.x = THREE.MathUtils.lerp(this.rightUpLegBone.rotation.x, 0.78, dt * 10.0);
+      }
+
       if (this.ziplineT >= 1.0) {
         this.ziplineActive = false;
         this.ziplineSpan = null;
         this.isGrounded = true;
         this.transitionToMode('idle', true);
         audio.playSfx('footstep', 0, 'dirt');
+        audio.playSfx('breath_exert', 0);
       }
 
       this.updateBraidPhysics(dt);
@@ -870,6 +1056,32 @@ export class NairaController {
       audio.playSfx('footstep', 0, surface);
     }
 
+    // Low-obstacle vault detection while moving at athletic speed (Milestone 3)
+    if (this.isGrounded && this.speed > 2.2 && (input.moveZ < -0.2 || input.jumpPressed) && nextMode !== 'climb') {
+      const probeDist = 0.95;
+      const aheadX = this.position.x + Math.sin(this.yaw) * probeDist;
+      const aheadZ = this.position.z + Math.cos(this.yaw) * probeDist;
+      const aheadY = terrain.sampleGroundY(aheadX, aheadZ, this.position.y);
+      const heightDelta = aheadY - this.position.y;
+
+      if (heightDelta >= 0.32 && heightDelta <= 1.25) {
+        const landDist = 1.95;
+        const landX = this.position.x + Math.sin(this.yaw) * landDist;
+        const landZ = this.position.z + Math.cos(this.yaw) * landDist;
+        const landY = terrain.sampleGroundY(landX, landZ, aheadY);
+        if (landY <= aheadY + 0.25) {
+          this.isVaulting = true;
+          this.vaultTimer = 0;
+          this.vaultStartPos.copy(this.position);
+          this.vaultTargetPos.set(landX, landY, landZ);
+          this.vaultApexY = aheadY + 0.28;
+          this.transitionToMode('vault', true);
+          audio.playSfx('cloth_rustle', 0);
+          return;
+        }
+      }
+    }
+
     if (input.jumpPressed && this.isGrounded && nextMode !== 'climb') {
       this.verticalVelocity = 3.96;
       this.isGrounded = false;
@@ -880,24 +1092,42 @@ export class NairaController {
     if (nextMode === 'climb') {
       if (Math.abs(input.moveZ) > 0.05) {
         this.position.y += -input.moveZ * 0.8 * dt;
+        if (Math.sin(this.elapsedSec * 6.5) > 0.96) {
+          audio.playSfx('climb_grip', 0);
+        }
       }
       if (traversal) {
         const crag = traversal.findNearbyCrag(this.position, 2.0);
         if (crag) {
+          // Lateral shimmy across crag wall (Milestone 3)
+          if (Math.abs(input.moveX) > 0.05) {
+            this.position.x += input.moveX * 0.75 * dt;
+            const halfW = crag.width * 0.46;
+            this.position.x = Math.max(crag.centerX - halfW, Math.min(crag.centerX + halfW, this.position.x));
+            if (Math.sin(this.elapsedSec * 7.0) > 0.96) {
+              audio.playSfx('climb_grip', 0);
+            }
+          }
+          // Procedural lateral shimmy tilt on spine
+          const shimmyTilt = -input.moveX * 0.16;
+          if (this.spineBone) {
+            this.spineBone.rotation.z = THREE.MathUtils.lerp(this.spineBone.rotation.z, shimmyTilt, dt * 8.0);
+          }
+
           // Maintain physical standoff distance from crag wall so body and legs never sink
           const targetZ = crag.centerZ + 0.38;
           this.position.z = THREE.MathUtils.lerp(this.position.z, targetZ, dt * 10.0);
           this.position.y = Math.max(crag.bottomY + 0.2, this.position.y);
-          // Auto mantle onto platform ledge when reaching top
-          if (this.position.y >= crag.topY - 0.22) {
-            this.position.y = crag.topY;
-            this.position.z = crag.centerZ - 0.95;
-            this.position.x = crag.centerX;
-            this.isGrounded = true;
-            this.verticalVelocity = 0;
-            input.climbHeld = false;
-            this.transitionToMode('idle', true);
-            audio.playSfx('footstep', 0, 'stone');
+
+          // Initiate smooth parametric mantle onto platform ledge when reaching top (Milestone 3)
+          if (this.position.y >= crag.topY - 0.32 && (-input.moveZ > 0.05 || this.position.y >= crag.topY - 0.08)) {
+            this.isMantling = true;
+            this.mantleTimer = 0;
+            this.mantleStartPos.copy(this.position);
+            this.mantleTargetPos.set(this.position.x, crag.topY, crag.centerZ - 0.95);
+            this.transitionToMode('mantle', true);
+            audio.playSfx('climb_grip', 0);
+            return;
           }
         }
       }
@@ -980,6 +1210,23 @@ export class NairaController {
     tex.needsUpdate = true;
     this.textures.push(tex);
     return tex;
+  }
+
+  public startMantle(topY: number, targetZ: number): void {
+    this.isMantling = true;
+    this.mantleTimer = 0;
+    this.mantleStartPos.copy(this.position);
+    this.mantleTargetPos.set(this.position.x, topY, targetZ);
+    this.transitionToMode('mantle', true);
+  }
+
+  public startVault(targetX: number, targetY: number, targetZ: number): void {
+    this.isVaulting = true;
+    this.vaultTimer = 0;
+    this.vaultStartPos.copy(this.position);
+    this.vaultTargetPos.set(targetX, targetY, targetZ);
+    this.vaultApexY = Math.max(this.position.y, targetY) + 0.28;
+    this.transitionToMode('vault', true);
   }
 
   public dispose(): void {
