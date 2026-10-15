@@ -298,6 +298,8 @@ export class PbrMaterialLibrary {
       name: 'ClothQuechuaWeave',
       color: new THREE.Color(0xffffff),
       map: quechuaWeaveAlbedo,
+      normalMap: stoneworkNormal,
+      normalScale: new THREE.Vector2(0.25, 0.25),
       roughness: 0.88,
       metalness: 0.0,
       side: THREE.DoubleSide,
@@ -403,6 +405,8 @@ export class PbrMaterialLibrary {
     this.goldOrnamental = new THREE.MeshStandardMaterial({
       name: 'IncaOrnamentalGold',
       color: new THREE.Color(0xd6a94a),
+      normalMap: stoneworkNormal,
+      normalScale: new THREE.Vector2(0.35, 0.35),
       roughnessMap: stoneworkRoughness,
       roughness: 0.3,
       metalness: 0.94,
@@ -458,30 +462,63 @@ export class PbrMaterialLibrary {
     // Apply nano-hexagonal stochastic micro-relief and non-repeating hex-tiling
     applyNanoHexagonRelief(this.andesiteCut, {
       scale: 68.0,
-      reliefStrength: 0.32,
-      grooveDepth: 0.20,
+      reliefStrength: 0.30,
+      grooveDepth: 0.18,
       hexTiling: false, // preserve coursed masonry direction while adding hand-pecked mineral relief
     });
 
     applyNanoHexagonRelief(this.fieldstoneRough, {
       scale: 54.0,
-      reliefStrength: 0.44,
-      grooveDepth: 0.28,
+      reliefStrength: 0.40,
+      grooveDepth: 0.26,
       hexTiling: true, // break repeating square patterns on rough rock and boulders
     });
 
     applyNanoHexagonRelief(this.groundForestFloor, {
       scale: 48.0,
-      reliefStrength: 0.38,
-      grooveDepth: 0.26,
+      reliefStrength: 0.34,
+      grooveDepth: 0.22,
       hexTiling: true, // break 28x28 square grid repetition on valley terrain
     });
 
     applyNanoHexagonRelief(this.highSierraPuna, {
       scale: 52.0,
-      reliefStrength: 0.40,
-      grooveDepth: 0.25,
+      reliefStrength: 0.36,
+      grooveDepth: 0.22,
       hexTiling: true, // break 18x18 repetition across puna steppe
+    });
+
+    // Micro-fibrous relief for braided Andean ichu grass ropes (Q'eswachaka)
+    applyNanoHexagonRelief(this.ropeBraided, {
+      scale: 86.0,
+      reliefStrength: 0.35,
+      grooveDepth: 0.28,
+      hexTiling: false,
+    });
+
+    // Crystalline rime & firn ice granular micro-relief on snow peaks
+    applyNanoHexagonRelief(this.highSierraSnow, {
+      scale: 58.0,
+      reliefStrength: 0.32,
+      grooveDepth: 0.20,
+      hexTiling: true,
+    });
+
+    // Tactile hand-hammered gold leaf relief on Inca ornamental treasures
+    applyNanoHexagonRelief(this.goldOrnamental, {
+      scale: 64.0,
+      reliefStrength: 0.22,
+      grooveDepth: 0.15,
+      roughnessVariation: 0.12,
+      hexTiling: false,
+    });
+
+    // Tactile loom-woven thread micro-relief on Quechua poncho cloth
+    applyNanoHexagonRelief(this.clothQuechuaRed, {
+      scale: 96.0,
+      reliefStrength: 0.24,
+      grooveDepth: 0.16,
+      hexTiling: false,
     });
 
     this.materials.push(

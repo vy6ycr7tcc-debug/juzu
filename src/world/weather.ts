@@ -19,9 +19,12 @@ export class WeatherSystem {
   // Precipitation particle systems
   private rainPoints: THREE.Points | null = null;
   private snowPoints: THREE.Points | null = null;
+  private motesPoints: THREE.Points | null = null;
   private rainPositions: Float32Array = new Float32Array(0);
   private snowPositions: Float32Array = new Float32Array(0);
   private snowVelocities: Float32Array = new Float32Array(0);
+  private motesPositions: Float32Array = new Float32Array(0);
+  private motesPhase: Float32Array = new Float32Array(0);
 
   // Archaeologist lantern / cavern torchlight
   public readonly cavernTorch: THREE.PointLight;
@@ -108,10 +111,52 @@ export class WeatherSystem {
     this.snowPoints.visible = false;
     this.group.add(this.snowPoints);
 
+    // 3. Sunlit Ambient Atmospheric Motes (140 micro-particles catching god rays & canopy sunlight)
+    const motesCount = 140;
+    const motesGeo = new THREE.BufferGeometry();
+    const motesPos = new Float32Array(motesCount * 3);
+    const motesPh = new Float32Array(motesCount);
+    for (let i = 0; i < motesCount; i++) {
+      motesPos[i * 3] = (Math.random() - 0.5) * 24.0;
+      motesPos[i * 3 + 1] = Math.random() * 12.0;
+      motesPos[i * 3 + 2] = (Math.random() - 0.5) * 24.0;
+      motesPh[i] = Math.random() * Math.PI * 2.0;
+    }
+    motesGeo.setAttribute('position', new THREE.BufferAttribute(motesPos, 3));
+    this.motesPositions = motesPos;
+    this.motesPhase = motesPh;
+    this.geometries.push(motesGeo);
+
+    const motesTex = this.createSnowflakeTexture(64);
+    const motesMat = new THREE.PointsMaterial({
+      size: 0.22,
+      map: motesTex,
+      transparent: true,
+      opacity: 0.36,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      color: 0xffeaae,
+    });
+    this.materials.push(motesMat);
+    this.motesPoints = new THREE.Points(motesGeo, motesMat);
+    this.motesPoints.name = 'SunlitMotesPoints';
+    this.group.add(this.motesPoints);
+
     scene.add(this.group);
   }
 
   public setBiome(biome: RegionBiomeId): void {
+    if (this.motesPoints) {
+      const mat = this.motesPoints.material as THREE.PointsMaterial;
+      if (biome === 'highSierra') {
+        mat.color.setHex(0xd8eeff);
+        mat.opacity = 0.44;
+      } else {
+        mat.color.setHex(0xffeaae);
+        mat.opacity = 0.36;
+      }
+    }
+
     if (biome === 'highSierra') {
       this.currentWeather = 'snowFlurries';
       if (this.rainPoints) this.rainPoints.visible = false;
@@ -250,6 +295,44 @@ export class WeatherSystem {
         this.snowPositions[i * 3] = x;
         this.snowPositions[i * 3 + 1] = y;
         this.snowPositions[i * 3 + 2] = z;
+      }
+      posAttr.needsUpdate = true;
+    }
+
+    // 3. Update sunlit ambient atmospheric motes (gentle Brownian drift catching sunbeams)
+    if (this.motesPoints && this.motesPoints.visible) {
+      const posAttr = this.motesPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const count = posAttr.count;
+      const boxSize = 24.0;
+      const halfBox = boxSize * 0.5;
+
+      for (let i = 0; i < count; i++) {
+        let x = this.motesPositions[i * 3];
+        let y = this.motesPositions[i * 3 + 1];
+        let z = this.motesPositions[i * 3 + 2];
+        const phase = this.motesPhase[i];
+
+        // Subtle thermal lift & hovering oscillation
+        y += Math.sin(this.torchFlickerTimer * 1.1 + phase) * 0.06 * dt + 0.12 * dt;
+        x += Math.cos(this.torchFlickerTimer * 0.8 + phase) * 0.08 * dt;
+        z += Math.sin(this.torchFlickerTimer * 0.7 + phase * 1.3) * 0.07 * dt;
+
+        const relX = x - focusPosition.x;
+        const relY = y - focusPosition.y;
+        const relZ = z - focusPosition.z;
+
+        if (relX > halfBox) x -= boxSize;
+        else if (relX < -halfBox) x += boxSize;
+
+        if (relY > 12.0) y = focusPosition.y + Math.random() * 2.0;
+        else if (relY < -1.5) y = focusPosition.y + 10.0;
+
+        if (relZ > halfBox) z -= boxSize;
+        else if (relZ < -halfBox) z += boxSize;
+
+        this.motesPositions[i * 3] = x;
+        this.motesPositions[i * 3 + 1] = y;
+        this.motesPositions[i * 3 + 2] = z;
       }
       posAttr.needsUpdate = true;
     }

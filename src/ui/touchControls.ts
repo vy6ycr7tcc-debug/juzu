@@ -45,6 +45,8 @@ const ICONS = {
   journal: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
   photo: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
   menu: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  mirror: `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#ffd700" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3m-3.5-6.5l-2.1 2.1m-8.8 8.8l-2.1 2.1m0-13l2.1 2.1m8.8 8.8l2.1 2.1"/><circle cx="12" cy="12" r="2.2" fill="#ffd700"/></svg>`,
+  zipline: `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#6cd4ff" stroke-width="2.2" stroke-linecap="round"><path d="M3 5l18 8"/><circle cx="12" cy="9" r="3"/><path d="M12 12v6m-3-3l3 3 3-3"/></svg>`,
 };
 
 export class TouchControlsOverlay {
@@ -66,6 +68,7 @@ export class TouchControlsOverlay {
   private joystickOriginY: number = 0;
   private readonly maxRadius: number = 54;
   private readonly sprintRadius: number = 42;
+  private isSprintingActive: boolean = false;
 
   // Camera look touch tracking
   private lookTouchId: number = -1;
@@ -709,11 +712,16 @@ export class TouchControlsOverlay {
       const normX = (Math.cos(angle) * clampedDist) / effMax;
       const normZ = (Math.sin(angle) * clampedDist) / effMax;
       const isSprinting = clampedDist >= effSprint;
+      if (isSprinting && !this.isSprintingActive) {
+        triggerHaptic(14);
+      }
+      this.isSprintingActive = isSprinting;
       this.inputRef.setTouchMovement(normX, normZ, isSprinting);
     }
   }
 
   private resetJoystick(): void {
+    this.isSprintingActive = false;
     if (this.joystickKnobEl) {
       this.joystickKnobEl.style.transform = 'translate3d(0, 0, 0)';
     }
@@ -724,7 +732,7 @@ export class TouchControlsOverlay {
 
   /**
    * Adapts the primary action button icon, label, and aura based on what
-   * Naira is currently in range of (Takedown, Sluice Wheel, Quipu, etc.).
+   * Naira is currently in range of (Takedown, Sluice Wheel, Solar Mirror, Zipline, Quipu, etc.).
    */
   public updateContextualAction(promptText: string): void {
     if (!this.actionBtnEl || !this.actionIconWrapEl || !this.actionLabelEl) return;
@@ -736,12 +744,24 @@ export class TouchControlsOverlay {
         this.actionBtnEl.style.borderColor = '#ff4d4d';
         this.actionBtnEl.style.boxShadow = '0 0 20px rgba(255, 60, 60, 0.8), inset 0 0 10px rgba(255, 60, 60, 0.3)';
         this.actionBtnEl.style.color = '#ff6b6b';
-      } else if (promptText.includes('Sluice Wheel')) {
+      } else if (promptText.includes('Sluice Wheel') || promptText.includes('Sluice')) {
         this.actionIconWrapEl.innerHTML = ICONS.sluice;
         this.actionLabelEl.textContent = 'TURN';
         this.actionBtnEl.style.borderColor = '#ffd275';
         this.actionBtnEl.style.boxShadow = '0 0 18px rgba(250, 200, 90, 0.75), inset 0 0 10px rgba(250, 200, 90, 0.25)';
         this.actionBtnEl.style.color = '#ffe49e';
+      } else if (promptText.includes('Solar Mirror') || promptText.includes('Mirror')) {
+        this.actionIconWrapEl.innerHTML = ICONS.mirror;
+        this.actionLabelEl.textContent = 'ALIGN';
+        this.actionBtnEl.style.borderColor = '#ffd700';
+        this.actionBtnEl.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8), inset 0 0 10px rgba(255, 215, 0, 0.3)';
+        this.actionBtnEl.style.color = '#fff080';
+      } else if (promptText.includes('Zipline') || promptText.includes('Ride')) {
+        this.actionIconWrapEl.innerHTML = ICONS.zipline;
+        this.actionLabelEl.textContent = 'ZIPLINE';
+        this.actionBtnEl.style.borderColor = '#6cd4ff';
+        this.actionBtnEl.style.boxShadow = '0 0 20px rgba(108, 212, 255, 0.8), inset 0 0 10px rgba(108, 212, 255, 0.3)';
+        this.actionBtnEl.style.color = '#cceeff';
       } else if (promptText.includes('Quipu')) {
         this.actionIconWrapEl.innerHTML = ICONS.quipu;
         this.actionLabelEl.textContent = 'EXAMINE';
