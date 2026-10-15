@@ -34,9 +34,11 @@ export class PaititiRegion {
 
     if (!materials || !terrain) return;
 
+    const hAt = (x: number, z: number): number => terrain.getPaititiHeightAt(x, z);
+
     // 1. Curved Coricancha Sun-Temple Terraces & Crowned Golden Sun Portal (z = -12.5)
     const ptZ = -12.5;
-    const ptY = terrain.getTerrainHeightAt(0, ptZ);
+    const ptY = hAt(0, ptZ);
 
     const curvedTerraceGeo = new THREE.CylinderGeometry(8.5, 9.4, 2.2, 28, 2, false, -Math.PI * 0.45, Math.PI * 0.9);
     const upperTerraceGeo = new THREE.CylinderGeometry(5.8, 6.5, 2.0, 24, 2, false, -Math.PI * 0.42, Math.PI * 0.84);
@@ -59,12 +61,18 @@ export class PaititiRegion {
 
     // Monumental Imperial Stepped Staircase ascending the Coricancha terraces
     const stairStepCount = 14;
+    const startGroundY = hAt(0, -3.8);
+    const portalFloorY = hAt(0, portalZ) + 0.08; // Exact surface of upper terrace
+
     for (let s = 0; s < stairStepCount; s++) {
-      const tz = -4.2 - s * 0.72;
-      const stepGroundY = terrain.getTerrainHeightAt(0, tz);
-      const topY = Math.max(stepGroundY + 0.25, ptY + 0.35 + s * 0.28);
-      const stepH = Math.max(0.8, topY - stepGroundY + 0.6);
-      const stepGeo = new THREE.BoxGeometry(3.6, stepH, 0.85);
+      const t = s / (stairStepCount - 1);
+      const tz = -3.8 - s * 0.70;
+      const stepW = 5.8 - t * 2.0;
+      const topY = THREE.MathUtils.lerp(startGroundY + 0.22, portalFloorY, t);
+      const stepGroundY = hAt(0, tz);
+      const stepH = Math.max(0.95, topY - stepGroundY + 0.65);
+      const stepCurve = 0.32 * (1.0 - t * 0.75);
+      const stepGeo = this.createCurvedStepGeometry(stepW, stepH, 1.08, stepCurve);
       this.geometries.push(stepGeo);
 
       const st = new THREE.Mesh(stepGeo, materials.andesiteCut);
@@ -72,125 +80,199 @@ export class PaititiRegion {
       st.castShadow = true;
       st.receiveShadow = true;
       this.group.add(st);
+      terrain.registerWalkable(st);
     }
 
-    // Flanking solid stone stepped balustrades
+    // Continuous Battered Inca Cheek Ramparts (flanking the staircase)
+    const leftNodes: Array<{ xIn: number; xOut: number; yTop: number; yBot: number; z: number }> = [];
+    const rightNodes: Array<{ xIn: number; xOut: number; yTop: number; yBot: number; z: number }> = [];
+
     for (let s = 0; s < stairStepCount; s++) {
-      const tz = -4.2 - s * 0.72;
-      const stepGroundY = terrain.getTerrainHeightAt(0, tz);
-      const topY = Math.max(stepGroundY + 0.25, ptY + 0.35 + s * 0.28);
-      const balH = Math.max(1.1, topY - stepGroundY + 0.95);
-      const balGeo = new THREE.BoxGeometry(0.48, balH, 0.76);
-      this.geometries.push(balGeo);
+      const t = s / (stairStepCount - 1);
+      const tz = -3.8 - s * 0.70;
+      const stepW = 5.8 - t * 2.0;
+      const topY = THREE.MathUtils.lerp(startGroundY + 0.22, portalFloorY, t);
 
-      for (let side = -1; side <= 1; side += 2) {
-        const bal = new THREE.Mesh(balGeo, materials.andesiteCut);
-        bal.position.set(side * 2.05, topY - balH * 0.5 + 0.32, tz);
-        bal.castShadow = true;
-        bal.receiveShadow = true;
-        this.group.add(bal);
-      }
+      // Left cheek wall
+      const xInL = -stepW * 0.5;
+      const xOutL = xInL - 0.75;
+      const groundYL = hAt(xOutL, tz);
+      leftNodes.push({
+        xIn: xInL,
+        xOut: xOutL,
+        yTop: topY,
+        yBot: Math.min(topY - 1.1, groundYL - 0.55),
+        z: tz,
+      });
+
+      // Right cheek wall
+      const xInR = stepW * 0.5;
+      const xOutR = xInR + 0.75;
+      const groundYR = hAt(xOutR, tz);
+      rightNodes.push({
+        xIn: xInR,
+        xOut: xOutR,
+        yTop: topY,
+        yBot: Math.min(topY - 1.1, groundYR - 0.55),
+        z: tz,
+      });
     }
 
-    // Sacred Imperial Double-Jamb Sun Portal (Doble Jamba) atop the upper temple terrace
-    const portalFloorY = ptY + 4.1; // Surface of upper terrace
-    const plinthGeo = IncaMasonrySystem.createIncaPillowWallGeometry(7.2, 2.8, 4.2, {
-      courses: 5,
-      stonesPerCourse: 7,
-      pillowBulge: 0.052,
-    });
-    
-    // Outer battered jambs
-    const outerJambGeo = IncaMasonrySystem.createIncaPillarGeometry(0.92, 4.4, 1.15, {
-      courses: 7,
+    const leftRampartGeo = this.createCheekRampartGeometry(leftNodes, -1);
+    const rightRampartGeo = this.createCheekRampartGeometry(rightNodes, 1);
+    this.geometries.push(leftRampartGeo, rightRampartGeo);
+
+    const leftRampart = new THREE.Mesh(leftRampartGeo, materials.andesiteCut);
+    leftRampart.castShadow = true;
+    leftRampart.receiveShadow = true;
+    this.group.add(leftRampart);
+
+    const rightRampart = new THREE.Mesh(rightRampartGeo, materials.andesiteCut);
+    rightRampart.castShadow = true;
+    rightRampart.receiveShadow = true;
+    this.group.add(rightRampart);
+
+    // Sacred Imperial Double-Jamb Sun Portal & Monumental Ashlar Facade Wall
+    // Deep foundation ashlar facade walls (Hawa Pirqa) extending into bedrock
+    const facadeWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.8, 5.8, 1.45, {
+      courses: 9,
+      stonesPerCourse: 5,
       pillowBulge: 0.045,
+      batter: 0.08,
     });
-    // Inner recessed jambs creating the authentic double-jamb Inca recess
-    const innerJambGeo = IncaMasonrySystem.createIncaPillarGeometry(0.45, 3.9, 0.85, {
+    const wingReturnGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.2, 5.2, 1.35, {
+      courses: 8,
+      stonesPerCourse: 4,
+      pillowBulge: 0.045,
+      batter: 0.08,
+    });
+    const facadeNicheGeo = new THREE.BoxGeometry(0.55, 0.78, 0.35);
+    const facadeQiruGeo = new THREE.CylinderGeometry(0.12, 0.09, 0.32, 12);
+    const facadeBermGeo = IncaMasonrySystem.createWallFootingBermGeometry(5.2, 0.38, 0.55);
+    this.geometries.push(facadeWallGeo, wingReturnGeo, facadeNicheGeo, facadeQiruGeo, facadeBermGeo);
+
+    for (let side = -1; side <= 1; side += 2) {
+      // Main facade wing wall sunk 1.65m into terrace floor
+      const facade = new THREE.Mesh(facadeWallGeo, materials.andesiteCut);
+      facade.position.set(side * 4.35, portalFloorY + 1.25, portalZ);
+      facade.castShadow = true;
+      facade.receiveShadow = true;
+      this.group.add(facade);
+
+      // Lateral retaining wing return anchoring into the mountain caldera slopes
+      const returnWall = new THREE.Mesh(wingReturnGeo, materials.andesiteCut);
+      returnWall.position.set(side * 6.85, portalFloorY + 1.15, portalZ - 1.2);
+      returnWall.rotation.y = side * 0.42;
+      returnWall.castShadow = true;
+      returnWall.receiveShadow = true;
+      this.group.add(returnWall);
+
+      // Footing berm along the base of the facade wall
+      const berm = new THREE.Mesh(facadeBermGeo, materials.groundForestFloor);
+      berm.position.set(side * 4.35, portalFloorY + 0.1, portalZ + 0.55);
+      berm.receiveShadow = true;
+      this.group.add(berm);
+
+      // Sacred trapezoidal ceremonial niche in the facade wall
+      const niche = new THREE.Mesh(facadeNicheGeo, materials.fieldstoneRough);
+      niche.position.set(side * 3.8, portalFloorY + 1.65, portalZ + 0.48);
+      this.group.add(niche);
+
+      const qiru = new THREE.Mesh(facadeQiruGeo, materials.goldOrnamental);
+      qiru.position.set(side * 3.8, portalFloorY + 1.45, portalZ + 0.48);
+      qiru.castShadow = true;
+      this.group.add(qiru);
+    }
+
+    // Outer battered jambs (leaning inward 6 degrees, wider opening at threshold)
+    const outerJambGeo = IncaMasonrySystem.createIncaPillarGeometry(0.85, 4.0, 1.25, {
       courses: 6,
+      pillowBulge: 0.042,
+      batter: 0.06,
+    });
+    // Inner recessed jambs creating authentic double-jamb Inca recess
+    const innerJambGeo = IncaMasonrySystem.createIncaPillarGeometry(0.48, 3.6, 0.95, {
+      courses: 5,
+      pillowBulge: 0.035,
+      batter: 0.06,
+    });
+    // Colossal monolithic lintel megalith spanning across portal and locking into facade walls
+    const lintelMegalithGeo = IncaMasonrySystem.createIncaPillowWallGeometry(5.8, 0.78, 1.45, {
+      courses: 1,
+      stonesPerCourse: 3,
+      pillowBulge: 0.042,
+    });
+    // Stepped Chakana pediment & crest
+    const pedimentGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.4, 0.55, 1.15, {
+      courses: 1,
+      stonesPerCourse: 2,
+      pillowBulge: 0.035,
+    });
+    const crestGeo = IncaMasonrySystem.createIncaPillowWallGeometry(1.9, 0.45, 1.05, {
+      courses: 1,
+      stonesPerCourse: 2,
       pillowBulge: 0.035,
     });
 
-    // Stepped imperial lintels & Chakana pediment
-    const lintelLowerGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.4, 0.55, 1.25, { courses: 1, stonesPerCourse: 4, pillowBulge: 0.035 });
-    const lintelUpperGeo = IncaMasonrySystem.createIncaPillowWallGeometry(5.2, 0.45, 1.35, { courses: 1, stonesPerCourse: 5, pillowBulge: 0.035 });
-    const pedimentGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 0.65, 1.15, { courses: 1, stonesPerCourse: 3, pillowBulge: 0.035 });
-    const chakanaCrestGeo = IncaMasonrySystem.createIncaPillowWallGeometry(2.2, 0.55, 1.05, { courses: 1, stonesPerCourse: 2, pillowBulge: 0.035 });
-
     this.geometries.push(
-      plinthGeo,
       outerJambGeo,
       innerJambGeo,
-      lintelLowerGeo,
-      lintelUpperGeo,
+      lintelMegalithGeo,
       pedimentGeo,
-      chakanaCrestGeo
+      crestGeo
     );
-
-    // Solid ashlar masonry plinth under the Sun Portal
-    const plinth = new THREE.Mesh(plinthGeo, materials.andesiteCut);
-    plinth.position.set(0, portalFloorY - 1.3, portalZ);
-    plinth.castShadow = true;
-    plinth.receiveShadow = true;
-    this.group.add(plinth);
 
     // Left & Right Outer Battered Jambs
     const leftOuterJamb = new THREE.Mesh(outerJambGeo, materials.andesiteCut);
-    leftOuterJamb.position.set(-1.62, portalFloorY + 2.1, portalZ);
-    leftOuterJamb.rotation.z = -0.06;
+    leftOuterJamb.position.set(-1.85, portalFloorY + 1.9, portalZ);
+    leftOuterJamb.rotation.z = -0.07;
     leftOuterJamb.castShadow = true;
     leftOuterJamb.receiveShadow = true;
     this.group.add(leftOuterJamb);
 
     const rightOuterJamb = new THREE.Mesh(outerJambGeo, materials.andesiteCut);
-    rightOuterJamb.position.set(1.62, portalFloorY + 2.1, portalZ);
-    rightOuterJamb.rotation.z = 0.06;
+    rightOuterJamb.position.set(1.85, portalFloorY + 1.9, portalZ);
+    rightOuterJamb.rotation.z = 0.07;
     rightOuterJamb.castShadow = true;
     rightOuterJamb.receiveShadow = true;
     this.group.add(rightOuterJamb);
 
     // Left & Right Inner Recessed Jambs (Sacred Imperial Doble Jamba)
     const leftInnerJamb = new THREE.Mesh(innerJambGeo, materials.andesiteCut);
-    leftInnerJamb.position.set(-1.18, portalFloorY + 1.9, portalZ + 0.08);
-    leftInnerJamb.rotation.z = -0.06;
+    leftInnerJamb.position.set(-1.40, portalFloorY + 1.7, portalZ + 0.12);
+    leftInnerJamb.rotation.z = -0.07;
     leftInnerJamb.castShadow = true;
     leftInnerJamb.receiveShadow = true;
     this.group.add(leftInnerJamb);
 
     const rightInnerJamb = new THREE.Mesh(innerJambGeo, materials.andesiteCut);
-    rightInnerJamb.position.set(1.18, portalFloorY + 1.9, portalZ + 0.08);
-    rightInnerJamb.rotation.z = 0.06;
+    rightInnerJamb.position.set(1.40, portalFloorY + 1.7, portalZ + 0.12);
+    rightInnerJamb.rotation.z = 0.07;
     rightInnerJamb.castShadow = true;
     rightInnerJamb.receiveShadow = true;
     this.group.add(rightInnerJamb);
 
-    // Stepped Imperial Lintel
-    const lintelLower = new THREE.Mesh(lintelLowerGeo, materials.andesiteCut);
-    lintelLower.position.set(0, portalFloorY + 4.2, portalZ);
-    lintelLower.castShadow = true;
-    lintelLower.receiveShadow = true;
-    this.group.add(lintelLower);
+    // Monolithic Imperial Lintel
+    const lintel = new THREE.Mesh(lintelMegalithGeo, materials.andesiteCut);
+    lintel.position.set(0, portalFloorY + 3.85, portalZ);
+    lintel.castShadow = true;
+    lintel.receiveShadow = true;
+    this.group.add(lintel);
 
-    const lintelUpper = new THREE.Mesh(lintelUpperGeo, materials.andesiteCut);
-    lintelUpper.position.set(0, portalFloorY + 4.7, portalZ);
-    lintelUpper.castShadow = true;
-    lintelUpper.receiveShadow = true;
-    this.group.add(lintelUpper);
-
-    // Chakana stepped stone pediment crest
+    // Stepped Chakana pediment & crest
     const pediment = new THREE.Mesh(pedimentGeo, materials.andesiteCut);
-    pediment.position.set(0, portalFloorY + 5.25, portalZ);
+    pediment.position.set(0, portalFloorY + 4.45, portalZ);
     pediment.castShadow = true;
     this.group.add(pediment);
 
-    const crest = new THREE.Mesh(chakanaCrestGeo, materials.andesiteCut);
-    crest.position.set(0, portalFloorY + 5.85, portalZ);
+    const crest = new THREE.Mesh(crestGeo, materials.andesiteCut);
+    crest.position.set(0, portalFloorY + 4.95, portalZ);
     crest.castShadow = true;
     this.group.add(crest);
 
     // Imperial Golden Sun Disc (Punchao) Assembly
     const sunGroup = new THREE.Group();
-    sunGroup.position.set(0, portalFloorY + 6.35, portalZ + 0.24);
+    sunGroup.position.set(0, portalFloorY + 5.65, portalZ + 0.22);
 
     const discRimGeo = new THREE.CylinderGeometry(1.22, 1.22, 0.12, 36);
     discRimGeo.rotateX(Math.PI * 0.5);
@@ -236,7 +318,7 @@ export class PaititiRegion {
     this.group.add(sunGroup);
 
     // 2. Twin Golden Aqueduct Channels & Fountains flanking the Central Esplanade
-    const aqY = terrain.getTerrainHeightAt(0, 7.2);
+    const aqY = hAt(0, 7.2);
     const channelGeo = new THREE.BoxGeometry(0.95, 0.85, 5.2);
     const goldLiningGeo = new THREE.BoxGeometry(0.55, 0.12, 5.1);
     this.geometries.push(channelGeo, goldLiningGeo);
@@ -381,5 +463,192 @@ export class PaititiRegion {
     this.materials.length = 0;
     this.interactables.length = 0;
     this.group.removeFromParent();
+  }
+
+  /**
+   * Generates an authentic monumental curved Inca andesite step geometry
+   * with convex front nosing arc, pillowed riser, and beveled bullnose edge.
+   */
+  private createCurvedStepGeometry(
+    width: number,
+    riserH: number,
+    treadD: number,
+    curveBulge: number
+  ): THREE.BufferGeometry {
+    const xSegs = 16;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    // Profile points along Z for each slice across width:
+    // 0: back bottom (-treadD*0.5, -riserH*0.5)
+    // 1: back top (-treadD*0.5, riserH*0.5)
+    // 2: front top edge (+treadD*0.5 + curve, riserH*0.5)
+    // 3: front bullnose (+treadD*0.5 + curve + 0.035, riserH*0.5 - 0.04)
+    // 4: front bottom (+treadD*0.5 + curve, -riserH*0.5)
+    for (let i = 0; i <= xSegs; i++) {
+      const u = i / xSegs;
+      const x = -width * 0.5 + u * width;
+      const curve = Math.sin(u * Math.PI) * curveBulge;
+
+      // 0: back bottom
+      positions.push(x, -riserH * 0.5, -treadD * 0.5);
+      uvs.push(u * 2.0, 0);
+
+      // 1: back top
+      positions.push(x, riserH * 0.5, -treadD * 0.5);
+      uvs.push(u * 2.0, 1.0);
+
+      // 2: front top edge
+      positions.push(x, riserH * 0.5, treadD * 0.5 + curve);
+      uvs.push(u * 2.0, 1.8);
+
+      // 3: front bullnose bevel
+      positions.push(x, riserH * 0.5 - 0.04, treadD * 0.5 + curve + 0.035);
+      uvs.push(u * 2.0, 1.9);
+
+      // 4: front bottom
+      positions.push(x, -riserH * 0.5, treadD * 0.5 + curve);
+      uvs.push(u * 2.0, 2.6);
+    }
+
+    const stride = 5;
+    for (let i = 0; i < xSegs; i++) {
+      const c = i * stride;
+      const n = (i + 1) * stride;
+
+      // Top tread quad (1 -> 2)
+      indices.push(c + 1, c + 2, n + 2);
+      indices.push(c + 1, n + 2, n + 1);
+
+      // Bullnose bevel quad (2 -> 3)
+      indices.push(c + 2, c + 3, n + 3);
+      indices.push(c + 2, n + 3, n + 2);
+
+      // Front riser quad (3 -> 4)
+      indices.push(c + 3, c + 4, n + 4);
+      indices.push(c + 3, n + 4, n + 3);
+
+      // Bottom quad (0 -> 4)
+      indices.push(c + 0, n + 0, n + 4);
+      indices.push(c + 0, n + 4, c + 4);
+
+      // Back quad (0 -> 1)
+      indices.push(c + 0, c + 1, n + 1);
+      indices.push(c + 0, n + 1, n + 0);
+    }
+
+    // Left endcap (i = 0, normal facing -X)
+    indices.push(0, 2, 1);
+    indices.push(0, 3, 2);
+    indices.push(0, 4, 3);
+
+    // Right endcap (i = xSegs, normal facing +X)
+    const last = xSegs * stride;
+    indices.push(last + 0, last + 1, last + 2);
+    indices.push(last + 0, last + 2, last + 3);
+    indices.push(last + 0, last + 3, last + 4);
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  /**
+   * Generates continuous sweeping battered Inca cheek ramparts flanking the staircase
+   * with sloping coping stones and battered retaining faces.
+   */
+  private createCheekRampartGeometry(
+    nodes: Array<{ xIn: number; xOut: number; yTop: number; yBot: number; z: number }>,
+    side: number
+  ): THREE.BufferGeometry {
+    const count = nodes.length;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    for (let s = 0; s < count; s++) {
+      const n = nodes[s];
+      const v = s / (count - 1);
+
+      // 0: inner top (above step edge)
+      positions.push(n.xIn, n.yTop + 0.32, n.z);
+      uvs.push(0, v * 4.0);
+
+      // 1: outer top (coping beveled edge)
+      positions.push(n.xOut, n.yTop + 0.24, n.z);
+      uvs.push(0.5, v * 4.0);
+
+      // 2: outer bot (battered outward at base)
+      positions.push(n.xOut + side * 0.22, n.yBot, n.z);
+      uvs.push(1.5, v * 4.0);
+
+      // 3: inner bot
+      positions.push(n.xIn, n.yTop - 0.25, n.z);
+      uvs.push(0, v * 4.0);
+    }
+
+    const stride = 4;
+    for (let s = 0; s < count - 1; s++) {
+      const c = s * stride;
+      const next = (s + 1) * stride;
+
+      if (side === 1) {
+        // Right side (facing +X)
+        // Top surface (0 -> 1)
+        indices.push(c + 0, c + 1, next + 1);
+        indices.push(c + 0, next + 1, next + 0);
+
+        // Outer battered wall (1 -> 2, facing +X)
+        indices.push(c + 1, c + 2, next + 2);
+        indices.push(c + 1, next + 2, next + 1);
+
+        // Inner wall (3 -> 0, facing -X)
+        indices.push(c + 3, next + 0, c + 0);
+        indices.push(c + 3, next + 3, next + 0);
+      } else {
+        // Left side (facing -X)
+        // Top surface (0 -> 1)
+        indices.push(c + 0, next + 1, c + 1);
+        indices.push(c + 0, next + 0, next + 1);
+
+        // Outer battered wall (1 -> 2, facing -X)
+        indices.push(c + 1, next + 2, c + 2);
+        indices.push(c + 1, next + 1, next + 2);
+
+        // Inner wall (3 -> 0, facing +X)
+        indices.push(c + 3, c + 0, next + 0);
+        indices.push(c + 3, next + 0, next + 3);
+      }
+    }
+
+    // Front cap at s = 0 (facing +Z toward approach plaza)
+    if (side === 1) {
+      indices.push(0, 2, 1);
+      indices.push(0, 3, 2);
+    } else {
+      indices.push(0, 1, 2);
+      indices.push(0, 2, 3);
+    }
+
+    // Back cap at s = count - 1 (facing -Z into terrace)
+    const last = (count - 1) * stride;
+    if (side === 1) {
+      indices.push(last + 0, last + 1, last + 2);
+      indices.push(last + 0, last + 2, last + 3);
+    } else {
+      indices.push(last + 0, last + 2, last + 1);
+      indices.push(last + 0, last + 3, last + 2);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
   }
 }

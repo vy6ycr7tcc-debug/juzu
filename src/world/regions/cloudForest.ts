@@ -30,6 +30,7 @@ export class CloudForestRegion {
   private bridgeGroup: THREE.Group = new THREE.Group();
   private condorMesh: THREE.Group = new THREE.Group();
   private geometries: THREE.BufferGeometry[] = [];
+  private materialsList: THREE.Material[] = [];
   private elapsedSec: number = 0;
 
   public build(
@@ -60,7 +61,7 @@ export class CloudForestRegion {
   ): void {
     this.bridgeGroup.name = 'RavineHangingBridge';
 
-    // Stone anchor towers & battered Inca abutments on South (z = +6.0) and North (z = -6.0) rims
+    // Authentic low battered Inca stone anchor bollards & foundation abutments on South (z = +6.0) and North (z = -6.0) rims
     const abutmentGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.2, 3.4, 2.6, {
       courses: 5,
       stonesPerCourse: 5,
@@ -68,17 +69,19 @@ export class CloudForestRegion {
       jointDepth: 0.026,
       batter: 0.08,
     });
-    const pillarGeo = IncaMasonrySystem.createIncaPillarGeometry(0.92, 2.65, 0.92, {
-      courses: 5,
-      pillowBulge: 0.042,
+    // Low, rounded battered stone anchor bollards (Clavijas de piedra) - waist-height, open vista
+    const bollardGeo = IncaMasonrySystem.createIncaPillarGeometry(0.72, 1.18, 0.72, {
+      courses: 3,
+      pillowBulge: 0.045,
       jointDepth: 0.022,
-      batter: 0.07,
+      batter: 0.06,
     });
-    const capGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(0.68, 0.28, 16);
-    const bolsterBeamGeo = new THREE.CylinderGeometry(0.14, 0.14, 3.6, 12);
-    bolsterBeamGeo.rotateZ(Math.PI * 0.5);
-    const ropeWrapGeo = new THREE.TorusGeometry(0.19, 0.055, 8, 16);
-    this.geometries.push(abutmentGeo, pillarGeo, capGeo, bolsterBeamGeo, ropeWrapGeo);
+    const capGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(0.48, 0.16, 16);
+    // Ground-level timber bolster sill embedded flush across the stone ramp floor
+    const groundSillGeo = new THREE.CylinderGeometry(0.12, 0.12, 3.2, 12);
+    groundSillGeo.rotateZ(Math.PI * 0.5);
+    const ropeWrapGeo = new THREE.TorusGeometry(0.16, 0.045, 8, 16);
+    this.geometries.push(abutmentGeo, bollardGeo, capGeo, groundSillGeo, ropeWrapGeo);
 
     const ends = [6.0, -6.0];
     for (let e = 0; e < ends.length; e++) {
@@ -103,35 +106,35 @@ export class CloudForestRegion {
       abutmentBerm.receiveShadow = true;
       this.group.add(abutmentBerm);
 
-      // Left & Right battered coursed stone anchor towers
-      const sides = [-1.52, 1.52];
+      // Left & Right low battered coursed stone anchor bollards (waist-height, leaving sky and gorge open)
+      const sides = [-1.45, 1.45];
       for (let s = 0; s < sides.length; s++) {
         const sx = sides[s];
-        const pillar = new THREE.Mesh(pillarGeo, materials.andesiteCut);
-        pillar.position.set(sx, baseY + 1.25, ez);
-        pillar.castShadow = true;
-        pillar.receiveShadow = true;
-        this.group.add(pillar);
+        const bollard = new THREE.Mesh(bollardGeo, materials.andesiteCut);
+        bollard.position.set(sx, baseY + 0.52, ez);
+        bollard.castShadow = true;
+        bollard.receiveShadow = true;
+        this.group.add(bollard);
 
         const cap = new THREE.Mesh(capGeo, materials.andesiteCut);
-        cap.position.set(sx, baseY + 2.58, ez);
+        cap.position.set(sx, baseY + 1.15, ez);
         cap.castShadow = true;
         cap.receiveShadow = true;
         this.group.add(cap);
       }
 
-      // Heavy transverse timber bolster beam (Tirante mayor) bridging the two stone towers
-      const bolster = new THREE.Mesh(bolsterBeamGeo, materials.woodAged);
-      bolster.position.set(0, baseY + 2.38, ez);
-      bolster.castShadow = true;
-      bolster.receiveShadow = true;
-      this.group.add(bolster);
+      // Ground-level timber bolster sill embedded flush across the stone ramp floor (Tirante de suelo)
+      const sill = new THREE.Mesh(groundSillGeo, materials.woodAged);
+      sill.position.set(0, baseY + 0.14, ez + (e === 0 ? 0.35 : -0.35));
+      sill.castShadow = true;
+      sill.receiveShadow = true;
+      this.group.add(sill);
 
-      // Braided rope coil tensioning wraps around the timber beam where cables anchor
-      const wrapXs = [-1.28, -0.85, 0.85, 1.28];
+      // Heavy braided rope tensioning coils securing the cables into subterranean anchor pits
+      const wrapXs = [-1.22, -0.78, 0.78, 1.22];
       for (let w = 0; w < wrapXs.length; w++) {
         const wrap = new THREE.Mesh(ropeWrapGeo, materials.ropeBraided);
-        wrap.position.set(wrapXs[w], baseY + 2.38, ez);
+        wrap.position.set(wrapXs[w], baseY + 0.16, ez + (e === 0 ? 0.35 : -0.35));
         wrap.rotation.y = Math.PI * 0.5;
         wrap.castShadow = true;
         this.group.add(wrap);
@@ -331,12 +334,12 @@ export class CloudForestRegion {
 
     // Battered Inca polygonal retaining walls flanking the valley path & ravine rim
     const wallSpecs = [
-      { x: -5.4, z: 9.0, w: 4.8, h: 2.6, d: 1.1, rotY: 0.32 },
-      { x: 5.6, z: 9.6, w: 4.6, h: 2.5, d: 1.1, rotY: -0.32 },
-      { x: -5.8, z: -9.8, w: 5.5, h: 3.1, d: 1.2, rotY: -0.22 },
-      { x: 5.8, z: -10.5, w: 5.2, h: 3.0, d: 1.2, rotY: 0.25 },
-      { x: -7.8, z: -18.5, w: 6.4, h: 3.4, d: 1.3, rotY: 0.12 },
-      { x: 7.6, z: -19.0, w: 6.0, h: 3.2, d: 1.3, rotY: -0.15 },
+      { x: -6.4, z: 9.8, w: 4.8, h: 2.0, d: 1.1, rotY: 0.38 },
+      { x: 7.2, z: 10.5, w: 4.4, h: 1.85, d: 1.1, rotY: -0.42 },
+      { x: -6.5, z: -11.5, w: 5.2, h: 2.4, d: 1.2, rotY: -0.18 },
+      { x: 7.2, z: -12.0, w: 4.8, h: 2.2, d: 1.2, rotY: 0.18 },
+      { x: -8.2, z: -18.5, w: 6.0, h: 2.8, d: 1.3, rotY: 0.12 },
+      { x: 8.2, z: -19.0, w: 5.8, h: 2.8, d: 1.3, rotY: -0.15 },
     ];
 
     for (let i = 0; i < wallSpecs.length; i++) {
@@ -401,59 +404,135 @@ export class CloudForestRegion {
     const shZ = -15.5;
     const shY = terrain.getTerrainHeightAt(shX, shZ);
 
-    const backWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 2.3, 0.55, {
-      courses: 4,
+    // Dedicated high-resolution combed ichu thatch material
+    const thatchAlbedo = materials.highSierraPuna.map ? materials.highSierraPuna.map.clone() : null;
+    if (thatchAlbedo) {
+      thatchAlbedo.wrapS = THREE.RepeatWrapping;
+      thatchAlbedo.wrapT = THREE.RepeatWrapping;
+      thatchAlbedo.repeat.set(1.5, 2.0);
+    }
+    const thatchNormal = materials.woodBark.normalMap ? materials.woodBark.normalMap.clone() : null;
+    if (thatchNormal) {
+      thatchNormal.wrapS = THREE.RepeatWrapping;
+      thatchNormal.wrapT = THREE.RepeatWrapping;
+      thatchNormal.repeat.set(3.0, 8.0);
+    }
+
+    const thatchMat = new THREE.MeshStandardMaterial({
+      name: 'CloudForestIchuThatch',
+      color: new THREE.Color(0xffffff),
+      map: thatchAlbedo,
+      normalMap: thatchNormal,
+      normalScale: new THREE.Vector2(1.5, 3.5),
+      roughness: 0.95,
+      metalness: 0.0,
+      vertexColors: true,
+      side: THREE.DoubleSide,
+    });
+    this.materialsList.push(thatchMat);
+
+    const backWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 2.8, 0.55, {
+      courses: 5,
       stonesPerCourse: 5,
       pillowBulge: 0.045,
     });
-    const sideWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(2.6, 2.1, 0.55, {
+    const sideWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(2.6, 2.4, 0.55, {
       courses: 4,
       stonesPerCourse: 4,
       pillowBulge: 0.045,
     });
-    const beamGeo = this.createChippedBlockGeometry(4.0, 0.18, 0.22);
-    const thatchRoofGeo = this.createChippedBlockGeometry(4.2, 0.14, 3.2);
+    const postGeo = new THREE.CylinderGeometry(0.12, 0.14, 1.85, 10);
+    const postPlinthGeo = IncaMasonrySystem.createRiverCobbleGeometry(0.24, 2.8);
+    const lintelGeo = new THREE.CylinderGeometry(0.12, 0.12, 3.8, 10);
+    lintelGeo.rotateZ(Math.PI * 0.5);
+    const rafterGeo = new THREE.CylinderGeometry(0.075, 0.085, 3.4, 8);
+    rafterGeo.rotateX(Math.PI * 0.5);
+    const thatchRoofGeo = this.createAndeanShedRoofGeometry(3.6, 2.6, 1.25, 0.30, 0.45);
+    const shelterBermGeo = IncaMasonrySystem.createWallFootingBermGeometry(3.8, 0.35, 0.45);
     const bannerGeo = new THREE.PlaneGeometry(0.85, 1.45);
-    this.geometries.push(backWallGeo, sideWallGeo, beamGeo, thatchRoofGeo, bannerGeo);
+    this.geometries.push(
+      backWallGeo,
+      sideWallGeo,
+      postGeo,
+      postPlinthGeo,
+      lintelGeo,
+      rafterGeo,
+      thatchRoofGeo,
+      shelterBermGeo,
+      bannerGeo
+    );
 
     const backWall = new THREE.Mesh(backWallGeo, materials.andesiteCut);
-    backWall.position.set(shX, shY + 0.95, shZ - 1.1);
+    backWall.position.set(shX, shY + 1.25, shZ - 1.1);
     backWall.castShadow = true;
     backWall.receiveShadow = true;
     this.group.add(backWall);
 
     const leftWall = new THREE.Mesh(sideWallGeo, materials.andesiteCut);
-    leftWall.position.set(shX - 1.55, shY + 0.85, shZ);
+    leftWall.position.set(shX - 1.55, shY + 0.95, shZ);
     leftWall.castShadow = true;
     leftWall.receiveShadow = true;
     this.group.add(leftWall);
 
     const rightWall = new THREE.Mesh(sideWallGeo, materials.andesiteCut);
-    rightWall.position.set(shX + 1.55, shY + 0.85, shZ);
+    rightWall.position.set(shX + 1.55, shY + 0.95, shZ);
     rightWall.castShadow = true;
     rightWall.receiveShadow = true;
     this.group.add(rightWall);
 
-    // Timber rafters & authentic thatched ichu roof
-    for (let b = 0; b < 5; b++) {
-      const beam = new THREE.Mesh(beamGeo, materials.woodAged);
-      beam.position.set(shX, shY + 2.05 - b * 0.08, shZ - 0.95 + b * 0.52);
-      beam.rotation.x = 0.14;
-      beam.castShadow = true;
-      this.group.add(beam);
+    // Footing berm sealing back wall into slope
+    const shelterBerm = new THREE.Mesh(shelterBermGeo, materials.groundForestFloor);
+    shelterBerm.position.set(shX, shY + 0.02, shZ - 0.75);
+    shelterBerm.receiveShadow = true;
+    this.group.add(shelterBerm);
+
+    // Front support timber columns on stone plinths
+    const postPositions = [shX - 1.55, shX + 1.55];
+    for (let p = 0; p < postPositions.length; p++) {
+      const px = postPositions[p];
+      const pz = shZ + 1.25;
+      const py = terrain.getTerrainHeightAt(px, pz);
+
+      const plinth = new THREE.Mesh(postPlinthGeo, materials.andesiteCut);
+      plinth.position.set(px, py + 0.08, pz);
+      plinth.castShadow = true;
+      plinth.receiveShadow = true;
+      this.group.add(plinth);
+
+      const post = new THREE.Mesh(postGeo, materials.woodAged);
+      post.position.set(px, py + 0.98, pz);
+      post.castShadow = true;
+      post.receiveShadow = true;
+      this.group.add(post);
     }
 
-    const thatchRoof = new THREE.Mesh(thatchRoofGeo, materials.ropeBraided);
-    thatchRoof.position.set(shX, shY + 2.15, shZ);
-    thatchRoof.rotation.x = 0.14;
+    // Heavy cross-lintel timber log atop the front posts
+    const lintel = new THREE.Mesh(lintelGeo, materials.woodAged);
+    lintel.position.set(shX, shY + 1.82, shZ + 1.25);
+    lintel.castShadow = true;
+    this.group.add(lintel);
+
+    // 5 sloped timber rafters connecting rear wall to front lintel
+    for (let r = 0; r < 5; r++) {
+      const rx = shX - 1.45 + r * 0.725;
+      const rafter = new THREE.Mesh(rafterGeo, materials.woodAged);
+      rafter.position.set(rx, shY + 2.24, shZ + 0.06);
+      rafter.rotation.x = 0.34;
+      rafter.castShadow = true;
+      this.group.add(rafter);
+    }
+
+    // Authentic 3D volumetric combed ichu thatch roof with steep 20-degree Andean pitch
+    const thatchRoof = new THREE.Mesh(thatchRoofGeo, thatchMat);
+    thatchRoof.position.set(shX, shY + 1.76, shZ);
     thatchRoof.castShadow = true;
     thatchRoof.receiveShadow = true;
     this.group.add(thatchRoof);
 
-    // Quechua ceremonial textile banner draped inside shelter
+    // Quechua ceremonial textile banner draped inside shelter entrance
     const banner = new THREE.Mesh(bannerGeo, materials.clothQuechuaRed);
-    banner.position.set(shX - 0.65, shY + 1.4, shZ - 0.8);
-    banner.rotation.y = 0.08;
+    banner.position.set(shX - 0.75, shY + 1.25, shZ + 0.45);
+    banner.rotation.y = 0.12;
     banner.castShadow = true;
     this.group.add(banner);
 
@@ -606,9 +685,14 @@ export class CloudForestRegion {
     // Authentic circular stepped Inca Usnu altar platform embedded into the forest loam
     const daisGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(1.65, 0.22, 20);
     const innerDaisGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(1.22, 0.16, 20);
-    // Sacred carved Inca Waka monolith with stepped Chakana collars
-    const markerGeo = IncaMasonrySystem.createIncaWakaSteleGeometry(0.32, 1.25, 12);
-    this.geometries.push(daisGeo, innerDaisGeo, markerGeo);
+    // Carved andesite offering vessel receptacle (Qonopa basin)
+    const vesselPlinthGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(0.38, 0.18, 16);
+    // Sacred carved Inca Waka monolith with stepped Chakana collars on the rear flank
+    const markerGeo = IncaMasonrySystem.createIncaWakaSteleGeometry(0.28, 0.95, 12);
+    // Rustic beaten bronze ceremonial offering dish
+    const bronzeDishGeo = new THREE.CylinderGeometry(0.24, 0.16, 0.08, 16);
+    const emberGeo = new THREE.SphereGeometry(0.12, 12, 8);
+    this.geometries.push(daisGeo, innerDaisGeo, vesselPlinthGeo, markerGeo, bronzeDishGeo, emberGeo);
 
     const dais = new THREE.Mesh(daisGeo, materials.andesiteCut);
     dais.position.set(cpX, cpY + 0.08, cpZ);
@@ -643,38 +727,31 @@ export class CloudForestRegion {
       this.group.add(cobble);
     }
 
+    // Carved andesite ceremonial vessel (Qonopa) on the inner dais
+    const vessel = new THREE.Mesh(vesselPlinthGeo, materials.andesiteCut);
+    vessel.position.set(cpX, cpY + 0.36, cpZ);
+    vessel.castShadow = true;
+    vessel.receiveShadow = true;
+    this.group.add(vessel);
+
+    // Rustic beaten bronze offering dish nested inside
+    const dish = new THREE.Mesh(bronzeDishGeo, materials.metalBronze);
+    dish.position.set(cpX, cpY + 0.42, cpZ);
+    dish.castShadow = true;
+    this.group.add(dish);
+
+    // Glowing sacred ember
+    const ember = new THREE.Mesh(emberGeo, materials.goldOrnamental);
+    ember.position.set(cpX, cpY + 0.46, cpZ);
+    this.group.add(ember);
+
+    // Standing sacred Waka stele monolith on the flank of the altar
     const marker = new THREE.Mesh(markerGeo, materials.andesiteCut);
-    marker.position.set(cpX, cpY + 0.85, cpZ);
+    marker.position.set(cpX - 0.68, cpY + 0.58, cpZ - 0.22);
+    marker.rotation.y = 0.35;
     marker.castShadow = true;
     marker.receiveShadow = true;
     this.group.add(marker);
-
-    // Authentic ceremonial Inca bronze Kero / Qonopa vessel brazier
-    const brazierGeo = new THREE.CylinderGeometry(0.28, 0.18, 0.22, 16);
-    const brazierBaseGeo = new THREE.CylinderGeometry(0.20, 0.24, 0.08, 16);
-    const brazierLipGeo = new THREE.TorusGeometry(0.28, 0.025, 8, 16);
-    brazierLipGeo.rotateX(Math.PI * 0.5);
-    const emberGeo = new THREE.SphereGeometry(0.18, 14, 10);
-    this.geometries.push(brazierGeo, brazierBaseGeo, brazierLipGeo, emberGeo);
-
-    const brazier = new THREE.Mesh(brazierGeo, materials.metalBronze);
-    brazier.position.set(cpX, cpY + 1.55, cpZ);
-    brazier.castShadow = true;
-    this.group.add(brazier);
-
-    const brazierBase = new THREE.Mesh(brazierBaseGeo, materials.metalBronze);
-    brazierBase.position.set(cpX, cpY + 1.44, cpZ);
-    brazierBase.castShadow = true;
-    this.group.add(brazierBase);
-
-    const brazierLip = new THREE.Mesh(brazierLipGeo, materials.metalBronze);
-    brazierLip.position.set(cpX, cpY + 1.66, cpZ);
-    brazierLip.castShadow = true;
-    this.group.add(brazierLip);
-
-    const ember = new THREE.Mesh(emberGeo, materials.goldOrnamental);
-    ember.position.set(cpX, cpY + 1.64, cpZ);
-    this.group.add(ember);
 
     this.interactables.push({
       id: 'checkpoint_south_trail',
@@ -705,6 +782,27 @@ export class CloudForestRegion {
     perch.castShadow = true;
     perch.receiveShadow = true;
     this.group.add(perch);
+
+    // Weathered Andean bedrock crag outcrops framing the ridge pass behind the viewpoint
+    const ridgeCrags = [
+      { x: -3.2, yOff: 0.65, z: -25.6, rad: 2.1, seed: 4.1 },
+      { x: 3.2, yOff: 0.65, z: -25.6, rad: 2.1, seed: 5.7 },
+      { x: 0.0, yOff: 0.95, z: -27.2, rad: 2.6, seed: 6.9 },
+      { x: -1.6, yOff: 0.40, z: -24.2, rad: 1.1, seed: 2.3 },
+      { x: 1.6, yOff: 0.40, z: -24.2, rad: 1.1, seed: 3.1 },
+    ];
+    for (let i = 0; i < ridgeCrags.length; i++) {
+      const rc = ridgeCrags[i];
+      const rcy = terrain.getTerrainHeightAt(rc.x, rc.z);
+      const cragGeo = IncaMasonrySystem.createRiverCobbleGeometry(rc.rad, rc.seed);
+      this.geometries.push(cragGeo);
+      const cragMesh = new THREE.Mesh(cragGeo, materials.fieldstoneRough);
+      cragMesh.position.set(rc.x, rcy + rc.yOff, rc.z);
+      cragMesh.rotation.set(Math.sin(rc.seed) * 0.2, rc.seed, Math.cos(rc.seed) * 0.2);
+      cragMesh.castShadow = true;
+      cragMesh.receiveShadow = true;
+      this.group.add(cragMesh);
+    }
 
     // Circling Majestic Andean Condor (Vultur gryphus) high overhead
     this.condorMesh = this.createCondorMesh(materials);
@@ -855,11 +953,234 @@ export class CloudForestRegion {
     this.condorMesh.rotation.z = 0.18;
   }
 
+  /**
+   * Generates an authentic 3D volumetric Andean shed / lean-to ichu thatch roof.
+   * Features a sloping thatch plane descending from back to front, generous eaves overhang,
+   * combed straw ridges with organic displacement, vertical eave faces, 3D verge edge faces,
+   * and multi-tone vertex-colored straw gradient (bleached gold to weathered amber).
+   */
+  private createAndeanShedRoofGeometry(
+    w: number,
+    d: number,
+    slopeDrop: number,
+    eaveThick: number,
+    overhang: number
+  ): THREE.BufferGeometry {
+    const ow = w + overhang * 2;
+    const od = d + overhang * 2;
+    const halfW = ow * 0.5;
+    const halfD = od * 0.5;
+
+    const stepsX = 10;
+    const stepsZ = 10;
+
+    const posList: number[] = [];
+    const normList: number[] = [];
+    const uvList: number[] = [];
+    const colList: number[] = [];
+    const idxList: number[] = [];
+
+    const addQuad = (
+      p0: [number, number, number],
+      p1: [number, number, number],
+      p2: [number, number, number],
+      p3: [number, number, number],
+      norm: [number, number, number],
+      u0: number, v0: number, u1: number, v1: number,
+      c0: [number, number, number],
+      c1: [number, number, number],
+      c2: [number, number, number],
+      c3: [number, number, number]
+    ): void => {
+      const baseIdx = posList.length / 3;
+      posList.push(...p0, ...p1, ...p2, ...p3);
+      normList.push(...norm, ...norm, ...norm, ...norm);
+      uvList.push(u0, v0, u1, v0, u1, v1, u0, v1);
+      colList.push(...c0, ...c1, ...c2, ...c3);
+      idxList.push(baseIdx, baseIdx + 1, baseIdx + 2, baseIdx, baseIdx + 2, baseIdx + 3);
+    };
+
+    // Color swatches for combed Andean ichu straw
+    const cHighRidge: [number, number, number] = [0.88, 0.74, 0.46]; // Bleached sunlit straw
+    const cMidSlope: [number, number, number] = [0.76, 0.58, 0.32];  // Warm amber ichu body
+    const cEaveLow: [number, number, number] = [0.60, 0.44, 0.22];   // Weathered straw
+    const cEaveFace: [number, number, number] = [0.46, 0.34, 0.18];  // Exposed vertical straw cut
+    const cUnderside: [number, number, number] = [0.28, 0.20, 0.10]; // Deep shadow occlusion
+
+    // 1. Top sloped combed thatch surface
+    for (let iz = 0; iz < stepsZ; iz++) {
+      const tz0 = iz / stepsZ;
+      const tz1 = (iz + 1) / stepsZ;
+      const z0 = -halfD + tz0 * od;
+      const z1 = -halfD + tz1 * od;
+
+      const baseH0 = (1.0 - tz0) * slopeDrop;
+      const baseH1 = (1.0 - tz1) * slopeDrop;
+
+      for (let ix = 0; ix < stepsX; ix++) {
+        const tx0 = ix / stepsX;
+        const tx1 = (ix + 1) / stepsX;
+        const x0 = -halfW + tx0 * ow;
+        const x1 = -halfW + tx1 * ow;
+
+        const disp00 = Math.sin(x0 * 7.5 + z0 * 5.2) * 0.035 + Math.cos(x0 * 14.0) * 0.015;
+        const disp10 = Math.sin(x1 * 7.5 + z0 * 5.2) * 0.035 + Math.cos(x1 * 14.0) * 0.015;
+        const disp11 = Math.sin(x1 * 7.5 + z1 * 5.2) * 0.035 + Math.cos(x1 * 14.0) * 0.015;
+        const disp01 = Math.sin(x0 * 7.5 + z1 * 5.2) * 0.035 + Math.cos(x0 * 14.0) * 0.015;
+
+        const y00 = baseH0 + disp00;
+        const y10 = baseH0 + disp10;
+        const y11 = baseH1 + disp11;
+        const y01 = baseH1 + disp01;
+
+        const col0: [number, number, number] = [
+          cHighRidge[0] * (1.0 - tz0) + cMidSlope[0] * tz0,
+          cHighRidge[1] * (1.0 - tz0) + cMidSlope[1] * tz0,
+          cHighRidge[2] * (1.0 - tz0) + cMidSlope[2] * tz0,
+        ];
+        const col1: [number, number, number] = [
+          cHighRidge[0] * (1.0 - tz1) + cEaveLow[0] * tz1,
+          cHighRidge[1] * (1.0 - tz1) + cEaveLow[1] * tz1,
+          cHighRidge[2] * (1.0 - tz1) + cEaveLow[2] * tz1,
+        ];
+
+        const slopeAngle = Math.atan2(slopeDrop, od);
+        const ny = Math.cos(slopeAngle);
+        const nz = Math.sin(slopeAngle);
+
+        addQuad(
+          [x0, y00, z0],
+          [x1, y10, z0],
+          [x1, y11, z1],
+          [x0, y01, z1],
+          [0, ny, nz],
+          tx0 * 2.5, tz0 * 3.5,
+          tx1 * 2.5, tz1 * 3.5,
+          col0, col0, col1, col1
+        );
+      }
+    }
+
+    // 2. Front eave vertical face (+Z)
+    const frontZ = halfD;
+    const frontBaseY = 0;
+    for (let ix = 0; ix < stepsX; ix++) {
+      const tx0 = ix / stepsX;
+      const tx1 = (ix + 1) / stepsX;
+      const x0 = -halfW + tx0 * ow;
+      const x1 = -halfW + tx1 * ow;
+      const droop0 = Math.sin(tx0 * Math.PI * 6.0) * 0.025;
+      const droop1 = Math.sin(tx1 * Math.PI * 6.0) * 0.025;
+
+      addQuad(
+        [x0, frontBaseY - eaveThick + droop0, frontZ],
+        [x1, frontBaseY - eaveThick + droop1, frontZ],
+        [x1, frontBaseY + droop1, frontZ],
+        [x0, frontBaseY + droop0, frontZ],
+        [0, 0, 1],
+        tx0 * 2.5, 0, tx1 * 2.5, 0.4,
+        cEaveFace, cEaveFace, cEaveFace, cEaveFace
+      );
+
+      // Underside soffit return
+      addQuad(
+        [x0, frontBaseY - eaveThick + droop0, frontZ - overhang],
+        [x1, frontBaseY - eaveThick + droop1, frontZ - overhang],
+        [x1, frontBaseY - eaveThick + droop1, frontZ],
+        [x0, frontBaseY - eaveThick + droop0, frontZ],
+        [0, -1, 0],
+        tx0 * 2.5, 0, tx1 * 2.5, 0.3,
+        cUnderside, cUnderside, cUnderside, cUnderside
+      );
+    }
+
+    // 3. Back eave vertical face (-Z)
+    const backZ = -halfD;
+    const backBaseY = slopeDrop;
+    for (let ix = 0; ix < stepsX; ix++) {
+      const tx0 = ix / stepsX;
+      const tx1 = (ix + 1) / stepsX;
+      const x0 = -halfW + tx0 * ow;
+      const x1 = -halfW + tx1 * ow;
+
+      addQuad(
+        [x1, backBaseY - eaveThick, backZ],
+        [x0, backBaseY - eaveThick, backZ],
+        [x0, backBaseY, backZ],
+        [x1, backBaseY, backZ],
+        [0, 0, -1],
+        tx1 * 2.5, 0, tx0 * 2.5, 0.4,
+        cEaveFace, cEaveFace, cEaveFace, cEaveFace
+      );
+
+      // Underside soffit return
+      addQuad(
+        [x1, backBaseY - eaveThick, backZ],
+        [x1, backBaseY - eaveThick, backZ + overhang],
+        [x0, backBaseY - eaveThick, backZ + overhang],
+        [x0, backBaseY - eaveThick, backZ],
+        [0, -1, 0],
+        tx1 * 2.5, 0, tx0 * 2.5, 0.3,
+        cUnderside, cUnderside, cUnderside, cUnderside
+      );
+    }
+
+    // 4. Left (-X) and Right (+X) verge edge faces closing the 3D volume
+    for (let side = -1; side <= 1; side += 2) {
+      const vx = side * halfW;
+      const normX = side;
+
+      for (let iz = 0; iz < stepsZ; iz++) {
+        const tz0 = iz / stepsZ;
+        const tz1 = (iz + 1) / stepsZ;
+        const z0 = -halfD + tz0 * od;
+        const z1 = -halfD + tz1 * od;
+        const y0 = (1.0 - tz0) * slopeDrop;
+        const y1 = (1.0 - tz1) * slopeDrop;
+
+        if (side === 1) {
+          addQuad(
+            [vx, y0, z0],
+            [vx, y1, z1],
+            [vx, y1 - eaveThick, z1],
+            [vx, y0 - eaveThick, z0],
+            [normX, 0, 0],
+            tz0 * 3.5, 0, tz1 * 3.5, 0.4,
+            cMidSlope, cEaveLow, cEaveLow, cMidSlope
+          );
+        } else {
+          addQuad(
+            [vx, y1, z1],
+            [vx, y0, z0],
+            [vx, y0 - eaveThick, z0],
+            [vx, y1 - eaveThick, z1],
+            [normX, 0, 0],
+            tz1 * 3.5, 0, tz0 * 3.5, 0.4,
+            cEaveLow, cMidSlope, cMidSlope, cEaveLow
+          );
+        }
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posList), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normList), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvList), 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colList), 3));
+    geo.setIndex(idxList);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   public dispose(): void {
     for (let i = 0; i < this.geometries.length; i++) {
       this.geometries[i].dispose();
     }
     this.geometries.length = 0;
+    for (let i = 0; i < this.materialsList.length; i++) {
+      this.materialsList[i].dispose();
+    }
+    this.materialsList.length = 0;
     this.interactables.length = 0;
     this.group.removeFromParent();
   }

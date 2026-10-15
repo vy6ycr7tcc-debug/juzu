@@ -217,16 +217,22 @@ export class FoliageSystem {
     for (let i = 0; i < boulderCount * 4 && rIdx < boulderCount; i++) {
       const x = (rand() - 0.5) * 24.0;
       const z = -28.0 + rand() * 52.0;
-      if (Math.abs(x) < 2.5 && z > -22 && z < 16) continue;
+      if (Math.abs(x) < 3.2 && z > -22 && z < 16) continue;
+      // Keep clear of direct camera shot cones to avoid giant foreground obstruction
+      if (Math.hypot(x - 1.15, z - 5.2) < 4.8) continue; // Paititi camera cone
+      if (Math.hypot(x - 1.1, z - 12.0) < 4.8) continue;  // Jungle camera cone
+      if (Math.hypot(x - 1.15, z - 11.5) < 4.8) continue; // High Sierra camera cone
+      if (Math.hypot(x - 1.85, z - 5.35) < 4.5) continue; // Bridge camera cone
+
       const y = terrain.getTerrainHeightAt(x, z);
       if (y > 6.2) continue; // Keep off steep canyon walls so boulders never protrude horizontally
 
-      const sx = 0.55 + rand() * 1.1;
-      const sy = 0.45 + rand() * 0.75;
-      const sz = 0.55 + rand() * 1.1;
-      // Sink boulder 40% into ground so base is 100% embedded
-      _dummy.position.set(x, y - sy * 0.35, z);
-      _dummy.rotation.set(rand() * 0.4, rand() * Math.PI * 2, rand() * 0.4);
+      const sx = 0.72 + rand() * 0.45;
+      const sy = 0.65 + rand() * 0.45;
+      const sz = 0.72 + rand() * 0.45;
+      // Sink boulder 55% into ground so base is firmly rooted in mountain bedrock
+      _dummy.position.set(x, y - sy * 0.55, z);
+      _dummy.rotation.set((rand() - 0.5) * 0.35, rand() * Math.PI * 2, (rand() - 0.5) * 0.35);
       _dummy.scale.set(sx, sy, sz);
       _dummy.updateMatrix();
       this.boulderInstanced.setMatrixAt(rIdx, _dummy.matrix);
@@ -502,18 +508,29 @@ export class FoliageSystem {
   }
 
   private createCraggyBoulderGeometry(): THREE.BufferGeometry {
-    const geo = new THREE.DodecahedronGeometry(0.95, 2);
+    const geo = new THREE.DodecahedronGeometry(0.95, 1);
     const pos = geo.attributes.position as THREE.BufferAttribute;
+    const uvs = new Float32Array(pos.count * 2);
+
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
-      const chip =
-        1.0 +
-        0.2 * Math.sin(x * 2.6 + y * 3.1) +
-        0.15 * Math.cos(z * 2.9 - x * 2.2);
-      pos.setXYZ(i, x * chip, y * chip * 0.82, z * chip);
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+
+      // Cleavage planes & angular fracturing along tectonic fracture joints
+      const plane = Math.sign(x * 0.6 + y * 0.8 - z * 0.3);
+      const fracture = 1.0 + 0.18 * plane + 0.12 * Math.sin(x * 3.5 + z * 2.8);
+      x *= fracture;
+      y *= (fracture * 0.95);
+      z *= fracture;
+
+      pos.setXYZ(i, x, y, z);
+
+      // Triplanar-style projection for UVs to avoid texture stretching
+      uvs[i * 2] = (x + z) * 0.75;
+      uvs[i * 2 + 1] = (y + x * 0.5) * 0.75;
     }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
     return geo;
   }
