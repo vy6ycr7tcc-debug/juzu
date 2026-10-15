@@ -270,7 +270,7 @@ export class JuzuEngine {
       this.post?.applyPreset('sierraGold');
       this.save.getState().chapter = 4;
     } else if (isJL) {
-      this.lightRig.applyGrade('afternoon', this.gpu?.renderer);
+      this.lightRig.applyGrade('noon', this.gpu?.renderer);
       this.post?.applyPreset('jungleGreen');
       this.save.getState().chapter = 7;
     } else if (isPT) {
