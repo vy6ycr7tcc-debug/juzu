@@ -29,6 +29,8 @@ export class OverTheShoulderCamera {
   public yaw: number = Math.PI; // Facing North (-Z) along the valley
   public pitch: number = -0.06;
   public orbitDistance: number = 3.25;
+  public invertY: boolean = false;
+  public sensitivity: number = 1.0;
 
   private readonly smoothedPos: THREE.Vector3 = new THREE.Vector3(0.55, 3.3, 12.2);
   private readonly smoothedLook: THREE.Vector3 = new THREE.Vector3(0.45, 2.9, 6.0);
@@ -201,8 +203,9 @@ export class OverTheShoulderCamera {
       }
     }
 
-    this.yaw -= input.lookDeltaX * 0.008;
-    this.pitch = Math.max(-0.55, Math.min(0.48, this.pitch - input.lookDeltaY * 0.006));
+    const lookYSign = this.invertY ? -1 : 1;
+    this.yaw -= input.lookDeltaX * 0.008 * this.sensitivity;
+    this.pitch = Math.max(-0.55, Math.min(0.48, this.pitch - input.lookDeltaY * 0.006 * lookYSign * this.sensitivity));
 
     const targetFov =
       locoMode === 'zipline'

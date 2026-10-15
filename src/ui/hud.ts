@@ -84,6 +84,7 @@ export class HudOverlay {
 
     // Top-left objective banner (fades after 5s per §3.11)
     const obj = document.createElement('div');
+    obj.setAttribute('data-hud-element', 'true');
     obj.style.cssText = [
       'position:absolute',
       'top:60px',
@@ -101,6 +102,7 @@ export class HudOverlay {
 
     // Bottom-center contextual interaction prompt (§3.11)
     const prompt = document.createElement('div');
+    prompt.setAttribute('data-hud-element', 'true');
     prompt.style.cssText = [
       'position:absolute',
       'bottom:54px',
@@ -121,6 +123,7 @@ export class HudOverlay {
     // Bottom-left thin health bar (crimson andean band, visible when damaged)
     const healthWrap = document.createElement('div');
     healthWrap.id = 'juzu-health-wrap';
+    healthWrap.setAttribute('data-hud-element', 'true');
     healthWrap.style.cssText = [
       'position:absolute',
       'bottom:38px',
@@ -147,6 +150,7 @@ export class HudOverlay {
 
     // Bottom-left thin stamina bar (visible ONLY when draining per §3.11)
     const stamWrap = document.createElement('div');
+    stamWrap.setAttribute('data-hud-element', 'true');
     stamWrap.style.cssText = [
       'position:absolute',
       'bottom:28px',
@@ -172,6 +176,7 @@ export class HudOverlay {
 
     // Bottom-right ammo count (visible ONLY when bow is drawn per §3.11)
     const ammo = document.createElement('div');
+    ammo.setAttribute('data-hud-element', 'true');
     ammo.style.cssText = [
       'position:absolute',
       'bottom:26px',
