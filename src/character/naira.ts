@@ -30,7 +30,8 @@ export type LocomotionMode =
   | 'zipline'
   | 'aim'
   | 'vault'
-  | 'mantle';
+  | 'mantle'
+  | 'takedown';
 
 // Preallocated module-scope scratch objects — zero per-frame allocations (§5.2 #1)
 const _moveVec = new THREE.Vector3();
@@ -99,6 +100,8 @@ export class NairaController {
   private verticalVelocity: number = 0;
   private sprintDurationSec: number = 0;
   private elapsedSec: number = 0;
+  private isTakedownActive: boolean = false;
+  private takedownTimer: number = 0;
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
   private textures: THREE.Texture[] = [];
@@ -703,6 +706,53 @@ export class NairaController {
       [-0.06, 0.0, 0.0],
     ]));
     this.actions.vault = this.mixer.clipAction(new THREE.AnimationClip('vault', 0.48, vltTracks));
+
+    // Sprint B: Close-quarters stealth takedown grapple clip (lunges, sweeping arm hook, takedown slam)
+    const tkT = [0, 0.22, 0.52, 0.85];
+    const tkTracks: THREE.KeyframeTrack[] = [];
+    addT(tkTracks, composeTrack(this.spineBone, tkT, [
+      [0.08, 0.0, 0.0],
+      [0.32, 0.08, 0.05],
+      [0.45, 0.04, -0.08],
+      [0.05, 0.0, 0.0],
+    ]));
+    addT(tkTracks, composeTrack(this.rightArmBone, tkT, [
+      [0.85, 0.15, -0.35],
+      [0.45, 0.45, -0.85],
+      [0.75, 0.25, -0.65],
+      [1.15, -0.05, 0.15],
+    ]));
+    addT(tkTracks, composeTrack(this.leftArmBone, tkT, [
+      [1.15, -0.15, 0.25],
+      [0.65, -0.45, 0.65],
+      [0.85, -0.25, 0.45],
+      [1.15, 0.05, -0.15],
+    ]));
+    addT(tkTracks, composeTrack(this.leftUpLegBone, tkT, [
+      [0.25, 0.08, 0.18],
+      [0.65, 0.14, 0.22],
+      [0.48, 0.08, 0.12],
+      [0.02, 0.0, -0.02],
+    ]));
+    addT(tkTracks, composeTrack(this.rightUpLegBone, tkT, [
+      [0.18, -0.06, -0.15],
+      [0.42, -0.10, -0.18],
+      [0.28, -0.06, -0.10],
+      [-0.02, 0.0, 0.02],
+    ]));
+    addT(tkTracks, composeTrack(this.leftLegBone, tkT, [
+      [-0.35, 0.0, 0.0],
+      [-0.78, 0.0, 0.0],
+      [-0.42, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
+    ]));
+    addT(tkTracks, composeTrack(this.rightLegBone, tkT, [
+      [-0.25, 0.0, 0.0],
+      [-0.55, 0.0, 0.0],
+      [-0.30, 0.0, 0.0],
+      [-0.05, 0.0, 0.0],
+    ]));
+    this.actions.takedown = this.mixer.clipAction(new THREE.AnimationClip('takedown', 0.85, tkTracks));
   }
 
   /**
@@ -858,6 +908,13 @@ export class NairaController {
     }
   }
 
+  public triggerTakedownGrapple(): void {
+    this.isTakedownActive = true;
+    this.takedownTimer = 0.85;
+    this.speed = 0;
+    this.transitionToMode('takedown', true);
+  }
+
   public update(
     dt: number,
     input: InputState,
@@ -920,6 +977,20 @@ export class NairaController {
         audio.playSfx('footstep', 0, 'stone');
       }
 
+      this.updateBraidPhysics(dt);
+      if (this.mixer && this.activeAction) {
+        this.mixer.update(dt);
+      }
+      return;
+    }
+
+    // Handle active stealth takedown animation
+    if (this.isTakedownActive) {
+      this.takedownTimer -= dt;
+      if (this.takedownTimer <= 0) {
+        this.isTakedownActive = false;
+        this.transitionToMode('crouch', true);
+      }
       this.updateBraidPhysics(dt);
       if (this.mixer && this.activeAction) {
         this.mixer.update(dt);
@@ -1054,6 +1125,12 @@ export class NairaController {
       const onStone = this.position.z < -10.0 || (Math.abs(this.position.x) <= 3.5 && this.position.z > 6.0);
       const surface = inWater ? 'water' : onBridge ? 'wood' : onStone ? 'stone' : 'dirt';
       audio.playSfx('footstep', 0, surface);
+      if (onBridge) {
+        audio.playSfx('rope_creak', 0);
+      }
+      if (inWater) {
+        audio.playSfx('water_stroke', 0);
+      }
     }
 
     // Low-obstacle vault detection while moving at athletic speed (Milestone 3)

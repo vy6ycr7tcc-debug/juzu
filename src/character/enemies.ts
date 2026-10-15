@@ -40,6 +40,12 @@ export interface SolNegroOperative {
   mixer: THREE.AnimationMixer | null;
   actions: Record<string, THREE.AnimationAction>;
   activeActionName: string;
+  staggerTimer: number;
+  staggerImpulse: THREE.Vector3;
+  flinchPitch: number;
+  isDying: boolean;
+  dyingTimer: number;
+  takedownTimer: number;
 }
 
 export interface BulletTracer {
@@ -137,6 +143,12 @@ export class EnemyManager {
         mixer: null,
         actions: {},
         activeActionName: '',
+        staggerTimer: 0,
+        staggerImpulse: new THREE.Vector3(),
+        flinchPitch: 0,
+        isDying: false,
+        dyingTimer: 0,
+        takedownTimer: 0,
       };
       this.operatives.push(op);
 
@@ -253,11 +265,12 @@ export class EnemyManager {
   public applyHitAt(
     hitPos: THREE.Vector3,
     damage: number,
-    radius: number = 1.1
+    radius: number = 1.1,
+    hitOrigin?: THREE.Vector3
   ): SolNegroOperative | null {
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
-      if (!op.active) continue;
+      if (!op.active && !op.isDying) continue;
       const dx = hitPos.x - op.position.x;
       const dy = hitPos.y - (op.position.y + 1.0);
       const dz = hitPos.z - op.position.z;
@@ -265,9 +278,20 @@ export class EnemyManager {
         op.health = Math.max(0, op.health - damage);
         op.awareness = 1.0;
         op.state = 'combat';
+
+        // Kinetic hit reaction & stagger physics
+        op.staggerTimer = 0.45;
+        op.flinchPitch = 0.32;
+        if (hitOrigin) {
+          op.staggerImpulse.subVectors(op.position, hitOrigin).setY(0).normalize().multiplyScalar(2.6);
+        } else {
+          op.staggerImpulse.set(-Math.sin(op.yaw), 0, -Math.cos(op.yaw)).multiplyScalar(2.4);
+        }
+
         if (op.health <= 0) {
+          op.isDying = true;
+          op.dyingTimer = 1.2;
           op.active = false;
-          op.root.visible = false;
         }
         return op;
       }
@@ -281,7 +305,7 @@ export class EnemyManager {
   ): SolNegroOperative | null {
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
-      if (!op.active || op.state === 'combat') continue;
+      if (!op.active || op.state === 'combat' || op.isDying) continue;
 
       const dx = playerPos.x - op.position.x;
       const dz = playerPos.z - op.position.z;
@@ -303,13 +327,15 @@ export class EnemyManager {
     op.active = false;
     op.state = 'unaware';
     op.awareness = 0;
-    op.root.visible = false;
+    op.isDying = true;
+    op.takedownTimer = 1.2;
+    op.dyingTimer = 1.2;
   }
 
   public alertToNoise(origin: THREE.Vector3, radius: number = 32.0): void {
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
-      if (!op.active || op.state === 'combat') continue;
+      if (!op.active || op.state === 'combat' || op.isDying) continue;
 
       const dx = origin.x - op.position.x;
       const dz = origin.z - op.position.z;
@@ -332,7 +358,43 @@ export class EnemyManager {
   ): void {
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
-      if (!op.active) continue;
+      if (!op.active && !op.isDying) continue;
+
+      // Handle dying & takedown collapse
+      if (op.isDying) {
+        op.dyingTimer -= dt;
+        if (op.takedownTimer > 0) {
+          op.takedownTimer -= dt;
+          op.root.rotation.x = THREE.MathUtils.lerp(op.root.rotation.x, -Math.PI * 0.48, dt * 7.0);
+          const gy = terrain ? terrain.sampleGroundY(op.position.x, op.position.z, op.position.y) : 0;
+          op.position.y = Math.max(gy - 0.1, op.position.y - dt * 1.4);
+        } else {
+          op.position.addScaledVector(op.staggerImpulse, dt);
+          op.staggerImpulse.multiplyScalar(Math.max(0, 1.0 - dt * 5.0));
+          op.root.rotation.x = THREE.MathUtils.lerp(op.root.rotation.x, -Math.PI * 0.45, dt * 5.5);
+        }
+        op.root.position.copy(op.position);
+        if (op.dyingTimer <= 0) {
+          op.isDying = false;
+          op.root.visible = false;
+        }
+        if (op.mixer) op.mixer.update(dt);
+        continue;
+      }
+
+      // Handle hit stagger & recoil flinch
+      if (op.staggerTimer > 0) {
+        op.staggerTimer -= dt;
+        op.position.addScaledVector(op.staggerImpulse, dt);
+        op.staggerImpulse.multiplyScalar(Math.max(0, 1.0 - dt * 5.5));
+        if (terrain) {
+          op.position.y = terrain.sampleGroundY(op.position.x, op.position.z, op.position.y);
+        }
+        op.flinchPitch = Math.max(0, op.flinchPitch - dt * 0.9);
+        op.root.rotation.x = -op.flinchPitch;
+      } else {
+        op.root.rotation.x = 0;
+      }
 
       _toPlayer.subVectors(playerPosition, op.position);
       const distSq = _toPlayer.lengthSq();
@@ -463,7 +525,14 @@ export class EnemyManager {
       op.patrolT = i * 0.5;
       op.position.copy(op.patrolStart);
       op.root.position.copy(op.position);
+      op.root.rotation.set(0, op.yaw, 0);
       op.root.visible = true;
+      op.staggerTimer = 0;
+      op.staggerImpulse.set(0, 0, 0);
+      op.flinchPitch = 0;
+      op.isDying = false;
+      op.dyingTimer = 0;
+      op.takedownTimer = 0;
       if (op.muzzleFlashMesh) op.muzzleFlashMesh.visible = false;
     }
     for (let t = 0; t < this.tracers.length; t++) {
