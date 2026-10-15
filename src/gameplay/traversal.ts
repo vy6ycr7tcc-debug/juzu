@@ -155,7 +155,7 @@ export class TraversalSystem {
     ropeGeo.rotateX(Math.PI / 2);
     this.geometries.push(ropeGeo);
 
-    const ropeMesh = new THREE.Mesh(ropeGeo, materials.leather);
+    const ropeMesh = new THREE.Mesh(ropeGeo, materials.ropeBraided);
     ropeMesh.position.lerpVectors(startVec, endVec, 0.5);
     ropeMesh.lookAt(endVec);
     ropeMesh.castShadow = true;

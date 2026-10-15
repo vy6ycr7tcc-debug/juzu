@@ -30,6 +30,7 @@ export class PbrMaterialLibrary {
   public groundForestFloor!: THREE.MeshStandardMaterial;
   public highSierraSnow!: THREE.MeshStandardMaterial;
   public highSierraPuna!: THREE.MeshStandardMaterial;
+  public ropeBraided!: THREE.MeshStandardMaterial;
 
   private readonly textures: THREE.Texture[] = [];
   private readonly materials: THREE.Material[] = [];
@@ -442,6 +443,17 @@ export class PbrMaterialLibrary {
       vertexColors: true,
     });
 
+    // 16. Braided Andean Ichu Grass Rope (Q'eswachaka style) — §2.2
+    this.ropeBraided = new THREE.MeshStandardMaterial({
+      name: 'RopeBraidedIchu',
+      color: new THREE.Color(0xa08556),
+      map: canvasAlbedo,
+      normalMap: barkNormal,
+      normalScale: new THREE.Vector2(1.8, 1.8),
+      roughness: 0.92,
+      metalness: 0.0,
+    });
+
     this.materials.push(
       this.andesiteCut,
       this.fieldstoneRough,
@@ -462,7 +474,8 @@ export class PbrMaterialLibrary {
       this.goldOrnamental,
       this.groundForestFloor,
       this.highSierraSnow,
-      this.highSierraPuna
+      this.highSierraPuna,
+      this.ropeBraided
     );
   }
 

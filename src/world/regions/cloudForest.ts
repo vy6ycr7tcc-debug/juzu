@@ -59,17 +59,21 @@ export class CloudForestRegion {
   ): void {
     this.bridgeGroup.name = 'RavineHangingBridge';
 
-    // Stone anchor abutments & battered Inca pillars on South (z = +6.0) and North (z = -6.0) rims
-    const abutmentGeo = this.createChippedBlockGeometry(3.8, 3.2, 2.2);
-    const pillarGeo = this.createChippedBlockGeometry(0.68, 2.45, 0.68);
-    const capGeo = this.createChippedBlockGeometry(0.82, 0.28, 0.82);
-    this.geometries.push(abutmentGeo, pillarGeo, capGeo);
+    // Stone anchor towers & battered Inca abutments on South (z = +6.0) and North (z = -6.0) rims
+    const abutmentGeo = this.createChippedBlockGeometry(4.2, 3.4, 2.6);
+    const pillarGeo = this.createBatteredWallGeometry(0.85, 2.65, 0.85);
+    const capGeo = this.createChippedBlockGeometry(0.96, 0.28, 0.96);
+    const bolsterBeamGeo = new THREE.CylinderGeometry(0.14, 0.14, 3.6, 12);
+    bolsterBeamGeo.rotateZ(Math.PI * 0.5);
+    const ropeWrapGeo = new THREE.TorusGeometry(0.19, 0.055, 8, 16);
+    this.geometries.push(abutmentGeo, pillarGeo, capGeo, bolsterBeamGeo, ropeWrapGeo);
 
     const ends = [6.0, -6.0];
     for (let e = 0; e < ends.length; e++) {
       const ez = ends[e];
       const baseY = terrain.getTerrainHeightAt(0, ez);
 
+      // Massive stepped andesite abutment foundation
       const abutment = new THREE.Mesh(abutmentGeo, materials.andesiteCut);
       abutment.position.set(0, baseY - 1.15, ez);
       abutment.castShadow = true;
@@ -77,29 +81,44 @@ export class CloudForestRegion {
       this.group.add(abutment);
       terrain.registerWalkable(abutment);
 
-      // Left & Right trapezoidal stone rope-anchor pillars
-      const sides = [-1.42, 1.42];
+      // Left & Right battered stone anchor towers
+      const sides = [-1.52, 1.52];
       for (let s = 0; s < sides.length; s++) {
         const sx = sides[s];
         const pillar = new THREE.Mesh(pillarGeo, materials.andesiteCut);
-        pillar.position.set(sx, baseY + 1.15, ez);
+        pillar.position.set(sx, baseY + 1.25, ez);
         pillar.castShadow = true;
         pillar.receiveShadow = true;
         this.group.add(pillar);
 
         const cap = new THREE.Mesh(capGeo, materials.moss);
-        cap.position.set(sx, baseY + 2.42, ez);
+        cap.position.set(sx, baseY + 2.58, ez);
         cap.castShadow = true;
         cap.receiveShadow = true;
         this.group.add(cap);
+      }
 
-        // Stone anchor pillar capped with mountain moss
+      // Heavy transverse timber bolster beam (Tirante mayor) bridging the two stone towers
+      const bolster = new THREE.Mesh(bolsterBeamGeo, materials.woodAged);
+      bolster.position.set(0, baseY + 2.38, ez);
+      bolster.castShadow = true;
+      bolster.receiveShadow = true;
+      this.group.add(bolster);
+
+      // Braided rope coil tensioning wraps around the timber beam where cables anchor
+      const wrapXs = [-1.28, -0.85, 0.85, 1.28];
+      for (let w = 0; w < wrapXs.length; w++) {
+        const wrap = new THREE.Mesh(ropeWrapGeo, materials.ropeBraided);
+        wrap.position.set(wrapXs[w], baseY + 2.38, ez);
+        wrap.rotation.y = Math.PI * 0.5;
+        wrap.castShadow = true;
+        this.group.add(wrap);
       }
     }
 
-    // 26 Weathered Wooden Planks (InstancedMesh per §5.2) with catenary sag
-    const plankCount = 26;
-    const plankGeo = this.createChippedBlockGeometry(2.55, 0.11, 0.36);
+    // 28 Weathered Wooden Planks with catenary sag & organic tilt
+    const plankCount = 28;
+    const plankGeo = this.createChippedBlockGeometry(2.55, 0.11, 0.38);
     this.geometries.push(plankGeo);
     const plankInstanced = new THREE.InstancedMesh(plankGeo, materials.woodAged, plankCount);
     plankInstanced.castShadow = true;
@@ -109,13 +128,12 @@ export class CloudForestRegion {
     const color = new THREE.Color();
     for (let i = 0; i < plankCount; i++) {
       const t = i / (plankCount - 1);
-      const z = 5.5 - t * 11.0;
+      const z = 5.6 - t * 11.2;
       const normZ = z / 5.85;
-      const sag = (1.0 - normZ * normZ) * 0.28;
+      const sag = (1.0 - normZ * normZ) * 0.32;
       const y = 1.66 - sag;
-      // Subtle per-plank organic twist & weathering
-      const jitterYaw = Math.sin(i * 2.7) * 0.025;
-      const jitterRoll = Math.cos(i * 3.1) * 0.015;
+      const jitterYaw = Math.sin(i * 2.7) * 0.022;
+      const jitterRoll = Math.cos(i * 3.1) * 0.018;
 
       dummy.position.set(0, y, z);
       dummy.rotation.set(0, jitterYaw, jitterRoll);
@@ -130,6 +148,21 @@ export class CloudForestRegion {
     if (plankInstanced.instanceColor) plankInstanced.instanceColor.needsUpdate = true;
     this.bridgeGroup.add(plankInstanced);
 
+    // Transverse timber binding cleats lashed across the deck every 5 planks
+    const cleatGeo = this.createChippedBlockGeometry(2.65, 0.08, 0.16);
+    this.geometries.push(cleatGeo);
+    for (let c = 2; c < plankCount; c += 5) {
+      const t = c / (plankCount - 1);
+      const z = 5.6 - t * 11.2;
+      const normZ = z / 5.85;
+      const sag = (1.0 - normZ * normZ) * 0.32;
+      const y = 1.66 - sag + 0.08;
+      const cleat = new THREE.Mesh(cleatGeo, materials.woodAged);
+      cleat.position.set(0, y, z);
+      cleat.castShadow = true;
+      this.bridgeGroup.add(cleat);
+    }
+
     // Walkable bridge collision strip for downward grounding raycast
     const bridgeDeckColliderGeo = new THREE.BoxGeometry(2.6, 0.14, 11.6);
     this.geometries.push(bridgeDeckColliderGeo);
@@ -139,45 +172,114 @@ export class CloudForestRegion {
     this.bridgeGroup.add(bridgeColliderMesh);
     terrain.registerWalkable(bridgeColliderMesh);
 
-    // Braided suspension handrail cables, foot cables, and vertical dropper ropes
-    const cableSegs = 20;
-    const ropeSides = [-1.28, 1.28];
-    const segGeo = new THREE.CylinderGeometry(0.035, 0.035, 1.0, 6);
-    segGeo.rotateX(Math.PI / 2);
-    this.geometries.push(segGeo);
+    // Braided suspension cable networks (authentic Q'eswachaka style)
+    const cableSegs = 24;
+    const handCableGeo = new THREE.CylinderGeometry(0.032, 0.032, 1.0, 7);
+    handCableGeo.rotateX(Math.PI * 0.5);
+    const mainCableGeo = new THREE.CylinderGeometry(0.048, 0.048, 1.0, 7);
+    mainCableGeo.rotateX(Math.PI * 0.5);
+    const midCableGeo = new THREE.CylinderGeometry(0.020, 0.020, 1.0, 6);
+    midCableGeo.rotateX(Math.PI * 0.5);
+    const latticeGeo = new THREE.CylinderGeometry(0.010, 0.010, 1.0, 5);
+    latticeGeo.rotateX(Math.PI * 0.5);
+    this.geometries.push(handCableGeo, mainCableGeo, midCableGeo, latticeGeo);
 
+    // Under-deck main load cables (Duros) supporting the planks
+    const underDeckSides = [-0.88, 0.88];
+    for (let u = 0; u < underDeckSides.length; u++) {
+      const ux = underDeckSides[u];
+      for (let i = 0; i < cableSegs; i++) {
+        const t0 = i / cableSegs;
+        const t1 = (i + 1) / cableSegs;
+        const z0 = 6.0 - t0 * 12.0;
+        const z1 = 6.0 - t1 * 12.0;
+        const n0 = z0 / 6.0;
+        const n1 = z1 / 6.0;
+        const y0 = 1.58 - (1.0 - n0 * n0) * 0.32;
+        const y1 = 1.58 - (1.0 - n1 * n1) * 0.32;
+
+        const mainSeg = new THREE.Mesh(mainCableGeo, materials.ropeBraided);
+        mainSeg.position.set(ux, (y0 + y1) * 0.5, (z0 + z1) * 0.5);
+        const dz = z1 - z0;
+        const dy = y1 - y0;
+        mainSeg.scale.set(1, 1, Math.hypot(dy, dz));
+        mainSeg.rotation.x = Math.atan2(dy, -dz);
+        mainSeg.castShadow = true;
+        this.bridgeGroup.add(mainSeg);
+      }
+    }
+
+    // Handrail cables, mid stabilizer cables, and woven diagonal rope lattice (Redes de Baranda)
+    const ropeSides = [-1.28, 1.28];
     for (let s = 0; s < ropeSides.length; s++) {
       const rx = ropeSides[s];
       for (let i = 0; i < cableSegs; i++) {
         const t0 = i / cableSegs;
         const t1 = (i + 1) / cableSegs;
-        const z0 = 5.9 - t0 * 11.8;
-        const z1 = 5.9 - t1 * 11.8;
-        const n0 = z0 / 5.9;
-        const n1 = z1 / 5.9;
-        const y0 = 2.95 - (1.0 - n0 * n0) * 0.58;
-        const y1 = 2.95 - (1.0 - n1 * n1) * 0.58;
+        const z0 = 6.0 - t0 * 12.0;
+        const z1 = 6.0 - t1 * 12.0;
+        const n0 = z0 / 6.0;
+        const n1 = z1 / 6.0;
+        const handY0 = 2.85 - (1.0 - n0 * n0) * 0.55;
+        const handY1 = 2.85 - (1.0 - n1 * n1) * 0.55;
+        const midY0 = 2.15 - (1.0 - n0 * n0) * 0.42;
+        const midY1 = 2.15 - (1.0 - n1 * n1) * 0.42;
+        const deckY0 = 1.62 - (1.0 - n0 * n0) * 0.32;
+        const deckY1 = 1.62 - (1.0 - n1 * n1) * 0.32;
 
-        const handCable = new THREE.Mesh(segGeo, materials.leather);
-        handCable.position.set(rx, (y0 + y1) * 0.5, (z0 + z1) * 0.5);
+        // Top handrail cable
+        const handCable = new THREE.Mesh(handCableGeo, materials.ropeBraided);
+        handCable.position.set(rx, (handY0 + handY1) * 0.5, (z0 + z1) * 0.5);
         const dz = z1 - z0;
-        const dy = y1 - y0;
-        const len = Math.hypot(dy, dz);
-        handCable.scale.set(1, 1, len);
-        handCable.rotation.x = Math.atan2(dy, -dz);
+        const handDy = handY1 - handY0;
+        handCable.scale.set(1, 1, Math.hypot(handDy, dz));
+        handCable.rotation.x = Math.atan2(handDy, -dz);
         handCable.castShadow = true;
         this.bridgeGroup.add(handCable);
 
-        // Vertical rope hanger every 2 segments
-        if (i % 2 === 0 && i > 0) {
-          const deckY = 1.66 - (1.0 - n0 * n0) * 0.28;
-          const hangerH = y0 - deckY;
-          const hangerGeo = new THREE.CylinderGeometry(0.018, 0.018, hangerH, 5);
-          this.geometries.push(hangerGeo);
-          const hanger = new THREE.Mesh(hangerGeo, materials.leather);
-          hanger.position.set(rx, deckY + hangerH * 0.5, z0);
-          this.bridgeGroup.add(hanger);
-        }
+        // Mid-height stabilizer cable
+        const midCable = new THREE.Mesh(midCableGeo, materials.ropeBraided);
+        midCable.position.set(rx * 0.95, (midY0 + midY1) * 0.5, (z0 + z1) * 0.5);
+        const midDy = midY1 - midY0;
+        midCable.scale.set(1, 1, Math.hypot(midDy, dz));
+        midCable.rotation.x = Math.atan2(midDy, -dz);
+        midCable.castShadow = true;
+        this.bridgeGroup.add(midCable);
+
+        // Diagonal woven rope lattice (Redes de Baranda)
+        const lat1 = new THREE.Mesh(latticeGeo, materials.ropeBraided);
+        const p1x = rx;
+        const p1y = handY0;
+        const p1z = z0;
+        const p2x = rx * 0.88;
+        const p2y = deckY1;
+        const p2z = z1;
+        lat1.position.set((p1x + p2x) * 0.5, (p1y + p2y) * 0.5, (p1z + p2z) * 0.5);
+        const l1dx = p2x - p1x;
+        const l1dy = p2y - p1y;
+        const l1dz = p2z - p1z;
+        lat1.scale.set(1, 1, Math.hypot(l1dx, l1dy, l1dz));
+        lat1.rotation.x = Math.atan2(l1dy, -l1dz);
+        lat1.rotation.y = Math.atan2(l1dx, Math.hypot(l1dy, l1dz));
+        lat1.castShadow = true;
+        this.bridgeGroup.add(lat1);
+
+        const lat2 = new THREE.Mesh(latticeGeo, materials.ropeBraided);
+        const p3x = rx * 0.88;
+        const p3y = deckY0;
+        const p3z = z0;
+        const p4x = rx;
+        const p4y = handY1;
+        const p4z = z1;
+        lat2.position.set((p3x + p4x) * 0.5, (p3y + p4y) * 0.5, (p3z + p4z) * 0.5);
+        const l2dx = p4x - p3x;
+        const l2dy = p4y - p3y;
+        const l2dz = p4z - p3z;
+        lat2.scale.set(1, 1, Math.hypot(l2dx, l2dy, l2dz));
+        lat2.rotation.x = Math.atan2(l2dy, -l2dz);
+        lat2.rotation.y = Math.atan2(l2dx, Math.hypot(l2dy, l2dz));
+        lat2.castShadow = true;
+        this.bridgeGroup.add(lat2);
       }
     }
 
@@ -250,7 +352,9 @@ export class CloudForestRegion {
     const backWallGeo = this.createBatteredWallGeometry(3.6, 2.3, 0.55);
     const sideWallGeo = this.createBatteredWallGeometry(0.55, 2.1, 2.6);
     const beamGeo = this.createChippedBlockGeometry(4.0, 0.18, 0.22);
-    this.geometries.push(backWallGeo, sideWallGeo, beamGeo);
+    const thatchRoofGeo = this.createChippedBlockGeometry(4.2, 0.14, 3.2);
+    const bannerGeo = new THREE.PlaneGeometry(0.85, 1.45);
+    this.geometries.push(backWallGeo, sideWallGeo, beamGeo, thatchRoofGeo, bannerGeo);
 
     const backWall = new THREE.Mesh(backWallGeo, materials.andesiteCut);
     backWall.position.set(shX, shY + 0.95, shZ - 1.1);
@@ -270,7 +374,7 @@ export class CloudForestRegion {
     rightWall.receiveShadow = true;
     this.group.add(rightWall);
 
-    // Timber rafters & mossy thatch roof slope
+    // Timber rafters & authentic thatched ichu roof
     for (let b = 0; b < 5; b++) {
       const beam = new THREE.Mesh(beamGeo, materials.woodAged);
       beam.position.set(shX, shY + 2.05 - b * 0.08, shZ - 0.95 + b * 0.52);
@@ -278,6 +382,20 @@ export class CloudForestRegion {
       beam.castShadow = true;
       this.group.add(beam);
     }
+
+    const thatchRoof = new THREE.Mesh(thatchRoofGeo, materials.ropeBraided);
+    thatchRoof.position.set(shX, shY + 2.15, shZ);
+    thatchRoof.rotation.x = 0.14;
+    thatchRoof.castShadow = true;
+    thatchRoof.receiveShadow = true;
+    this.group.add(thatchRoof);
+
+    // Quechua ceremonial textile banner draped inside shelter
+    const banner = new THREE.Mesh(bannerGeo, materials.clothQuechuaRed);
+    banner.position.set(shX - 0.65, shY + 1.4, shZ - 0.8);
+    banner.rotation.y = 0.08;
+    banner.castShadow = true;
+    this.group.add(banner);
 
     // Stone offering niche & hanging quipu record inside the shelter
     const nicheGeo = this.createChippedBlockGeometry(0.75, 0.85, 0.45);
@@ -303,19 +421,45 @@ export class CloudForestRegion {
       radius: 2.6,
     });
 
-    // 2. Carved Inca Stele & Flowing Water Channel at (x = -2.6, z = -16.2)
+    // 2. Carved Inca Stele & Ceremonial Paccha Water Fountain at (x = -2.6, z = -16.2)
     const stX = -2.6;
     const stZ = -16.2;
     const stY = terrain.getTerrainHeightAt(stX, stZ);
 
-    const plinthGeo = this.createChippedBlockGeometry(1.85, 0.45, 1.85);
+    const plinthGeo = this.createChippedBlockGeometry(2.1, 0.45, 2.1);
     const steleGeo = this.createBatteredWallGeometry(0.95, 2.35, 0.48);
-    const sunDiscGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16);
+    const sunDiscGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16);
     sunDiscGeo.rotateX(Math.PI / 2);
+
+    // Monolithic carved andesite basin (Paccha)
+    const basinGeo = this.createChippedBlockGeometry(1.4, 0.65, 1.2);
+    const basinWaterGeo = new THREE.PlaneGeometry(1.15, 0.95);
+    basinWaterGeo.rotateX(-Math.PI * 0.5);
+    const spoutGeo = new THREE.CylinderGeometry(0.065, 0.08, 0.35, 8);
+    spoutGeo.rotateX(Math.PI * 0.5);
     const channelGeo = this.createChippedBlockGeometry(4.2, 0.35, 0.65);
     const channelWaterGeo = new THREE.PlaneGeometry(4.0, 0.36);
-    channelWaterGeo.rotateX(-Math.PI / 2);
-    this.geometries.push(plinthGeo, steleGeo, sunDiscGeo, channelGeo, channelWaterGeo);
+    channelWaterGeo.rotateX(-Math.PI * 0.5);
+
+    // Spoked bronze sluice wheel
+    const wheelRimGeo = new THREE.TorusGeometry(0.28, 0.035, 8, 18);
+    const wheelHubGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.12, 12);
+    wheelHubGeo.rotateX(Math.PI * 0.5);
+    const spokeGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.52, 6);
+
+    this.geometries.push(
+      plinthGeo,
+      steleGeo,
+      sunDiscGeo,
+      basinGeo,
+      basinWaterGeo,
+      spoutGeo,
+      channelGeo,
+      channelWaterGeo,
+      wheelRimGeo,
+      wheelHubGeo,
+      spokeGeo
+    );
 
     const plinth = new THREE.Mesh(plinthGeo, materials.andesiteCut);
     plinth.position.set(stX, stY + 0.15, stZ);
@@ -329,20 +473,56 @@ export class CloudForestRegion {
     stele.receiveShadow = true;
     this.group.add(stele);
 
-    // Carved ornamental gold/bronze Chakana solar inset on the stele (§2.2)
+    // Carved ornamental gold Chakana solar medallion on the stele
     const sunDisc = new THREE.Mesh(sunDiscGeo, materials.goldOrnamental);
     sunDisc.position.set(stX, stY + 1.72, stZ + 0.23);
     this.group.add(sunDisc);
 
-    // Stone water channel that still runs (§1.2 "a water channel that still runs")
+    // Carved stone fountain basin
+    const basin = new THREE.Mesh(basinGeo, materials.andesiteCut);
+    basin.position.set(stX + 0.95, stY + 0.28, stZ + 0.65);
+    basin.castShadow = true;
+    basin.receiveShadow = true;
+    this.group.add(basin);
+
+    const basinWater = new THREE.Mesh(basinWaterGeo, materials.water);
+    basinWater.position.set(stX + 0.95, stY + 0.55, stZ + 0.65);
+    this.group.add(basinWater);
+
+    // Stone water spout protruding from stele base pouring into basin
+    const spout = new THREE.Mesh(spoutGeo, materials.andesiteCut);
+    spout.position.set(stX + 0.35, stY + 0.72, stZ + 0.38);
+    spout.castShadow = true;
+    this.group.add(spout);
+
+    // Bronze spoked sluice wheel assembly
+    const wheelGroup = new THREE.Group();
+    wheelGroup.position.set(stX - 0.35, stY + 1.05, stZ + 0.26);
+    const wheelRim = new THREE.Mesh(wheelRimGeo, materials.metalBronze);
+    wheelRim.castShadow = true;
+    wheelGroup.add(wheelRim);
+
+    const wheelHub = new THREE.Mesh(wheelHubGeo, materials.metalBronze);
+    wheelHub.castShadow = true;
+    wheelGroup.add(wheelHub);
+
+    for (let sp = 0; sp < 3; sp++) {
+      const spoke = new THREE.Mesh(spokeGeo, materials.metalBronze);
+      spoke.rotation.z = (sp / 3) * Math.PI;
+      spoke.castShadow = true;
+      wheelGroup.add(spoke);
+    }
+    this.group.add(wheelGroup);
+
+    // Stone water channel extending outward
     const channel = new THREE.Mesh(channelGeo, materials.andesiteCut);
-    channel.position.set(stX + 1.2, stY + 0.1, stZ + 1.15);
+    channel.position.set(stX + 2.8, stY + 0.1, stZ + 1.15);
     channel.castShadow = true;
     channel.receiveShadow = true;
     this.group.add(channel);
 
     const channelWater = new THREE.Mesh(channelWaterGeo, materials.water);
-    channelWater.position.set(stX + 1.2, stY + 0.29, stZ + 1.15);
+    channelWater.position.set(stX + 2.8, stY + 0.29, stZ + 1.15);
     this.group.add(channelWater);
 
     this.interactables.push({
@@ -416,14 +596,8 @@ export class CloudForestRegion {
     perch.receiveShadow = true;
     this.group.add(perch);
 
-    // Circling Andean Condor high overhead
-    const wingGeo = new THREE.BoxGeometry(2.6, 0.06, 0.48);
-    const bodyGeo = new THREE.ConeGeometry(0.22, 0.95, 6);
-    bodyGeo.rotateX(Math.PI / 2);
-    this.geometries.push(wingGeo, bodyGeo);
-    const wings = new THREE.Mesh(wingGeo, materials.hair);
-    const body = new THREE.Mesh(bodyGeo, materials.hair);
-    this.condorMesh.add(wings, body);
+    // Circling Majestic Andean Condor (Vultur gryphus) high overhead
+    this.condorMesh = this.createCondorMesh(materials);
     this.condorMesh.position.set(0, 26, -18);
     this.group.add(this.condorMesh);
 
@@ -434,6 +608,86 @@ export class CloudForestRegion {
       position: new THREE.Vector3(vpX, vpY + 1.0, vpZ),
       radius: 3.5,
     });
+  }
+
+  private createCondorMesh(materials: PbrMaterialLibrary): THREE.Group {
+    const group = new THREE.Group();
+
+    // 1. Sleek Torso / Fuselage
+    const torsoGeo = new THREE.ConeGeometry(0.24, 1.35, 10);
+    torsoGeo.rotateX(Math.PI * 0.5);
+    const torso = new THREE.Mesh(torsoGeo, materials.hair);
+    group.add(torso);
+
+    // 2. White Feathered Neck Collar (Iconic Andean Condor ruff)
+    const collarGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.16, 12);
+    collarGeo.rotateX(Math.PI * 0.5);
+    const collar = new THREE.Mesh(collarGeo, materials.highSierraSnow);
+    collar.position.set(0, 0.04, -0.62);
+    group.add(collar);
+
+    // 3. Head & Hooked Predatory Beak
+    const headGeo = new THREE.SphereGeometry(0.16, 12, 10);
+    const head = new THREE.Mesh(headGeo, materials.hair);
+    head.position.set(0, 0.08, -0.82);
+    group.add(head);
+
+    const beakGeo = new THREE.ConeGeometry(0.07, 0.24, 6);
+    beakGeo.rotateX(-Math.PI * 0.45);
+    const beak = new THREE.Mesh(beakGeo, materials.woodAged);
+    beak.position.set(0, 0.02, -0.98);
+    group.add(beak);
+
+    // 4. Broad Tail Fan
+    const tailGeo = new THREE.BoxGeometry(0.65, 0.04, 0.72);
+    const tail = new THREE.Mesh(tailGeo, materials.hair);
+    tail.position.set(0, -0.02, 0.85);
+    tail.rotation.x = -0.08;
+    group.add(tail);
+
+    // 5. Majestic Soaring Wings (Left & Right) with white dorsal patches & slotted primaries
+    for (let side = -1; side <= 1; side += 2) {
+      const wingGroup = new THREE.Group();
+      wingGroup.position.set(side * 0.18, 0.06, -0.15);
+
+      // Main inner wing
+      const mainWingGeo = new THREE.BoxGeometry(1.65, 0.04, 0.58);
+      const mainWing = new THREE.Mesh(mainWingGeo, materials.hair);
+      mainWing.position.set(side * 0.82, 0, 0);
+      wingGroup.add(mainWing);
+
+      // Distinctive white dorsal wing coverts patch (upper wing)
+      const whitePatchGeo = new THREE.BoxGeometry(1.15, 0.02, 0.28);
+      const whitePatch = new THREE.Mesh(whitePatchGeo, materials.highSierraSnow);
+      whitePatch.position.set(side * 0.65, 0.03, -0.08);
+      wingGroup.add(whitePatch);
+
+      // Outer swept wing
+      const outerWingGeo = new THREE.BoxGeometry(1.1, 0.035, 0.46);
+      const outerWing = new THREE.Mesh(outerWingGeo, materials.hair);
+      outerWing.position.set(side * 1.95, 0.04, 0.06);
+      outerWing.rotation.z = side * 0.06;
+      wingGroup.add(outerWing);
+
+      // 5 Slotted primary flight feather "fingers" at wingtip
+      for (let p = 0; p < 5; p++) {
+        const primGeo = new THREE.BoxGeometry(0.42, 0.02, 0.08);
+        const prim = new THREE.Mesh(primGeo, materials.hair);
+        const pz = -0.16 + p * 0.09;
+        const px = side * (2.45 + p * 0.04);
+        prim.position.set(px, 0.08 + p * 0.015, pz);
+        prim.rotation.y = side * (-0.12 + p * 0.08);
+        prim.rotation.z = side * (0.12 + p * 0.03);
+        wingGroup.add(prim);
+        this.geometries.push(primGeo);
+      }
+
+      this.geometries.push(mainWingGeo, whitePatchGeo, outerWingGeo);
+      group.add(wingGroup);
+    }
+
+    this.geometries.push(torsoGeo, collarGeo, headGeo, beakGeo, tailGeo);
+    return group;
   }
 
   private createChippedBlockGeometry(w: number, h: number, d: number): THREE.BufferGeometry {
