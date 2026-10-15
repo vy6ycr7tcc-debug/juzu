@@ -306,14 +306,19 @@ export class HighSierraRegion {
     materials: PbrMaterialLibrary,
     hAt: (x: number, z: number) => number
   ): void {
-    const mirX = 1.65;
-    const mirZ = 6.2;
+    const mirX = 3.2;
+    const mirZ = 4.8;
     const mirY = hAt(mirX, mirZ);
 
-    // Sculpted stone pedestal with stepped Chakana profile
-    const pedBaseGeo = this.createWeatheredBlock(0.92, 0.45, 0.92);
-    const pedColGeo = this.createWeatheredBlock(0.68, 0.78, 0.68);
-    const pedCapGeo = this.createWeatheredBlock(0.82, 0.24, 0.82);
+    // Sculpted monolithic andesite pedestal with authentic Inca pillow masonry and battered profile
+    const pedBaseGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(0.88, 0.24, 16);
+    const pedColGeo = IncaMasonrySystem.createIncaPillarGeometry(0.72, 1.05, 0.72, {
+      courses: 3,
+      pillowBulge: 0.045,
+      jointDepth: 0.022,
+      batter: 0.07,
+    });
+    const pedCapGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(0.62, 0.16, 16);
     const forkGeo = new THREE.TorusGeometry(0.56, 0.055, 14, 28, Math.PI);
     forkGeo.rotateZ(Math.PI);
     this.geometries.push(pedBaseGeo, pedColGeo, pedCapGeo, forkGeo);
@@ -322,19 +327,19 @@ export class HighSierraRegion {
     pedGroup.position.set(mirX, mirY, mirZ);
 
     const pb = new THREE.Mesh(pedBaseGeo, materials.andesiteCut);
-    pb.position.set(0, 0.22, 0);
+    pb.position.set(0, 0.12, 0);
     pb.castShadow = true;
     pb.receiveShadow = true;
     pedGroup.add(pb);
 
     const pc = new THREE.Mesh(pedColGeo, materials.andesiteCut);
-    pc.position.set(0, 0.82, 0);
+    pc.position.set(0, 0.72, 0);
     pc.castShadow = true;
     pc.receiveShadow = true;
     pedGroup.add(pc);
 
     const pcap = new THREE.Mesh(pedCapGeo, materials.andesiteCut);
-    pcap.position.set(0, 1.32, 0);
+    pcap.position.set(0, 1.30, 0);
     pcap.castShadow = true;
     pcap.receiveShadow = true;
     pedGroup.add(pcap);
@@ -412,39 +417,135 @@ export class HighSierraRegion {
     materials: PbrMaterialLibrary,
     hAt: (x: number, z: number) => number
   ): void {
-    const segLen = 4.2;
-    const wallGeo = this.createWeatheredBlock(0.95, 2.35, segLen);
-    const snowCapGeo = new THREE.BoxGeometry(1.15, 0.22, segLen);
-    this.geometries.push(wallGeo, snowCapGeo);
-
     const snowMat = new THREE.MeshStandardMaterial({
       name: 'AndenesSnowLedge',
-      color: new THREE.Color(5.2, 5.4, 5.8),
+      color: new THREE.Color(2.2, 2.3, 2.5),
       map: materials.highSierraSnow.map,
-      roughness: 0.55,
+      roughness: 0.65,
       metalness: 0.0,
     });
     this.materials.push(snowMat);
 
+    // 4 sweeping continuous curved andenes agricultural terraces flanking East and West slopes
     for (let side = -1; side <= 1; side += 2) {
       for (let tier = 0; tier < 4; tier++) {
-        const wallX = side * (10.2 + tier * 3.4);
-        for (let s = 0; s < 8; s++) {
-          const zSeg = 8.0 - s * 4.0;
-          const baseY = hAt(wallX, zSeg);
+        const segs = 32;
+        const zStart = 8.8;
+        const zEnd = -15.5;
 
-          const wall = new THREE.Mesh(wallGeo, materials.andesiteCut);
-          wall.position.set(wallX, baseY + 0.15, zSeg);
-          wall.castShadow = true;
-          wall.receiveShadow = true;
-          this.group.add(wall);
+        const posList: number[] = [];
+        const normList: number[] = [];
+        const uvList: number[] = [];
+        const idxList: number[] = [];
+
+        const snowPosList: number[] = [];
+        const snowNormList: number[] = [];
+        const snowUvList: number[] = [];
+        const snowIdxList: number[] = [];
+
+        const wallThick = 0.85;
+        const batter = 0.12;
+
+        for (let i = 0; i <= segs; i++) {
+          const t = i / segs;
+          const z = zStart + t * (zEnd - zStart);
+          const contour = Math.sin(z * 0.18) * 1.4 + Math.cos(z * 0.38) * 0.6;
+          const frontX = side * (9.2 + tier * 3.2 + contour);
+          const backX = frontX + side * wallThick;
+
+          // Upper ground terrace level and lower ground terrace level
+          const lowerGroundY = hAt(frontX - side * 1.6, z);
+          const upperGroundY = hAt(frontX, z);
+
+          // Retaining wall face: rises from lower ground up to upper terrace lip
+          const bottomY = lowerGroundY - 0.35;
+          const topY = Math.max(upperGroundY + 0.18, lowerGroundY + 1.25);
+          const topFrontX = frontX + side * ((topY - bottomY) * batter);
+          const topBackX = backX + side * ((topY - bottomY) * batter);
+
+          const bulge = Math.sin(t * Math.PI * 14) * 0.028;
+
+          posList.push(
+            frontX, bottomY, z,
+            topFrontX + side * bulge, topY, z,
+            topBackX, topY, z,
+            backX, bottomY, z
+          );
+
+          const fnx = -side * Math.cos(batter);
+          const fny = Math.sin(batter);
+          normList.push(
+            fnx, fny, 0,
+            fnx, fny, 0,
+            0, 1, 0,
+            0, 1, 0
+          );
+
+          uvList.push(
+            t * 10.0, 0.0,
+            t * 10.0, 2.5,
+            t * 10.0, 3.0,
+            t * 10.0, 0.0
+          );
 
           if (tier >= 2) {
-            const cap = new THREE.Mesh(snowCapGeo, snowMat);
-            cap.position.set(wallX + side * 0.2, baseY + 1.32, zSeg);
-            cap.receiveShadow = true;
-            this.group.add(cap);
+            snowPosList.push(
+              topFrontX + side * bulge - side * 0.06, topY + 0.02, z,
+              topBackX + side * 0.06, topY + 0.10 + Math.sin(t * 8) * 0.03, z
+            );
+            snowNormList.push(0, 1, 0, 0, 1, 0);
+            snowUvList.push(t * 5.0, 0, t * 5.0, 1);
           }
+        }
+
+        for (let i = 0; i < segs; i++) {
+          const v0 = i * 4;
+          const v1 = (i + 1) * 4;
+          // Correct counter-clockwise winding facing inwards into valley
+          if (side === 1) {
+            idxList.push(v0, v0 + 1, v1, v1, v0 + 1, v1 + 1);
+            idxList.push(v0 + 1, v0 + 2, v1 + 1, v1 + 1, v0 + 2, v1 + 2);
+          } else {
+            idxList.push(v0, v1, v0 + 1, v1, v1 + 1, v0 + 1);
+            idxList.push(v0 + 1, v1 + 1, v0 + 2, v1 + 1, v1 + 2, v0 + 2);
+          }
+
+          if (tier >= 2) {
+            const sv0 = i * 2;
+            const sv1 = (i + 1) * 2;
+            if (side === 1) {
+              snowIdxList.push(sv0, sv0 + 1, sv1, sv1, sv0 + 1, sv1 + 1);
+            } else {
+              snowIdxList.push(sv0, sv1, sv0 + 1, sv1, sv1 + 1, sv0 + 1);
+            }
+          }
+        }
+
+        const wallGeo = new THREE.BufferGeometry();
+        wallGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posList), 3));
+        wallGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normList), 3));
+        wallGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvList), 2));
+        wallGeo.setIndex(idxList);
+        wallGeo.computeVertexNormals();
+        this.geometries.push(wallGeo);
+
+        const wallMesh = new THREE.Mesh(wallGeo, materials.andesiteCut);
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+        this.group.add(wallMesh);
+
+        if (tier >= 2) {
+          const snowGeo = new THREE.BufferGeometry();
+          snowGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(snowPosList), 3));
+          snowGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(snowNormList), 3));
+          snowGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(snowUvList), 2));
+          snowGeo.setIndex(snowIdxList);
+          snowGeo.computeVertexNormals();
+          this.geometries.push(snowGeo);
+
+          const snowMesh = new THREE.Mesh(snowGeo, snowMat);
+          snowMesh.receiveShadow = true;
+          this.group.add(snowMesh);
         }
       }
     }
@@ -463,15 +564,28 @@ export class HighSierraRegion {
     materials: PbrMaterialLibrary,
     hAt: (x: number, z: number) => number
   ): void {
-    // Combed golden-amber ichu straw thatch material using fine furrowed bark normal map
+    const thatchAlbedo = materials.highSierraPuna.map ? materials.highSierraPuna.map.clone() : null;
+    if (thatchAlbedo) {
+      thatchAlbedo.wrapS = THREE.RepeatWrapping;
+      thatchAlbedo.wrapT = THREE.RepeatWrapping;
+      thatchAlbedo.repeat.set(1.5, 2.0);
+    }
+    const thatchNormal = materials.woodBark.normalMap ? materials.woodBark.normalMap.clone() : null;
+    if (thatchNormal) {
+      thatchNormal.wrapS = THREE.RepeatWrapping;
+      thatchNormal.wrapT = THREE.RepeatWrapping;
+      thatchNormal.repeat.set(3.0, 8.0);
+    }
+
     const thatchMat = new THREE.MeshStandardMaterial({
       name: 'AndeanIchuThatchCombed',
-      color: new THREE.Color(0x7e5c30), // rich weathered Andean golden-bronze ichu straw
-      map: materials.ropeBraided.map,
-      normalMap: materials.woodBark.normalMap,
-      normalScale: new THREE.Vector2(0.85, 1.45),
-      roughness: 0.94,
+      color: new THREE.Color(0xffffff), // driven by rich vertex color gradient and maps
+      map: thatchAlbedo,
+      normalMap: thatchNormal,
+      normalScale: new THREE.Vector2(1.5, 3.5),
+      roughness: 0.95,
       metalness: 0.0,
+      vertexColors: true,
       side: THREE.DoubleSide,
     });
     this.materials.push(thatchMat);
@@ -486,8 +600,8 @@ export class HighSierraRegion {
       { x: 7.5, z: -12.4, w: 4.4, d: 3.4, h: 2.85, rotY: -0.42 },
     ];
 
-    const gableH = 1.35;
-    const eavesOverhang = 0.32;
+    const gableH = 1.85;
+    const eavesOverhang = 0.42;
 
     for (let i = 0; i < houses.length; i++) {
       const hs = houses[i];
@@ -509,6 +623,7 @@ export class HighSierraRegion {
       const wallGeo = this.createBatteredHouseWallsGeometry(hs.w, hs.h, hs.d);
       this.geometries.push(wallGeo);
       const walls = new THREE.Mesh(wallGeo, materials.andesiteCut);
+      walls.position.set(0, hs.h * 0.5, 0);
       walls.castShadow = true;
       walls.receiveShadow = true;
       houseGrp.add(walls);
@@ -585,6 +700,25 @@ export class HighSierraRegion {
       purlinBack.position.set(0, hs.h + gableH * 0.48, -hs.d * 0.26);
       purlinBack.castShadow = true;
       houseGrp.add(purlinBack);
+
+      // Protruding round timber rafter tails jutting out under the thatch eaves
+      const rafterTailGeo = new THREE.CylinderGeometry(0.045, 0.048, 0.55, 6);
+      rafterTailGeo.rotateX(Math.PI * 0.5);
+      this.geometries.push(rafterTailGeo);
+      for (let r = 0; r < 7; r++) {
+        const rx = -hs.w * 0.45 + (r / 6) * hs.w * 0.9;
+        const rafF = new THREE.Mesh(rafterTailGeo, materials.woodAged);
+        rafF.position.set(rx, hs.h + 0.06, hs.d * 0.5 + eavesOverhang * 0.55);
+        rafF.rotation.x = -0.35;
+        rafF.castShadow = true;
+        houseGrp.add(rafF);
+
+        const rafB = new THREE.Mesh(rafterTailGeo, materials.woodAged);
+        rafB.position.set(rx, hs.h + 0.06, -hs.d * 0.5 - eavesOverhang * 0.55);
+        rafB.rotation.x = 0.35;
+        rafB.castShadow = true;
+        houseGrp.add(rafB);
+      }
 
       // 6. Sculpted High-Altitude Combed Ichu Thatch Roof (true gabled form)
       const roofGeo = this.createAndeanGableRoofGeometry(hs.w, hs.d, gableH, eavesOverhang);
@@ -729,7 +863,8 @@ export class HighSierraRegion {
   }
 
   /**
-   * Builds stacked Apacheta stone cairns flanking the high-altitude stone road.
+   * Builds authentic conical Apacheta stone cairns composed of angular rock slabs,
+   * natural repose angles, and a sacred white quartz mineral shard at the apex.
    */
   private buildApachetaCairns(
     materials: PbrMaterialLibrary,
@@ -737,34 +872,100 @@ export class HighSierraRegion {
   ): void {
     const cairnCoords: Array<[number, number]> = [
       [-2.8, 8.4],
-      [2.9, 8.2],
+      [3.6, 7.6],
       [-3.4, -3.5],
       [3.5, -3.8],
     ];
-    const stoneGeo = new THREE.DodecahedronGeometry(0.36, 1);
-    const capStoneGeo = new THREE.DodecahedronGeometry(0.18, 1);
-    this.geometries.push(stoneGeo, capStoneGeo);
+
+    const slabGeo = new THREE.DodecahedronGeometry(0.24, 0);
+    const smallSlabGeo = new THREE.DodecahedronGeometry(0.16, 0);
+    const quartzGeo = new THREE.DodecahedronGeometry(0.14, 0);
+    this.geometries.push(slabGeo, smallSlabGeo, quartzGeo);
+
+    // Weathered pale granitic apu offering stone for summit (Illa de roca sagrada)
+    const quartzMat = new THREE.MeshStandardMaterial({
+      name: 'AndeanSacredGraniteStone',
+      color: new THREE.Color(0xb8b0a2),
+      map: materials.fieldstoneRough.map,
+      normalMap: materials.fieldstoneRough.normalMap,
+      roughness: 0.86,
+      metalness: 0.0,
+    });
+    this.materials.push(quartzMat);
 
     for (let c = 0; c < cairnCoords.length; c++) {
       const [cx, cz] = cairnCoords[c];
       const cy = hAt(cx, cz);
-      for (let s = 0; s < 5; s++) {
-        const scale = 1.0 - s * 0.15;
-        const st = new THREE.Mesh(stoneGeo, materials.fieldstoneRough);
-        st.position.set(cx + Math.sin(s * 2.1) * 0.04, cy + s * 0.26 + 0.14, cz);
-        st.scale.set(scale * 1.2, scale * 0.72, scale * 1.1);
-        st.rotation.y = s * 1.1;
-        st.castShadow = true;
-        st.receiveShadow = true;
-        this.group.add(st);
+
+      // Layer 1 (Base): 12 angular rock slabs forming a broad circular mound of radius 0.85m
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2 + (i % 3) * 0.15;
+        const rad = 0.65 + (i % 4) * 0.06;
+        const rx = cx + Math.cos(ang) * rad;
+        const rz = cz + Math.sin(ang) * rad;
+        const ry = cy + 0.06 + (i % 2) * 0.04;
+
+        const slab = new THREE.Mesh(slabGeo, (i + c) % 2 === 0 ? materials.fieldstoneRough : materials.andesiteCut);
+        slab.position.set(rx, ry, rz);
+        slab.scale.set(1.4 + (i % 3) * 0.3, 0.55 + (i % 2) * 0.2, 1.2 + (i % 4) * 0.2);
+        slab.rotation.set((i % 4) * 0.2 - 0.3, ang + (i % 5) * 0.4, (i % 3) * 0.25 - 0.1);
+        slab.castShadow = true;
+        slab.receiveShadow = true;
+        this.group.add(slab);
       }
-      // Top offering stone: traditional Andean white quartz placed on cairn summit
-      const topStone = new THREE.Mesh(capStoneGeo, materials.andesiteCut);
-      topStone.position.set(cx, cy + 5 * 0.26 + 0.12, cz);
-      topStone.scale.set(0.9, 0.7, 0.9);
-      topStone.castShadow = true;
-      topStone.receiveShadow = true;
-      this.group.add(topStone);
+
+      // Layer 2 (Mid-tier): 8 overlapping stones filling crevices and stepping inward (radius 0.48m)
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + 0.35;
+        const rad = 0.38 + (i % 3) * 0.06;
+        const rx = cx + Math.cos(ang) * rad;
+        const rz = cz + Math.sin(ang) * rad;
+        const ry = cy + 0.24 + (i % 2) * 0.05;
+
+        const slab = new THREE.Mesh(slabGeo, (i + c) % 2 === 1 ? materials.fieldstoneRough : materials.andesiteCut);
+        slab.position.set(rx, ry, rz);
+        slab.scale.set(1.2 + (i % 2) * 0.2, 0.65, 1.1 + (i % 3) * 0.2);
+        slab.rotation.set((i % 3) * 0.3 - 0.15, ang + 0.8, (i % 2) * 0.3 - 0.15);
+        slab.castShadow = true;
+        slab.receiveShadow = true;
+        this.group.add(slab);
+      }
+
+      // Layer 3 (Upper tier): 5 stones tapering to the summit (radius 0.24m)
+      for (let i = 0; i < 5; i++) {
+        const ang = (i / 5) * Math.PI * 2 + 0.7;
+        const rad = 0.18 + (i % 2) * 0.04;
+        const rx = cx + Math.cos(ang) * rad;
+        const rz = cz + Math.sin(ang) * rad;
+        const ry = cy + 0.44 + (i % 2) * 0.05;
+
+        const slab = new THREE.Mesh(smallSlabGeo, materials.fieldstoneRough);
+        slab.position.set(rx, ry, rz);
+        slab.scale.set(1.1, 0.75, 1.0);
+        slab.rotation.set((i % 2) * 0.25, ang + 1.2, (i % 3) * 0.2);
+        slab.castShadow = true;
+        slab.receiveShadow = true;
+        this.group.add(slab);
+      }
+
+      // Layer 4 (Apex capstones): 2 support stones
+      for (let i = 0; i < 2; i++) {
+        const slab = new THREE.Mesh(smallSlabGeo, materials.andesiteCut);
+        slab.position.set(cx + (i === 0 ? -0.06 : 0.06), cy + 0.62, cz + (i === 0 ? -0.04 : 0.04));
+        slab.scale.set(0.9, 0.65, 0.85);
+        slab.castShadow = true;
+        slab.receiveShadow = true;
+        this.group.add(slab);
+      }
+
+      // Sacred offering crown: Upright white quartz mineral crystal shard (Illa)
+      const apexQuartz = new THREE.Mesh(quartzGeo, quartzMat);
+      apexQuartz.position.set(cx, cy + 0.76, cz);
+      apexQuartz.scale.set(0.85, 1.65, 0.75);
+      apexQuartz.rotation.set(0.12, c * 1.4, -0.08);
+      apexQuartz.castShadow = true;
+      apexQuartz.receiveShadow = true;
+      this.group.add(apexQuartz);
     }
   }
 
@@ -850,6 +1051,7 @@ export class HighSierraRegion {
       const iz = 11.0 - row * 2.6 + Math.cos(i * 2.3) * 0.8;
       if (Math.abs(ix) < 2.2 && iz > -14.0 && iz < 10.0) continue; // Keep paved road clear
       if (Math.abs(ix) > 4.8 && Math.abs(ix) < 9.8 && iz < -1.0 && iz > -15.0) continue; // Keep village clear
+      if (Math.hypot(ix, iz - 12.0) < 5.5) continue; // Keep foreground camera lens clear
       const iy = hAt(ix, iz);
       dummy.position.set(ix, iy - 0.05, iz);
       dummy.rotation.set(((i % 3) - 1) * 0.06, i * 1.37, (((i + 1) % 3) - 1) * 0.06);
@@ -931,8 +1133,9 @@ export class HighSierraRegion {
   }
 
   /**
-   * Builds an authentic dual-pitch gabled combed Andean ichu thatch roof geometry
-   * with deep eaves overhang, hanging fringe skirts, and gable verge overhangs.
+   * Builds an authentic volumetric combed Andean ichu thatch roof geometry
+   * with vertical straw bundle fluting, continuous drainage slope, deep rounded eaves,
+   * and thick gable verge trims.
    */
   private createAndeanGableRoofGeometry(
     w: number,
@@ -941,23 +1144,31 @@ export class HighSierraRegion {
     overhang: number
   ): THREE.BufferGeometry {
     const posList: number[] = [];
+    const normList: number[] = [];
     const uvList: number[] = [];
+    const colList: number[] = [];
     const idxList: number[] = [];
     let vOffset = 0;
 
     const ow = w * 0.5 + overhang;
     const od = d * 0.5 + overhang;
-    const ridgeY = gableH + 0.06;
+    const ridgeY = gableH + 0.08;
     const eaveY = 0.0;
-    const thickness = 0.16;
+    const stepsSlope = 8;
+    const stepsX = 16;
+    const eaveThick = 0.28;
 
     const addQuad = (
       p0: [number, number, number],
       p1: [number, number, number],
       p2: [number, number, number],
       p3: [number, number, number],
-      uScale: number = 1.0,
-      vScale: number = 1.0
+      n: [number, number, number],
+      u0: number, v0: number, u1: number, v1: number,
+      c0: [number, number, number] = [0.85, 0.68, 0.38],
+      c1: [number, number, number] = [0.85, 0.68, 0.38],
+      c2: [number, number, number] = [0.85, 0.68, 0.38],
+      c3: [number, number, number] = [0.85, 0.68, 0.38]
     ) => {
       posList.push(
         p0[0], p0[1], p0[2],
@@ -965,131 +1176,229 @@ export class HighSierraRegion {
         p2[0], p2[1], p2[2],
         p3[0], p3[1], p3[2]
       );
-      uvList.push(0, 0, uScale, 0, uScale, vScale, 0, vScale);
+      normList.push(
+        n[0], n[1], n[2],
+        n[0], n[1], n[2],
+        n[0], n[1], n[2],
+        n[0], n[1], n[2]
+      );
+      uvList.push(u0, v0, u1, v0, u1, v1, u0, v1);
+      colList.push(
+        c0[0], c0[1], c0[2],
+        c1[0], c1[1], c1[2],
+        c2[0], c2[1], c2[2],
+        c3[0], c3[1], c3[2]
+      );
       idxList.push(vOffset, vOffset + 1, vOffset + 2, vOffset, vOffset + 2, vOffset + 3);
       vOffset += 4;
     };
 
-    const stepsX = 8;
-    const stepsSlope = 5;
+    const strawCol = (ts: number, x: number): [number, number, number] => {
+      const flute = 0.94 + 0.06 * Math.sin(x * 18.0);
+      if (ts < 0.25) {
+        return [1.02 * flute, 0.84 * flute, 0.50 * flute];
+      } else if (ts < 0.75) {
+        return [0.88 * flute, 0.68 * flute, 0.36 * flute];
+      } else {
+        return [0.72 * flute, 0.52 * flute, 0.26 * flute];
+      }
+    };
 
-    // 1. Front roof slope (+Z)
-    for (let is = 0; is < stepsSlope; is++) {
-      const ts0 = is / stepsSlope;
-      const ts1 = (is + 1) / stepsSlope;
+    // Build combed vertical straw thatch slopes on Front (+Z) and Back (-Z)
+    for (let side = -1; side <= 1; side += 2) {
+      for (let is = 0; is < stepsSlope; is++) {
+        const ts0 = is / stepsSlope;
+        const ts1 = (is + 1) / stepsSlope;
 
-      const y0 = ridgeY * (1 - ts0) + eaveY * ts0 + Math.sin(ts0 * Math.PI) * -0.04;
-      const y1 = ridgeY * (1 - ts1) + eaveY * ts1 + Math.sin(ts1 * Math.PI) * -0.04;
-      const z0 = ts0 * od;
-      const z1 = ts1 * od;
+        // Graceful natural straw curve: gentle flare at the eaves for water shedding
+        const sag0 = Math.sin(ts0 * Math.PI) * -0.045;
+        const sag1 = Math.sin(ts1 * Math.PI) * -0.045;
+        const y0 = ridgeY * (1.0 - ts0) + eaveY * ts0 + sag0;
+        const y1 = ridgeY * (1.0 - ts1) + eaveY * ts1 + sag1;
+        const z0 = side * (ts0 * od);
+        const z1 = side * (ts1 * od);
 
+        const dy = y1 - y0;
+        const dz = z1 - z0;
+        const len = Math.hypot(dy, dz);
+        const snY = Math.abs(dz) / len;
+        const snZ = (side * -dy) / len;
+
+        for (let ix = 0; ix < stepsX; ix++) {
+          const tx0 = (ix / stepsX) * 2 - 1;
+          const tx1 = ((ix + 1) / stepsX) * 2 - 1;
+          const x0 = tx0 * ow;
+          const x1 = tx1 * ow;
+
+          // Vertical combed straw bundle fluting along the slope
+          const flute0 = Math.sin(x0 * 18.0) * 0.018 + Math.cos(x0 * 36.0) * 0.008;
+          const flute1 = Math.sin(x1 * 18.0) * 0.018 + Math.cos(x1 * 36.0) * 0.008;
+
+          if (side === 1) {
+            const col0 = strawCol(ts1, x0);
+            const col1 = strawCol(ts1, x1);
+            const col2 = strawCol(ts0, x1);
+            const col3 = strawCol(ts0, x0);
+            addQuad(
+              [x0, y1 + flute0, z1],
+              [x1, y1 + flute1, z1],
+              [x1, y0 + flute1, z0],
+              [x0, y0 + flute0, z0],
+              [0, snY, snZ],
+              ix / stepsX, ts1 * 3.0, (ix + 1) / stepsX, ts0 * 3.0,
+              col0, col1, col2, col3
+            );
+          } else {
+            const col0 = strawCol(ts1, x1);
+            const col1 = strawCol(ts1, x0);
+            const col2 = strawCol(ts0, x0);
+            const col3 = strawCol(ts0, x1);
+            addQuad(
+              [x1, y1 + flute1, z1],
+              [x0, y1 + flute0, z1],
+              [x0, y0 + flute0, z0],
+              [x1, y0 + flute1, z0],
+              [0, snY, snZ],
+              (ix + 1) / stepsX, ts1 * 3.0, ix / stepsX, ts0 * 3.0,
+              col0, col1, col2, col3
+            );
+          }
+        }
+      }
+
+      // Rounded volumetric eave overhang lip curling downward
+      const eaveZ = side * od;
+      const eaveFaceCol: [number, number, number] = [0.58, 0.44, 0.22];
+      const eaveUnderCol: [number, number, number] = [0.32, 0.24, 0.12];
       for (let ix = 0; ix < stepsX; ix++) {
         const tx0 = (ix / stepsX) * 2 - 1;
         const tx1 = ((ix + 1) / stepsX) * 2 - 1;
         const x0 = tx0 * ow;
         const x1 = tx1 * ow;
 
-        addQuad(
-          [x0, y1, z1],
-          [x1, y1, z1],
-          [x1, y0, z0],
-          [x0, y0, z0],
-          1.0, 1.0
-        );
+        if (side === 1) {
+          // Front eave vertical face
+          addQuad(
+            [x0, eaveY - eaveThick, eaveZ],
+            [x1, eaveY - eaveThick, eaveZ],
+            [x1, eaveY, eaveZ],
+            [x0, eaveY, eaveZ],
+            [0, 0, 1],
+            ix / stepsX, 0, (ix + 1) / stepsX, 0.4,
+            eaveFaceCol, eaveFaceCol, eaveFaceCol, eaveFaceCol
+          );
+          // Eave underside returning toward wall
+          addQuad(
+            [x0, eaveY - eaveThick, eaveZ],
+            [x0, eaveY - eaveThick * 0.3, eaveZ - 0.35],
+            [x1, eaveY - eaveThick * 0.3, eaveZ - 0.35],
+            [x1, eaveY - eaveThick, eaveZ],
+            [0, -1, 0],
+            ix / stepsX, 0, (ix + 1) / stepsX, 0.3,
+            eaveUnderCol, eaveUnderCol, eaveUnderCol, eaveUnderCol
+          );
+        } else {
+          // Back eave vertical face
+          addQuad(
+            [x1, eaveY - eaveThick, eaveZ],
+            [x0, eaveY - eaveThick, eaveZ],
+            [x0, eaveY, eaveZ],
+            [x1, eaveY, eaveZ],
+            [0, 0, -1],
+            (ix + 1) / stepsX, 0, ix / stepsX, 0.4,
+            eaveFaceCol, eaveFaceCol, eaveFaceCol, eaveFaceCol
+          );
+          // Back eave underside
+          addQuad(
+            [x1, eaveY - eaveThick, eaveZ],
+            [x1, eaveY - eaveThick * 0.3, eaveZ + 0.35],
+            [x0, eaveY - eaveThick * 0.3, eaveZ + 0.35],
+            [x0, eaveY - eaveThick, eaveZ],
+            [0, -1, 0],
+            (ix + 1) / stepsX, 0, ix / stepsX, 0.3,
+            eaveUnderCol, eaveUnderCol, eaveUnderCol, eaveUnderCol
+          );
+        }
       }
     }
 
-    // 2. Back roof slope (-Z)
-    for (let is = 0; is < stepsSlope; is++) {
-      const ts0 = is / stepsSlope;
-      const ts1 = (is + 1) / stepsSlope;
+    // 3D Gable verge edge faces closing the left (-X) and right (+X) ends
+    const vergeCol: [number, number, number] = [0.68, 0.52, 0.28];
+    for (let end = -1; end <= 1; end += 2) {
+      const vx = end * ow;
+      const normalX = end;
 
-      const y0 = ridgeY * (1 - ts0) + eaveY * ts0 + Math.sin(ts0 * Math.PI) * -0.04;
-      const y1 = ridgeY * (1 - ts1) + eaveY * ts1 + Math.sin(ts1 * Math.PI) * -0.04;
-      const z0 = -ts0 * od;
-      const z1 = -ts1 * od;
+      // Front slope verge (+Z)
+      for (let is = 0; is < stepsSlope; is++) {
+        const ts0 = is / stepsSlope;
+        const ts1 = (is + 1) / stepsSlope;
+        const y0 = ridgeY * (1.0 - ts0) + eaveY * ts0;
+        const y1 = ridgeY * (1.0 - ts1) + eaveY * ts1;
+        const z0 = ts0 * od;
+        const z1 = ts1 * od;
 
-      for (let ix = 0; ix < stepsX; ix++) {
-        const tx0 = (ix / stepsX) * 2 - 1;
-        const tx1 = ((ix + 1) / stepsX) * 2 - 1;
-        const x0 = tx0 * ow;
-        const x1 = tx1 * ow;
+        if (end === 1) {
+          addQuad(
+            [vx, y0, z0],
+            [vx, y1, z1],
+            [vx, y1 - eaveThick, z1],
+            [vx, y0 - eaveThick, z0],
+            [normalX, 0, 0],
+            ts0, 0, ts1, 0.4,
+            vergeCol, vergeCol, vergeCol, vergeCol
+          );
+        } else {
+          addQuad(
+            [vx, y1, z1],
+            [vx, y0, z0],
+            [vx, y0 - eaveThick, z0],
+            [vx, y1 - eaveThick, z1],
+            [normalX, 0, 0],
+            ts0, 0, ts1, 0.4,
+            vergeCol, vergeCol, vergeCol, vergeCol
+          );
+        }
+      }
 
-        addQuad(
-          [x1, y1, z1],
-          [x0, y1, z1],
-          [x0, y0, z0],
-          [x1, y0, z0],
-          1.0, 1.0
-        );
+      // Back slope verge (-Z)
+      for (let is = 0; is < stepsSlope; is++) {
+        const ts0 = is / stepsSlope;
+        const ts1 = (is + 1) / stepsSlope;
+        const y0 = ridgeY * (1.0 - ts0) + eaveY * ts0;
+        const y1 = ridgeY * (1.0 - ts1) + eaveY * ts1;
+        const z0 = -ts0 * od;
+        const z1 = -ts1 * od;
+
+        if (end === 1) {
+          addQuad(
+            [vx, y1, z1],
+            [vx, y0, z0],
+            [vx, y0 - eaveThick, z0],
+            [vx, y1 - eaveThick, z1],
+            [normalX, 0, 0],
+            ts0, 0, ts1, 0.4,
+            vergeCol, vergeCol, vergeCol, vergeCol
+          );
+        } else {
+          addQuad(
+            [vx, y0, z0],
+            [vx, y1, z1],
+            [vx, y1 - eaveThick, z1],
+            [vx, y0 - eaveThick, z0],
+            [normalX, 0, 0],
+            ts0, 0, ts1, 0.4,
+            vergeCol, vergeCol, vergeCol, vergeCol
+          );
+        }
       }
     }
-
-    // 3. Front eave hanging fringe skirt
-    for (let ix = 0; ix < stepsX; ix++) {
-      const tx0 = (ix / stepsX) * 2 - 1;
-      const tx1 = ((ix + 1) / stepsX) * 2 - 1;
-      const x0 = tx0 * ow;
-      const x1 = tx1 * ow;
-      addQuad(
-        [x0, eaveY - thickness, od],
-        [x1, eaveY - thickness, od],
-        [x1, eaveY, od],
-        [x0, eaveY, od],
-        1.0, 0.4
-      );
-    }
-
-    // 4. Back eave hanging fringe skirt
-    for (let ix = 0; ix < stepsX; ix++) {
-      const tx0 = (ix / stepsX) * 2 - 1;
-      const tx1 = ((ix + 1) / stepsX) * 2 - 1;
-      const x0 = tx0 * ow;
-      const x1 = tx1 * ow;
-      addQuad(
-        [x1, eaveY - thickness, -od],
-        [x0, eaveY - thickness, -od],
-        [x0, eaveY, -od],
-        [x1, eaveY, -od],
-        1.0, 0.4
-      );
-    }
-
-    // 5. Left and Right gable verge hanging skirts
-    addQuad(
-      [-ow, eaveY - thickness, od],
-      [-ow, eaveY, od],
-      [-ow, ridgeY, 0],
-      [-ow, ridgeY - thickness, 0],
-      0.8, 0.5
-    );
-    addQuad(
-      [-ow, ridgeY - thickness, 0],
-      [-ow, ridgeY, 0],
-      [-ow, eaveY, -od],
-      [-ow, eaveY - thickness, -od],
-      0.8, 0.5
-    );
-
-    addQuad(
-      [ow, eaveY, od],
-      [ow, eaveY - thickness, od],
-      [ow, ridgeY - thickness, 0],
-      [ow, ridgeY, 0],
-      0.8, 0.5
-    );
-    addQuad(
-      [ow, ridgeY, 0],
-      [ow, ridgeY - thickness, 0],
-      [ow, eaveY - thickness, -od],
-      [ow, eaveY, -od],
-      0.8, 0.5
-    );
 
     const geo = new THREE.BufferGeometry();
-    geo.setIndex(idxList);
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posList), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normList), 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvList), 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colList), 3));
+    geo.setIndex(idxList);
     geo.computeVertexNormals();
     return geo;
   }

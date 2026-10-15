@@ -263,7 +263,7 @@ export class JuzuEngine {
     this.traversal.group.visible = isCF;
     this.puzzles.group.visible = isCF;
     this.enemies.group.visible = isCF;
-    this.water.group.visible = !isHS;
+    this.water.group.visible = isCF;
     this.foliage.group.visible = !isHS;
     this.highSierra.group.visible = isHS;
     this.jungleLowlands.group.visible = isJL;
@@ -428,15 +428,15 @@ export class JuzuEngine {
       );
     } else if (shot === 'jungleLowlands') {
       this.setActiveRegion('jungleLowlands');
-      this.placeNairaAt(-0.2, 8.8, Math.PI, 'idle');
+      this.placeNairaAt(0.0, -1.8, Math.PI, 'idle');
       const ny = this.naira.position.y;
       this.cameraRig.snapToShot(
-        1.1,
+        0.95,
         ny + 1.55,
-        12.0,
-        -0.2,
+        2.2,
+        0.0,
         ny + 1.15,
-        -12.0,
+        -8.2,
         56
       );
     } else if (shot === 'paititi') {

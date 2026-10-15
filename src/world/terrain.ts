@@ -98,7 +98,17 @@ export class TerrainSystem {
     if (this.currentBiome === 'highSierra') {
       return this.getHighSierraHeightAt(x, z);
     }
+    if (this.currentBiome === 'jungleLowlands') {
+      return this.getJungleLowlandsHeightAt(x, z);
+    }
+    if (this.currentBiome === 'paititi') {
+      return this.getPaititiHeightAt(x, z);
+    }
 
+    return this.getCloudForestHeightAt(x, z);
+  }
+
+  public getCloudForestHeightAt(x: number, z: number): number {
     const ravineCenterZ = Math.sin(x * 0.055) * 1.4;
     const distFromRavine = Math.abs(z - ravineCenterZ);
 
@@ -125,13 +135,126 @@ export class TerrainSystem {
       valleyWall = Math.pow(wx, 1.32) * 0.36;
     }
 
+    // North-West stepped Inca terrace riser supporting the upper lookout shelf behind the crag
+    let nwBluff = 0;
+    if (x < -2.4 && z < -17.6) {
+      const tz = Math.min(1.0, (-17.6 - z) / 2.2);
+      const tx = Math.min(1.0, (-2.4 - x) / 1.6);
+      nwBluff = tz * tz * (3.0 - 2.0 * tz) * tx * 3.85;
+    }
+
     const bridgeClearance = Math.min(1.0, Math.hypot(x, z) / 8.5);
     const micro =
       (Math.sin(x * 0.23 + z * 0.19) * 0.28 +
         Math.cos(x * 0.51 - z * 0.43) * 0.12) *
       bridgeClearance;
 
-    return 1.65 + gorgeDepth + northRise + valleyWall + micro;
+    return 1.65 + gorgeDepth + northRise + valleyWall + nwBluff + micro;
+  }
+
+  public getJungleLowlandsHeightAt(x: number, z: number): number {
+    const cenX = 0.0;
+    const cenZ = -8.2;
+    const distToCenote = Math.hypot(x - cenX, z - cenZ);
+
+    // Sunken limestone basin holding the crystalline cenote pool
+    let cenoteDepth = 0;
+    if (distToCenote < 4.6) {
+      const t = distToCenote / 4.6;
+      // Dished parabolic basin bowl (depth 1.05m at center)
+      cenoteDepth = (1.0 - t * t) * 1.05;
+    }
+
+    // Lush Andean rainforest foothills rising behind the north altar
+    let northRise = 0;
+    if (z < -10.5) {
+      const nz = Math.min(35.0, -10.5 - z);
+      northRise = nz * 0.24 + Math.sin(nz * 0.36) * 0.22;
+    }
+
+    // Gentle south rainforest approach
+    let southSlope = 0;
+    if (z > -4.0) {
+      const sz = Math.min(30.0, z - (-4.0));
+      southSlope = sz * 0.035;
+    }
+
+    // Flanking jungle hillsides
+    const absX = Math.abs(x);
+    let lateralHills = 0;
+    if (absX > 8.8) {
+      const wx = absX - 8.8;
+      lateralHills = Math.pow(wx, 1.28) * 0.34;
+    }
+
+    // Shallow natural drainage stream for the hydraulic sluice gate near (3.6, 2.4)
+    let drainageChannel = 0;
+    const distToDrain = Math.hypot(x - 3.6, z - 2.4);
+    if (distToDrain < 2.2) {
+      const dt = distToDrain / 2.2;
+      drainageChannel = (1.0 - dt * dt) * 0.38;
+    }
+
+    // Natural undulating moss knolls and root hummocks
+    const centerClearance = Math.min(1.0, distToCenote / 5.2);
+    const swells =
+      (Math.sin(x * 0.24 + z * 0.21) * 0.18 +
+        Math.cos(x * 0.44 - z * 0.32) * 0.10) *
+      centerClearance;
+
+    return 2.15 - cenoteDepth - drainageChannel + northRise + southSlope + lateralHills + swells;
+  }
+
+  public getPaititiHeightAt(x: number, z: number): number {
+    const absX = Math.abs(x);
+
+    // Monolithic Coricancha temple approach:
+    // z in [-3.5, -14.5] is the monumental grand ceremonial stairway incline
+    let centralIncline = 0;
+    if (z < -3.5) {
+      const climbZ = Math.min(11.0, -3.5 - z);
+      centralIncline = (climbZ / 11.0) * 3.65;
+    }
+
+    // Sanctuary platform level for z <= -14.5, rising into caldera back wall beyond -20.0
+    let sanctuaryBack = 0;
+    if (z < -14.5) {
+      const pz = -14.5 - z;
+      if (pz > 5.5) {
+        sanctuaryBack = (pz - 5.5) * 0.38 + Math.sin(pz * 0.3) * 0.25;
+      }
+    }
+
+    // South sun plaza floor for z > 0
+    let southPlaza = 0;
+    if (z > 0.0) {
+      southPlaza = Math.min(25.0, z) * 0.02;
+    }
+
+    // Stepped lateral Coricancha terraces flanking the grand staircase
+    let terraceRise = 0;
+    if (absX > 4.6) {
+      const distOut = absX - 4.6;
+      const stepWidth = 3.2;
+      const stepHeight = 1.15;
+      const stepIdx = Math.floor(distOut / stepWidth);
+      const frac = (distOut % stepWidth) / stepWidth;
+      const ramp = frac < 0.2 ? frac / 0.2 : 1.0;
+      if (stepIdx < 4) {
+        terraceRise = (stepIdx + ramp) * stepHeight;
+      } else {
+        const calderaEdge = distOut - 4 * stepWidth;
+        terraceRise = 4 * stepHeight + calderaEdge * 0.45;
+      }
+    }
+
+    const stairClearance = Math.min(1.0, Math.max(0, absX - 3.8) / 2.0);
+    const micro =
+      (Math.sin(x * 0.16 + z * 0.14) * 0.08 +
+        Math.cos(x * 0.35 - z * 0.28) * 0.05) *
+      stairClearance;
+
+    return 2.15 + centralIncline + sanctuaryBack + southPlaza + terraceRise + micro;
   }
 
   public getHighSierraHeightAt(x: number, z: number): number {
@@ -172,7 +295,7 @@ export class TerrainSystem {
 
   public sampleGroundY(x: number, z: number, currentY: number = 4.0): number {
     if (
-      this.currentBiome !== 'highSierra' &&
+      this.currentBiome === 'cloudForest' &&
       Math.abs(x) <= 1.35 &&
       Math.abs(z) <= 5.85
     ) {
@@ -299,19 +422,19 @@ export class TerrainSystem {
     });
 
     const peakSpecs = [
-      // Central iconic Andean horn rising beyond the gorge gap
-      { x: 0, z: -95, rx: 80, ry: 48, rz: 65, seed: 1.4, snow: 0.40 },
+      // Central iconic Andean massif with multiple asymmetric horns and sharp arête
+      { x: -5, z: -105, rx: 125, ry: 48, rz: 85, seed: 1.4, snow: 0.38 },
       // Left and right peaks framing the central gap
-      { x: -45, z: -105, rx: 75, ry: 44, rz: 65, seed: 2.7, snow: 0.42 },
-      { x: 45, z: -102, rx: 75, ry: 42, rz: 65, seed: 3.9, snow: 0.42 },
+      { x: -60, z: -118, rx: 105, ry: 45, rz: 80, seed: 2.7, snow: 0.42 },
+      { x: 55, z: -115, rx: 105, ry: 44, rz: 80, seed: 3.9, snow: 0.42 },
       // Far left and right horns
-      { x: -85, z: -125, rx: 90, ry: 55, rz: 75, seed: 4.5, snow: 0.38 },
-      { x: 85, z: -125, rx: 90, ry: 52, rz: 75, seed: 5.2, snow: 0.38 },
+      { x: -100, z: -140, rx: 120, ry: 58, rz: 90, seed: 4.5, snow: 0.38 },
+      { x: 100, z: -140, rx: 120, ry: 56, rz: 90, seed: 5.2, snow: 0.38 },
       // Colossal backdrop summits piercing the upper sky
-      { x: -25, z: -155, rx: 110, ry: 74, rz: 85, seed: 6.3, snow: 0.32 },
-      { x: 30, z: -160, rx: 110, ry: 76, rz: 85, seed: 7.1, snow: 0.32 },
-      { x: -115, z: -175, rx: 120, ry: 82, rz: 90, seed: 8.2, snow: 0.30 },
-      { x: 115, z: -175, rx: 120, ry: 80, rz: 90, seed: 9.0, snow: 0.30 },
+      { x: -35, z: -175, rx: 135, ry: 78, rz: 105, seed: 6.3, snow: 0.32 },
+      { x: 40, z: -180, rx: 135, ry: 80, rz: 105, seed: 7.1, snow: 0.32 },
+      { x: -130, z: -195, rx: 145, ry: 86, rz: 110, seed: 8.2, snow: 0.30 },
+      { x: 130, z: -195, rx: 145, ry: 84, rz: 110, seed: 9.0, snow: 0.30 },
     ];
 
     for (let i = 0; i < peakSpecs.length; i++) {
@@ -334,7 +457,7 @@ export class TerrainSystem {
     depth: number,
     seed: number
   ): THREE.BufferGeometry {
-    const segs = 40;
+    const segs = 48;
     const geo = new THREE.PlaneGeometry(width, depth, segs, segs);
     geo.rotateX(-Math.PI / 2);
 
@@ -357,23 +480,52 @@ export class TerrainSystem {
         continue;
       }
 
-      // Linear fault-line mountain spine running diagonally across the massif
-      const ridgeZ = Math.sin(nx * 1.8 + seed) * (depth * 0.22);
+      // 1. Tectonic arête ridgeline curving diagonally through the massif
+      const ridgeZ = (Math.sin(nx * 2.2 + seed) * 0.22 + nx * 0.12) * (depth * 0.5);
       const distToRidge = Math.abs(z - ridgeZ) / (depth * 0.5);
-      const ridgeShape = Math.exp(-Math.pow(distToRidge * 2.4, 1.5));
-      const spineProfile = Math.cos(nx * Math.PI * 0.5) * (1.0 + 0.28 * Math.cos(nx * 3.5 + seed));
+      // Majestic mountain slope cross-section with broad shoulders
+      const ridgeShape = Math.exp(-Math.pow(distToRidge * 1.85, 1.35));
 
-      // Asymmetric slope: steep sheer granite cliff face vs stepped alpine couloir
-      const asym = z > ridgeZ ? 0.72 : 1.28;
+      // 2. Multi-summit jagged crest profile (multiple horns + sharp cols, zero smooth cones)
+      const p1X = -0.20 + Math.sin(seed * 1.7) * 0.08;
+      const p2X = 0.28 + Math.cos(seed * 2.1) * 0.08;
+      const p3X = -0.62;
+      const p4X = 0.65;
+      const horn1 = Math.exp(-Math.pow((nx - p1X) * 2.6, 2)) * 1.0;
+      const horn2 = Math.exp(-Math.pow((nx - p2X) * 3.0, 2)) * 0.88;
+      const shoulder1 = Math.exp(-Math.pow((nx - p3X) * 3.4, 2)) * 0.72;
+      const shoulder2 = Math.exp(-Math.pow((nx - p4X) * 3.6, 2)) * 0.65;
+      const crestSpine =
+        Math.max(horn1, Math.max(horn2, Math.max(shoulder1, shoulder2))) *
+        (1.0 - Math.pow(Math.abs(nx), 1.4) * 0.38);
 
-      // Multi-octave geological rock crags and stepped fracture planes
+      // 3. Glacial cirque erosion: deep concave scoop carved into one face
+      const cirqueX = 0.08 + Math.sin(seed * 3.1) * 0.1;
+      const cirqueZ = 0.18;
+      const cirqueDist = Math.hypot(nx - cirqueX, nz - cirqueZ);
+      const cirqueHollow = Math.exp(-cirqueDist * cirqueDist * 9.0) * 0.32;
+
+      // 4. Asymmetric slope: sheer precipice vs stepped glaciated couloir
+      const asym = z > ridgeZ ? 0.74 : 1.26;
+
+      // 5. Tilted Andean geological rock strata and stepped fracture planes (25-degree tilt)
+      const strata =
+        Math.sin((x * 0.24 + z * 0.18 + seed) * 1.4) * 0.09 +
+        Math.abs(Math.cos((x * 0.48 - z * 0.32 + seed * 2.1) * 1.2)) * 0.06;
+
+      // 6. Avalanche couloirs / rock chutes running down the cliff faces
+      const couloirs =
+        Math.sin(nx * 16.0 + seed * 4.3) * 0.045 * Math.max(0, 1.0 - distToRidge * 2.2);
+
+      // 7. High-frequency micro-crag noise
       const fbm =
-        Math.sin(x * 0.14 + z * 0.11 + seed) * 0.14 +
-        Math.cos(x * 0.32 - z * 0.26 + seed * 2.1) * 0.07 +
-        Math.sin(x * 0.72 + z * 0.65) * 0.03;
+        Math.sin(x * 0.18 + z * 0.14 + seed) * 0.08 +
+        Math.cos(x * 0.42 - z * 0.36) * 0.04 +
+        Math.sin(x * 0.88 + z * 0.78) * 0.02;
 
       const falloff = Math.cos(Math.min(1.0, dist) * Math.PI * 0.5);
-      const h = Math.max(0, (ridgeShape * spineProfile * asym + fbm) * Math.pow(falloff, 1.3));
+      const rawRidge = ridgeShape * crestSpine * asym - cirqueHollow;
+      const h = Math.max(0, (rawRidge + strata + couloirs + fbm) * Math.pow(falloff, 1.15));
       rawH[i] = h;
       if (h > maxRaw) maxRaw = h;
     }

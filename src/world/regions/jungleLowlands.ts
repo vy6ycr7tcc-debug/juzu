@@ -21,6 +21,7 @@ export class JungleLowlandsRegion {
   public readonly interactables: InteractableTarget[] = [];
   public sluiceGateMesh: THREE.Mesh | null = null;
   public poolMesh: THREE.Mesh | null = null;
+  public cenoteWaterMat: THREE.MeshStandardMaterial | null = null;
   public sluiceOpen: boolean = false;
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
@@ -41,188 +42,217 @@ export class JungleLowlandsRegion {
 
     if (!materials || !terrain) return;
 
-    // 1. Sunken Antisuyu Stepped Cenote Sanctuary on the North Basin (z = -5.5)
-    const cenZ = -5.5;
-    const cenY = terrain.getTerrainHeightAt(0, cenZ);
-    this.baseWaterY = cenY - 0.45;
+    const hAt = (x: number, z: number): number => terrain.getJungleLowlandsHeightAt(x, z);
+
+    // 1. Sunken Antisuyu Stepped Cenote Sanctuary on the North Basin (z = -8.2)
+    const cenZ = -8.2;
+    const cenY = hAt(0, cenZ);
+    this.baseWaterY = 1.88;
     this.targetWaterY = this.baseWaterY;
 
-    // Outer polygonal andesite retaining wall enclosing the sunken cenote (18 segments)
-    const ringCount = 18;
-    const wallGeo = this.createBatteredWallGeometry(2.35, 2.2, 0.95);
-    const mossCapGeo = this.createChippedBlockGeometry(2.45, 0.28, 1.05);
-    this.geometries.push(wallGeo, mossCapGeo);
+    // Authentic Sunken Turquoise Cenote Pool Water Surface with dynamic normal maps and depth gradient
+    const poolR = 3.6;
+    const poolGeo = new THREE.CircleGeometry(poolR, 48);
+    poolGeo.rotateX(-Math.PI * 0.5);
 
-    for (let i = 0; i < ringCount; i++) {
-      // Leave southern gap open for the grand stone staircase descent (i = 0, 1, 17)
-      if (i <= 1 || i === ringCount - 1) continue;
-      const ang = (i / ringCount) * Math.PI * 2 + Math.PI * 0.5;
-      const rx = Math.cos(ang) * 6.8;
-      const rz = cenZ + Math.sin(ang) * 6.8;
-      const ry = terrain.getTerrainHeightAt(rx, rz);
+    // Color gradient from deep sapphire-emerald abyss to translucent turquoise shallows
+    const pos = poolGeo.attributes.position as THREE.BufferAttribute;
+    const colors = new Float32Array(pos.count * 3);
+    const deepCol = new THREE.Color(0x0e3630);
+    const midCol = new THREE.Color(0x196e64);
+    const rimCol = new THREE.Color(0x2da898);
+    const colTmp = new THREE.Color();
 
-      const wall = new THREE.Mesh(wallGeo, materials.andesiteCut);
-      wall.position.set(rx, ry + 0.85, rz);
-      wall.rotation.y = -ang + Math.PI * 0.5;
-      wall.castShadow = true;
-      wall.receiveShadow = true;
-      this.group.add(wall);
-
-      const cap = new THREE.Mesh(mossCapGeo, materials.moss);
-      cap.position.set(rx, ry + 2.05, rz);
-      cap.rotation.y = -ang + Math.PI * 0.5;
-      cap.castShadow = true;
-      cap.receiveShadow = true;
-      this.group.add(cap);
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i);
+      const vz = pos.getZ(i);
+      const dist = Math.hypot(vx, vz);
+      const ratio = Math.min(1.0, dist / poolR);
+      if (ratio < 0.45) {
+        colTmp.copy(deepCol).lerp(midCol, ratio / 0.45);
+      } else {
+        colTmp.copy(midCol).lerp(rimCol, (ratio - 0.45) / 0.55);
+      }
+      colors[i * 3] = colTmp.r;
+      colors[i * 3 + 1] = colTmp.g;
+      colors[i * 3 + 2] = colTmp.b;
     }
+    poolGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    this.geometries.push(poolGeo);
 
-    // Flanking stone staircase cut into the western retaining wall
+    // Low sunken stone curb lining the pool rim flush with rainforest ground
+    const basinStoneGeo = new THREE.CylinderGeometry(poolR + 0.32, poolR + 0.12, 0.46, 48, 1, true);
+    this.geometries.push(basinStoneGeo);
+    const basinStone = new THREE.Mesh(basinStoneGeo, materials.andesiteCut);
+    basinStone.position.set(0, 1.84, cenZ);
+    basinStone.receiveShadow = true;
+    this.group.add(basinStone);
+
+    this.cenoteWaterMat = materials.water.clone();
+    this.cenoteWaterMat.vertexColors = true;
+    this.cenoteWaterMat.roughness = 0.05;
+    this.cenoteWaterMat.metalness = 0.08;
+    this.cenoteWaterMat.transparent = true;
+    this.cenoteWaterMat.opacity = 0.92;
+    if (this.cenoteWaterMat.normalMap) {
+      this.cenoteWaterMat.normalMap = this.cenoteWaterMat.normalMap.clone();
+      this.cenoteWaterMat.normalMap.wrapS = THREE.RepeatWrapping;
+      this.cenoteWaterMat.normalMap.wrapT = THREE.RepeatWrapping;
+      this.cenoteWaterMat.normalMap.repeat.set(6, 6);
+    }
+    this.materials.push(this.cenoteWaterMat);
+
+    this.poolMesh = new THREE.Mesh(poolGeo, this.cenoteWaterMat);
+    this.poolMesh.position.set(0, this.baseWaterY, cenZ);
+    this.poolMesh.receiveShadow = true;
+    this.group.add(this.poolMesh);
+
+    // Sweeping Curved Retaining Andenes Terraces (North Basin)
+    const northTerraceGeo = IncaMasonrySystem.createIncaPillowWallGeometry(14.5, 1.65, 0.95, {
+      courses: 3,
+      stonesPerCourse: 8,
+      pillowBulge: 0.045,
+      batter: 0.12,
+    });
+    const upperTerraceGeo = IncaMasonrySystem.createIncaPillowWallGeometry(16.5, 1.85, 0.95, {
+      courses: 3,
+      stonesPerCourse: 10,
+      pillowBulge: 0.045,
+      batter: 0.12,
+    });
+    this.geometries.push(northTerraceGeo, upperTerraceGeo);
+
+    const northTerrace = new THREE.Mesh(northTerraceGeo, materials.andesiteCut);
+    const nY = hAt(0, cenZ - 4.5);
+    northTerrace.position.set(0, nY + 0.65, cenZ - 4.5);
+    northTerrace.castShadow = true;
+    northTerrace.receiveShadow = true;
+    this.group.add(northTerrace);
+
+    const upperTerrace = new THREE.Mesh(upperTerraceGeo, materials.andesiteCut);
+    const uY = hAt(0, cenZ - 8.5);
+    upperTerrace.position.set(0, uY + 0.75, cenZ - 8.5);
+    upperTerrace.castShadow = true;
+    upperTerrace.receiveShadow = true;
+    this.group.add(upperTerrace);
+
+    // Flanking stone staircase descending gently into the cenote basin
     const stairStepCount = 8;
-    const stairGeo = this.createChippedBlockGeometry(1.4, 0.26, 0.65);
+    const stairGeo = this.createChippedBlockGeometry(1.6, 0.24, 0.72);
     this.geometries.push(stairGeo);
     for (let s = 0; s < stairStepCount; s++) {
       const t = s / (stairStepCount - 1);
-      const sx = -4.8 - t * 0.4;
-      const sz = -0.8 - t * 4.2;
-      const groundY = terrain.getTerrainHeightAt(sx, sz);
-      const sy = groundY + 0.15;
+      const sx = -4.2 - t * 0.4;
+      const sz = -1.2 - t * 4.5;
+      const groundY = hAt(sx, sz);
+      const sy = groundY + 0.12;
       const stair = new THREE.Mesh(stairGeo, materials.andesiteCut);
       stair.position.set(sx, sy, sz);
-      stair.rotation.y = 0.22;
+      stair.rotation.y = 0.25;
       stair.castShadow = true;
       stair.receiveShadow = true;
       this.group.add(stair);
       terrain.registerWalkable(stair);
     }
 
-    // Concentric Stepped Stone Basin Tiers (descending into the sunken pool, leaving center open for lagoon)
-    const tierSteps = [
-      { inR: 4.8, outR: 5.8, depth: 0.35, thick: 0.36 },
-      { inR: 3.8, outR: 4.8, depth: 0.75, thick: 0.38 },
-      { inR: 2.8, outR: 3.8, depth: 1.15, thick: 0.42 },
-    ];
-    for (let t = 0; t < tierSteps.length; t++) {
-      const step = tierSteps[t];
-      const stepGeo = this.createAnnularTierGeometry(
-        step.inR,
-        step.outR,
-        step.thick,
-        Math.PI * 0.62,
-        Math.PI * 1.76
-      );
-      this.geometries.push(stepGeo);
-      const stepMesh = new THREE.Mesh(stepGeo, materials.andesiteCut);
-      stepMesh.position.set(0, cenY - step.depth, cenZ);
-      stepMesh.receiveShadow = true;
-      this.group.add(stepMesh);
+    // Submerged stone steps descending into the flooded conduit passage
+    const subGeo = this.createChippedBlockGeometry(2.4, 0.35, 0.95);
+    this.geometries.push(subGeo);
+    for (let s = 0; s < 3; s++) {
+      const sub = new THREE.Mesh(subGeo, materials.andesiteCut);
+      sub.position.set(0, cenY - 0.45 - s * 0.25, cenZ - 1.8 - s * 0.75);
+      sub.receiveShadow = true;
+      this.group.add(sub);
     }
 
-    // Authentic Sunken Turquoise Cenote Pool Water Surface
-    const poolGeo = new THREE.CircleGeometry(5.4, 36);
-    poolGeo.rotateX(-Math.PI * 0.5);
-    this.geometries.push(poolGeo);
-
-    // Deep crystalline turquoise water material
-    const cenoteWaterMat = new THREE.MeshStandardMaterial({
-      name: 'AntisuyuCenoteWater',
-      color: new THREE.Color(0x1fa39c),
-      roughness: 0.08,
-      metalness: 0.15,
-      transparent: true,
-      opacity: 0.88,
+    // Central Antisuyu Paqcha Water Altar & Carved Amaru Stele (North Bank of Cenote)
+    const altarDaisGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 0.72, 2.4, {
+      courses: 2,
+      stonesPerCourse: 4,
+      pillowBulge: 0.042,
     });
-    this.materials.push(cenoteWaterMat);
-
-    this.poolMesh = new THREE.Mesh(poolGeo, cenoteWaterMat);
-    this.poolMesh.position.set(0, this.baseWaterY, cenZ);
-    this.poolMesh.receiveShadow = true;
-    this.group.add(this.poolMesh);
-
-    // Central Sunken Sanctuary Altar Pedestal & Carved Amaru Serpent Stele
-    const altarPlinthGeo = new THREE.CylinderGeometry(0.52, 0.72, 0.48, 8);
-    const obeliskGeo = new THREE.CylinderGeometry(0.28, 0.42, 3.4, 8);
-    const amaruRingGeo = new THREE.TorusGeometry(0.38, 0.065, 8, 16);
-    amaruRingGeo.rotateX(Math.PI * 0.5);
-    const sunDiscGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.08, 24);
-    sunDiscGeo.rotateX(Math.PI * 0.5);
-    const bossGeo = new THREE.SphereGeometry(0.16, 16, 12);
-    const rayGeo = new THREE.ConeGeometry(0.055, 0.22, 4);
-    rayGeo.rotateX(Math.PI * 0.5);
+    const basinGeo = new THREE.CylinderGeometry(1.05, 1.18, 0.42, 24);
+    const steleGeo = IncaMasonrySystem.createIncaPillarGeometry(1.05, 2.8, 0.65, {
+      courses: 5,
+      pillowBulge: 0.038,
+      batter: 0.08,
+    });
+    const steleCrestGeo = IncaMasonrySystem.createIncaPillowWallGeometry(1.35, 0.45, 0.75, {
+      courses: 1,
+      stonesPerCourse: 2,
+      pillowBulge: 0.035,
+    });
+    const spoutGeo = new THREE.ConeGeometry(0.12, 0.45, 8);
+    spoutGeo.rotateX(Math.PI * 0.5);
+    const sunMedallionGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.06, 24);
+    sunMedallionGeo.rotateX(Math.PI * 0.5);
 
     this.geometries.push(
-      altarPlinthGeo,
-      obeliskGeo,
-      amaruRingGeo,
-      sunDiscGeo,
-      bossGeo,
-      rayGeo
+      altarDaisGeo,
+      basinGeo,
+      steleGeo,
+      steleCrestGeo,
+      spoutGeo,
+      sunMedallionGeo
     );
 
-    const plinth = new THREE.Mesh(altarPlinthGeo, materials.andesiteCut);
-    plinth.position.set(0, cenY - 0.22, cenZ);
-    plinth.castShadow = true;
-    plinth.receiveShadow = true;
-    this.group.add(plinth);
+    const altarZ = -12.6;
+    const altarY = hAt(0, altarZ);
 
-    const obelisk = new THREE.Mesh(obeliskGeo, materials.andesiteCut);
-    obelisk.position.set(0, cenY + 1.55, cenZ);
-    obelisk.castShadow = true;
-    obelisk.receiveShadow = true;
-    this.group.add(obelisk);
+    const altarDais = new THREE.Mesh(altarDaisGeo, materials.andesiteCut);
+    altarDais.position.set(0, altarY + 0.36, altarZ);
+    altarDais.castShadow = true;
+    altarDais.receiveShadow = true;
+    this.group.add(altarDais);
 
-    // 4 Coiled Golden Amaru Serpent rings ascending the obelisk
-    for (let c = 0; c < 4; c++) {
-      const ring = new THREE.Mesh(amaruRingGeo, materials.goldOrnamental);
-      ring.position.set(0, cenY + 0.65 + c * 0.55, cenZ);
-      ring.rotation.z = Math.sin(c * 1.5) * 0.12;
-      ring.castShadow = true;
-      this.group.add(ring);
-    }
+    const basin = new THREE.Mesh(basinGeo, materials.andesiteCut);
+    basin.position.set(0, altarY + 0.42, altarZ + 0.65);
+    basin.castShadow = true;
+    basin.receiveShadow = true;
+    this.group.add(basin);
 
-    // Radiant Golden Inti Sun Disc crowned atop the Amaru Obelisk
-    const discFace = new THREE.Mesh(sunDiscGeo, materials.goldOrnamental);
-    discFace.position.set(0, cenY + 3.42, cenZ + 0.12);
-    discFace.castShadow = true;
-    this.group.add(discFace);
+    const stele = new THREE.Mesh(steleGeo, materials.andesiteCut);
+    stele.position.set(0, altarY + 1.85, altarZ);
+    stele.castShadow = true;
+    stele.receiveShadow = true;
+    this.group.add(stele);
 
-    const boss = new THREE.Mesh(bossGeo, materials.goldOrnamental);
-    boss.position.set(0, cenY + 3.42, cenZ + 0.18);
-    boss.castShadow = true;
-    this.group.add(boss);
+    const crest = new THREE.Mesh(steleCrestGeo, materials.andesiteCut);
+    crest.position.set(0, altarY + 3.45, altarZ);
+    crest.castShadow = true;
+    this.group.add(crest);
 
-    for (let r = 0; r < 12; r++) {
-      const ang = (r / 12) * Math.PI * 2;
-      const ray = new THREE.Mesh(rayGeo, materials.goldOrnamental);
-      const rad = 0.68;
-      ray.position.set(
-        Math.cos(ang) * rad,
-        cenY + 3.42 + Math.sin(ang) * rad,
-        cenZ + 0.12
-      );
-      ray.rotation.z = ang - Math.PI * 0.5;
-      ray.castShadow = true;
-      this.group.add(ray);
-    }
+    // Cast bronze Amaru serpent spout pouring water into the basin
+    const spout = new THREE.Mesh(spoutGeo, materials.metalBronze);
+    spout.position.set(0, altarY + 1.45, altarZ + 0.38);
+    spout.castShadow = true;
+    this.group.add(spout);
 
-    // Submerged Serpent Conduit Portal (visible through water, revealed when drained)
+    // Radiant Bronze Sun Medallion mounted on the upper stele
+    const medallion = new THREE.Mesh(sunMedallionGeo, materials.goldOrnamental);
+    medallion.position.set(0, altarY + 2.85, altarZ + 0.34);
+    medallion.castShadow = true;
+    this.group.add(medallion);
+
+    // Submerged Serpent Conduit Portal (revealed when drained)
     const conduitArchGeo = this.createBatteredWallGeometry(2.4, 2.6, 1.4);
     const portalInnerGeo = this.createChippedBlockGeometry(1.4, 2.0, 1.6);
     this.geometries.push(conduitArchGeo, portalInnerGeo);
 
     const conduitArch = new THREE.Mesh(conduitArchGeo, materials.andesiteCut);
-    conduitArch.position.set(0, cenY - 0.75, cenZ - 4.8);
+    conduitArch.position.set(0, cenY - 0.55, cenZ - 4.2);
     conduitArch.castShadow = true;
     conduitArch.receiveShadow = true;
     this.group.add(conduitArch);
 
     const portalInner = new THREE.Mesh(portalInnerGeo, materials.metalIron);
-    portalInner.position.set(0, cenY - 0.75, cenZ - 4.8);
+    portalInner.position.set(0, cenY - 0.55, cenZ - 4.2);
     this.group.add(portalInner);
 
     // 2. Bronze & Stone Hydraulic Sluice Gate on the Embankment (x = 3.6, z = 2.4)
     const slX = 3.6;
     const slZ = 2.4;
-    const slY = terrain.getTerrainHeightAt(slX, slZ);
+    const slY = hAt(slX, slZ);
     this.baseGateY = slY + 0.85;
     this.targetGateY = this.baseGateY;
 
@@ -337,23 +367,24 @@ export class JungleLowlandsRegion {
 
     // 3. Giant Buttressed Amazonian Ceiba / Lupuna Trunks & Hanging Liana Vines
     const ceibaCoords = [
-      [-6.5, 6.2],
-      [6.8, 5.8],
-      [-7.8, -5.5],
-      [8.2, -5.8],
-      [-8.5, -16.5],
-      [8.5, -16.8],
+      [-9.2, 5.2],  // Moved back & outward to frame the vista naturally
+      [9.5, 4.8],   // Moved back & outward
+      [-8.2, -5.5],
+      [8.5, -5.8],
+      [-9.2, -16.5],
+      [9.2, -16.8],
     ];
-    const trunkGeo = new THREE.CylinderGeometry(0.85, 1.55, 16.5, 14);
-    const buttressGeo = this.createCeibaButtressGeometry(2.6, 4.6, 0.42);
+    const trunkGeo = this.createOrganicLupunaTrunkGeometry();
+    const buttressGeo = this.createCeibaButtressGeometry(2.8, 5.2, 0.45);
     const vineGeo = new THREE.CylinderGeometry(0.028, 0.028, 8.5, 6);
     this.geometries.push(trunkGeo, buttressGeo, vineGeo);
 
     for (let i = 0; i < ceibaCoords.length; i++) {
       const [tx, tz] = ceibaCoords[i];
-      const ty = terrain.getTerrainHeightAt(tx, tz);
+      const ty = hAt(tx, tz);
       const trunk = new THREE.Mesh(trunkGeo, materials.woodBark);
-      trunk.position.set(tx, ty + 7.5, tz);
+      trunk.position.set(tx, ty - 0.4, tz);
+      trunk.rotation.y = i * 1.35;
       trunk.castShadow = true;
       trunk.receiveShadow = true;
       this.group.add(trunk);
@@ -363,7 +394,7 @@ export class JungleLowlandsRegion {
       for (let f = 0; f < finCount; f++) {
         const finAng = (f * Math.PI * 2) / finCount + i * 0.75;
         const fin = new THREE.Mesh(buttressGeo, materials.woodBark);
-        fin.position.set(tx, ty, tz);
+        fin.position.set(tx, ty - 0.2, tz);
         fin.rotation.y = finAng;
         fin.castShadow = true;
         fin.receiveShadow = true;
@@ -566,6 +597,12 @@ export class JungleLowlandsRegion {
     if (!this.group.visible) return;
     this.elapsedSec += dt;
 
+    // Animate cenote water surface ripples
+    if (this.cenoteWaterMat && this.cenoteWaterMat.normalMap) {
+      this.cenoteWaterMat.normalMap.offset.x = (this.elapsedSec * 0.02) % 1.0;
+      this.cenoteWaterMat.normalMap.offset.y = (this.elapsedSec * 0.015) % 1.0;
+    }
+
     // Smoothly animate sluice gate portcullis lifting/lowering
     if (this.sluiceGateMesh) {
       this.sluiceGateMesh.position.y = THREE.MathUtils.lerp(
@@ -583,6 +620,60 @@ export class JungleLowlandsRegion {
         Math.min(1.0, dt * 1.8)
       );
     }
+  }
+
+  /**
+   * Builds an organic Amazonian Lupuna/Ceiba trunk geometry with gentle natural curve,
+   * fluted buttressed base flare, and realistic taper.
+   */
+  private createOrganicLupunaTrunkGeometry(): THREE.BufferGeometry {
+    const hSegs = 14;
+    const radSegs = 12;
+    const totalHeight = 16.5;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    for (let h = 0; h <= hSegs; h++) {
+      const t = h / hSegs;
+      const y = t * totalHeight;
+      // Gentle natural curvature in trunk axis
+      const cx = Math.sin(t * Math.PI) * 0.35;
+      const cz = Math.cos(t * Math.PI * 0.8) * 0.28;
+
+      // Base flare and taper
+      const baseFlare = t < 0.22 ? Math.pow((0.22 - t) / 0.22, 1.8) * 1.25 : 0.0;
+      const radius = 1.15 * (1.0 - t * 0.55) + baseFlare;
+
+      for (let s = 0; s <= radSegs; s++) {
+        const u = s / radSegs;
+        const ang = u * Math.PI * 2;
+        // 5 fluting waves around the buttressed base
+        const fluting = t < 0.25 ? 1.0 + Math.sin(ang * 5.0) * 0.22 * (1.0 - t * 4.0) : 1.0;
+        const rx = cx + Math.cos(ang) * radius * fluting;
+        const rz = cz + Math.sin(ang) * radius * fluting;
+
+        positions.push(rx, y, rz);
+        uvs.push(u * 3.0, t * 8.0);
+      }
+    }
+
+    const stride = radSegs + 1;
+    for (let h = 0; h < hSegs; h++) {
+      for (let s = 0; s < radSegs; s++) {
+        const a = h * stride + s;
+        const b = a + stride;
+        indices.push(a, b, a + 1);
+        indices.push(b, b + 1, a + 1);
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
   }
 
   public dispose(): void {
