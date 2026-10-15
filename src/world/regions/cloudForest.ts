@@ -938,9 +938,12 @@ export class CloudForestRegion {
   public update(dt: number, playerPosition?: THREE.Vector3): void {
     this.elapsedSec += dt;
 
-    // Distance-gated subtle bridge sway & condor flight (§5.2 #3)
+    // Distance-gated dynamic bridge sway & footfall suspension resonance (§5.2 #3 & Milestone 3)
     if (!playerPosition || playerPosition.lengthSq() < 60 * 60) {
-      this.bridgeGroup.position.x = Math.sin(this.elapsedSec * 1.4) * 0.008;
+      const onBridge = playerPosition && Math.abs(playerPosition.x) <= 1.4 && Math.abs(playerPosition.z) <= 5.85;
+      const footfallResonance = onBridge ? Math.sin(this.elapsedSec * 6.2) * 0.024 : 0;
+      this.bridgeGroup.position.x = Math.sin(this.elapsedSec * 1.4) * 0.008 + footfallResonance;
+      this.bridgeGroup.position.y = onBridge ? -0.035 + Math.cos(this.elapsedSec * 6.2) * 0.012 : 0;
     }
 
     const cAng = this.elapsedSec * 0.28;
