@@ -550,16 +550,32 @@ export class JuzuEngine {
       );
     } else if (shot === 'puzzle') {
       this.setActiveRegion('cloudForest');
-      this.placeNairaAt(-1.1, -13.6, Math.PI, 'idle');
+      this.puzzles.turnWheel('cf_water_stele_channel', 1.0);
+      this.placeNairaAt(-1.1, -13.8, Math.PI, 'idle');
       const ny = this.naira.position.y;
       this.cameraRig.snapToShot(
-        -0.1,
-        ny + 1.25,
-        -11.5,
-        -0.95,
-        ny + 1.05,
-        -15.8,
-        54
+        0.25,
+        ny + 1.35,
+        -12.8,
+        -0.45,
+        ny + 0.95,
+        -16.2,
+        56
+      );
+    } else if (shot === 'solar') {
+      this.setActiveRegion('highSierra');
+      this.puzzles.markSolved('hs_solar_alignment');
+      this.highSierra.setSolarAligned(true);
+      this.placeNairaAt(3.2, 5.8, Math.PI, 'idle');
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        4.6,
+        ny + 1.45,
+        7.2,
+        1.5,
+        ny + 1.85,
+        -3.5,
+        58
       );
     } else if (shot === 'quipu') {
       this.setActiveRegion('cloudForest');
@@ -890,13 +906,14 @@ export class JuzuEngine {
         );
       } else if (id === 'sierra_solar_mirror') {
         this.puzzles.markSolved('hs_solar_alignment');
+        this.highSierra.setSolarAligned(true);
         this.save.setQuestFlag('q_hs_solar_aligned', true);
         this.save.getState().chapter = 5;
         this.save.addJournalEntry(
           'Intihuatana Solar Observatory: Reflecting the high-altitude sun across the gnomon pillar reveals the eastern descent into Antisuyu.'
         );
         this.quests.refreshObjectiveFromFlags(this.save, this.activeRegion);
-        this.audio.playSfx('collectible_chime', 0);
+        this.audio.playSfx('puzzle_solved', 0);
       } else if (id === 'jungle_hydraulic_sluice') {
         this.jungleLowlands.setSluiceOpen(true);
         this.puzzles.markSolved('jl_hydraulic_sluice');

@@ -53,9 +53,15 @@ export class PuzzleSystem {
   private counterweightBlockMesh: THREE.Mesh | null = null;
   private waterChannelStreamMesh: THREE.Mesh | null = null;
   private channelWaterMat: THREE.MeshStandardMaterial | null = null;
+  private waterCascadeMesh: THREE.Mesh | null = null;
+  private cascadeWaterMat: THREE.MeshStandardMaterial | null = null;
+  private cisternWaterMesh: THREE.Mesh | null = null;
+  private cisternWaterMat: THREE.MeshStandardMaterial | null = null;
 
+  private doorBaseY: number = 0;
   private doorClosedY: number = 0;
   private weightRaisedY: number = 0;
+  private elapsedSec: number = 0;
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
 
@@ -93,7 +99,7 @@ export class PuzzleSystem {
     this.group.add(this.sluiceWheelMesh);
 
     // 2. Carved Andesite Stone Aqueduct Channel connecting Sluice to Sanctuary Basin
-    const channelGeo = new THREE.BoxGeometry(0.48, 0.22, 1.95);
+    const channelGeo = new THREE.BoxGeometry(0.48, 0.22, 2.15);
     this.geometries.push(channelGeo);
     const channelStone = new THREE.Mesh(channelGeo, materials.andesiteCut);
     channelStone.position.set(-0.55, wheelY + 0.08, -16.0);
@@ -102,7 +108,7 @@ export class PuzzleSystem {
     this.group.add(channelStone);
 
     // Flowing Water Ribbon inside the carved channel
-    const waterRibbonGeo = new THREE.PlaneGeometry(0.28, 1.9);
+    const waterRibbonGeo = new THREE.PlaneGeometry(0.28, 2.1);
     waterRibbonGeo.rotateX(-Math.PI / 2);
     this.geometries.push(waterRibbonGeo);
 
@@ -121,9 +127,36 @@ export class PuzzleSystem {
     this.waterChannelStreamMesh.rotation.y = 0.62;
     this.group.add(this.waterChannelStreamMesh);
 
-    // 3. Heavy Counterweight Stone Door inside the North Sanctuary Portal (x = 0.0, z = -16.8)
-    const doorBaseY = terrain.getTerrainHeightAt(0.0, -16.8);
-    this.doorClosedY = doorBaseY + 1.32;
+    // 3. Carved Inca Stone Paqcha (fountain spout) pouring into the cistern
+    const spoutGeo = new THREE.CylinderGeometry(0.09, 0.14, 0.42, 10);
+    spoutGeo.rotateZ(Math.PI * 0.5);
+    const cascadeGeo = new THREE.PlaneGeometry(0.24, 0.92);
+    this.geometries.push(spoutGeo, cascadeGeo);
+
+    const paqchaSpout = new THREE.Mesh(spoutGeo, materials.andesiteCut);
+    paqchaSpout.position.set(0.38, wheelY + 0.12, -16.72);
+    paqchaSpout.rotation.y = 0.62;
+    paqchaSpout.castShadow = true;
+    this.group.add(paqchaSpout);
+
+    this.cascadeWaterMat = new THREE.MeshStandardMaterial({
+      color: 0x76c2e2,
+      roughness: 0.1,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.materials.push(this.cascadeWaterMat);
+
+    this.waterCascadeMesh = new THREE.Mesh(cascadeGeo, this.cascadeWaterMat);
+    this.waterCascadeMesh.position.set(0.68, wheelY - 0.28, -16.78);
+    this.group.add(this.waterCascadeMesh);
+
+    // 4. Heavy Counterweight Stone Door inside the North Sanctuary Portal (x = 0.0, z = -16.8)
+    this.doorBaseY = terrain.getTerrainHeightAt(0.0, -16.8);
+    this.doorClosedY = this.doorBaseY + 1.32;
     const doorGeo = new THREE.BoxGeometry(1.48, 2.55, 0.36, 3, 4, 2);
     this.geometries.push(doorGeo);
 
@@ -133,7 +166,33 @@ export class PuzzleSystem {
     this.counterweightDoorMesh.receiveShadow = true;
     this.group.add(this.counterweightDoorMesh);
 
-    // 4. Counterweight stone block that lowers as door rises
+    // 5. Circular Stone Counterweight Cistern Basin (x = 1.05, z = -16.8)
+    const cisternBasinGeo = new THREE.CylinderGeometry(0.72, 0.82, 0.88, 18, 1, true);
+    const cisternWaterGeo = new THREE.CircleGeometry(0.68, 18);
+    cisternWaterGeo.rotateX(-Math.PI / 2);
+    this.geometries.push(cisternBasinGeo, cisternWaterGeo);
+
+    const cisternBasin = new THREE.Mesh(cisternBasinGeo, materials.andesiteCut);
+    cisternBasin.position.set(1.05, this.doorBaseY + 0.38, -16.8);
+    cisternBasin.castShadow = true;
+    cisternBasin.receiveShadow = true;
+    this.group.add(cisternBasin);
+
+    this.cisternWaterMat = new THREE.MeshStandardMaterial({
+      color: 0x4896b8,
+      roughness: 0.15,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false,
+    });
+    this.materials.push(this.cisternWaterMat);
+
+    this.cisternWaterMesh = new THREE.Mesh(cisternWaterGeo, this.cisternWaterMat);
+    this.cisternWaterMesh.position.set(1.05, this.doorBaseY + 0.08, -16.8);
+    this.group.add(this.cisternWaterMesh);
+
+    // 6. Counterweight stone block that lowers into the rising cistern as door rises
     this.weightRaisedY = this.doorClosedY + 2.4;
     const weightGeo = new THREE.BoxGeometry(0.55, 0.65, 0.42);
     this.geometries.push(weightGeo);
@@ -207,6 +266,8 @@ export class PuzzleSystem {
   }
 
   public update(dt: number): void {
+    this.elapsedSec += dt;
+
     for (let i = 0; i < this.mechanisms.length; i++) {
       const m = this.mechanisms[i];
       if (m.solved && m.progress < 1.0) {
@@ -221,7 +282,19 @@ export class PuzzleSystem {
       }
       // Water stream fades in and ripples as wheel turns
       if (this.channelWaterMat) {
-        this.channelWaterMat.opacity = Math.min(0.72, steleState.progress * 0.85);
+        this.channelWaterMat.opacity = Math.min(0.82, steleState.progress * 0.95);
+      }
+      // Dynamic cascading paqcha waterfall into cistern
+      if (this.waterCascadeMesh && this.cascadeWaterMat) {
+        this.cascadeWaterMat.opacity = Math.min(0.88, steleState.progress * 0.98);
+        const squirt = steleState.progress > 0.05 ? 1.0 : 0.001;
+        this.waterCascadeMesh.scale.set(squirt, squirt, 1.0);
+        this.waterCascadeMesh.position.x = 0.68 + Math.sin(this.elapsedSec * 14.0) * 0.006 * steleState.progress;
+      }
+      // Rising water level in stone counterweight cistern
+      if (this.cisternWaterMesh && this.cisternWaterMat) {
+        this.cisternWaterMesh.position.y = this.doorBaseY + 0.08 + steleState.progress * 0.52;
+        this.cisternWaterMat.opacity = Math.min(0.88, 0.25 + steleState.progress * 0.62);
       }
     }
 
@@ -231,7 +304,7 @@ export class PuzzleSystem {
       if (this.counterweightDoorMesh) {
         this.counterweightDoorMesh.position.y = this.doorClosedY + doorState.progress * 2.25;
       }
-      // Counterweight block sinks down as door rises
+      // Counterweight block sinks down into the rising cistern as door rises
       if (this.counterweightBlockMesh) {
         this.counterweightBlockMesh.position.y = this.weightRaisedY - doorState.progress * 1.85;
       }
