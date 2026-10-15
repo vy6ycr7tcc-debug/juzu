@@ -165,6 +165,56 @@ export class JungleLowlandsRegion {
       this.group.add(sub);
     }
 
+    // Submerged Chinkana Amaru Portal (ancient subterranean passage to Paititi unsealed by draining the cenote)
+    const portalLintelGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.2, 0.65, 0.85, {
+      courses: 1,
+      stonesPerCourse: 3,
+      pillowBulge: 0.048,
+    });
+    const portalJambLGeo = IncaMasonrySystem.createIncaPillarGeometry(0.72, 2.2, 0.72, {
+      courses: 3,
+      pillowBulge: 0.042,
+      batter: 0.08,
+    });
+    const portalJambRGeo = IncaMasonrySystem.createIncaPillarGeometry(0.72, 2.2, 0.72, {
+      courses: 3,
+      pillowBulge: 0.042,
+      batter: 0.08,
+    });
+    const amaruReliefGeo = new THREE.TorusGeometry(0.48, 0.065, 12, 24, Math.PI);
+    amaruReliefGeo.rotateZ(Math.PI * 0.5);
+    this.geometries.push(portalLintelGeo, portalJambLGeo, portalJambRGeo, amaruReliefGeo);
+
+    const portalGroup = new THREE.Group();
+    portalGroup.position.set(0, cenY - 0.2, cenZ - 4.2);
+
+    const portalLintel = new THREE.Mesh(portalLintelGeo, materials.andesiteCut);
+    portalLintel.position.set(0, 1.25, 0);
+    portalLintel.castShadow = true;
+    portalLintel.receiveShadow = true;
+    portalGroup.add(portalLintel);
+
+    const jambL = new THREE.Mesh(portalJambLGeo, materials.andesiteCut);
+    jambL.position.set(-1.15, 0.0, 0);
+    jambL.rotation.y = 0.08;
+    jambL.castShadow = true;
+    jambL.receiveShadow = true;
+    portalGroup.add(jambL);
+
+    const jambR = new THREE.Mesh(portalJambRGeo, materials.andesiteCut);
+    jambR.position.set(1.15, 0.0, 0);
+    jambR.rotation.y = -0.08;
+    jambR.castShadow = true;
+    jambR.receiveShadow = true;
+    portalGroup.add(jambR);
+
+    // Carved Amaru serpent relief on lintel
+    const amaru = new THREE.Mesh(amaruReliefGeo, materials.metalBronze);
+    amaru.position.set(0, 1.25, 0.44);
+    portalGroup.add(amaru);
+
+    this.group.add(portalGroup);
+
     // Central Antisuyu Paqcha Water Altar & Carved Amaru Stele (North Bank of Cenote)
     const altarDaisGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 0.72, 2.4, {
       courses: 2,

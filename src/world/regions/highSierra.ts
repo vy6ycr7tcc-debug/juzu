@@ -24,7 +24,12 @@ import { InteractableTarget } from './cloudForest';
 export class HighSierraRegion {
   public readonly group: THREE.Group = new THREE.Group();
   public readonly interactables: InteractableTarget[] = [];
+  public solarAligned: boolean = false;
   private solarMirrorMesh: THREE.Object3D | null = null;
+  private solarBeamMesh: THREE.Mesh | null = null;
+  private solarBeamMat: THREE.MeshBasicMaterial | null = null;
+  private gnomonFlareMesh: THREE.Mesh | null = null;
+  private gnomonFlareMat: THREE.MeshBasicMaterial | null = null;
   private readonly streamerMeshes: THREE.Mesh[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
@@ -385,6 +390,48 @@ export class HighSierraRegion {
 
     this.solarMirrorMesh = mirrorAssembly;
     this.group.add(mirrorAssembly);
+
+    // Inti-k'anchay Volumetric Solar Reflection Beam connecting Mirror to Intihuatana Gnomon
+    const mirPos = new THREE.Vector3(mirX, mirY + 1.55, mirZ);
+    const obsZ = -10.5;
+    const obsY = hAt(0, obsZ);
+    const gnomonApex = new THREE.Vector3(0.45, obsY + 3.85, obsZ - 0.45);
+    const beamDist = mirPos.distanceTo(gnomonApex);
+
+    const beamGeo = new THREE.CylinderGeometry(0.08, 0.28, beamDist, 14, 1, true);
+    beamGeo.rotateX(Math.PI * 0.5);
+    const flareGeo = new THREE.CircleGeometry(0.85, 18);
+    this.geometries.push(beamGeo, flareGeo);
+
+    this.solarBeamMat = new THREE.MeshBasicMaterial({
+      color: 0xffe28a,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    this.materials.push(this.solarBeamMat);
+
+    this.solarBeamMesh = new THREE.Mesh(beamGeo, this.solarBeamMat);
+    this.solarBeamMesh.position.copy(mirPos).lerp(gnomonApex, 0.5);
+    this.solarBeamMesh.lookAt(gnomonApex);
+    this.group.add(this.solarBeamMesh);
+
+    this.gnomonFlareMat = new THREE.MeshBasicMaterial({
+      color: 0xfff0aa,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    this.materials.push(this.gnomonFlareMat);
+
+    this.gnomonFlareMesh = new THREE.Mesh(flareGeo, this.gnomonFlareMat);
+    this.gnomonFlareMesh.position.copy(gnomonApex);
+    this.gnomonFlareMesh.rotation.x = -Math.PI * 0.35;
+    this.group.add(this.gnomonFlareMesh);
 
     this.interactables.push({
       id: 'sierra_solar_mirror',
@@ -1464,12 +1511,38 @@ export class HighSierraRegion {
     return geo;
   }
 
+  public setSolarAligned(aligned: boolean): void {
+    this.solarAligned = aligned;
+  }
+
   public update(dt: number): void {
     if (!this.group.visible) return;
     this.elapsedSec += dt;
+
     if (this.solarMirrorMesh) {
-      this.solarMirrorMesh.rotation.y = Math.sin(this.elapsedSec * 0.5) * 0.25;
+      if (this.solarAligned) {
+        // Lock mirror heading onto the gnomon bearing vector
+        const targetAngle = -2.97;
+        this.solarMirrorMesh.rotation.y = THREE.MathUtils.lerp(
+          this.solarMirrorMesh.rotation.y,
+          targetAngle,
+          Math.min(1.0, dt * 3.5)
+        );
+        if (this.solarBeamMat) {
+          const pulse = 0.65 + Math.sin(this.elapsedSec * 4.5) * 0.15;
+          this.solarBeamMat.opacity = THREE.MathUtils.lerp(this.solarBeamMat.opacity, pulse, dt * 4.0);
+        }
+        if (this.gnomonFlareMat) {
+          const flarePulse = 0.75 + Math.sin(this.elapsedSec * 6.0) * 0.2;
+          this.gnomonFlareMat.opacity = THREE.MathUtils.lerp(this.gnomonFlareMat.opacity, flarePulse, dt * 4.0);
+        }
+      } else {
+        this.solarMirrorMesh.rotation.y = Math.sin(this.elapsedSec * 0.5) * 0.25;
+        if (this.solarBeamMat) this.solarBeamMat.opacity = 0;
+        if (this.gnomonFlareMat) this.gnomonFlareMat.opacity = 0;
+      }
     }
+
     // Subtle alpine wind sway on the Quechua saywa textile streamers
     for (let i = 0; i < this.streamerMeshes.length; i++) {
       const st = this.streamerMeshes[i];

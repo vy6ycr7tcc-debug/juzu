@@ -275,6 +275,22 @@ export class QuipuInspectOverlay {
       this.targetZoom = THREE.MathUtils.clamp(this.targetZoom + e.deltaY * 0.003, 2.2, 5.2);
     }, { passive: false });
 
+    // Keyboard navigation [A/D or Arrow keys to switch cords, Esc to close]
+    window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (!this.isOpen) return;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        this.selectedCordIndex = (this.selectedCordIndex + 1) % CORD_DATA.length;
+        this.renderCordPills();
+        this.updateInfoPanel();
+      } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        this.selectedCordIndex = (this.selectedCordIndex - 1 + CORD_DATA.length) % CORD_DATA.length;
+        this.renderCordPills();
+        this.updateInfoPanel();
+      } else if (e.key === 'Escape') {
+        this.close();
+      }
+    });
+
     // Build the Three.js mini viewport
     this.initThreeViewport(canvas);
     this.renderCordPills();
@@ -471,6 +487,9 @@ export class QuipuInspectOverlay {
     if (save) {
       save.addJournalEntry(
         'Inca Master Quipu Deciphered: Knot clusters record 120 soldiers, 345 maize fanegas, 18 solstice ceque shrines, and 84 bronze tumi blades.'
+      );
+      save.addJournalEntry(
+        'Quipu Secret Passage Blueprint: The 18 ceque knots point to a concealed aqueduct sluice bypass beneath the north sanctuary terrace. Opening the sluice unseals the submerged chinkana passage.'
       );
     }
     this.startAnimationLoop();
