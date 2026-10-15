@@ -220,24 +220,24 @@ export class PbrMaterialLibrary {
     // 1. Inca andesite stone (cut) — §2.2
     this.andesiteCut = new THREE.MeshStandardMaterial({
       name: 'IncaAndesiteCut',
-      color: new THREE.Color(0xe6e0d6),
+      color: new THREE.Color(0xfff6ec),
       map: stoneworkAlbedo,
       normalMap: stoneworkNormal,
       normalScale: new THREE.Vector2(0.95, 0.95),
       roughnessMap: stoneworkRoughness,
-      roughness: 0.84,
+      roughness: 0.82,
       metalness: 0.0,
     });
 
     // 2. Fieldstone / rough rock — §2.2
     this.fieldstoneRough = new THREE.MeshStandardMaterial({
       name: 'FieldstoneRough',
-      color: new THREE.Color(0xc8c2b8),
+      color: new THREE.Color(0xded8cc),
       map: fieldstoneAlbedo,
       normalMap: stoneworkNormal,
       normalScale: new THREE.Vector2(1.2, 1.2),
       roughnessMap: stoneworkRoughness,
-      roughness: 0.91,
+      roughness: 0.88,
       metalness: 0.0,
     });
 

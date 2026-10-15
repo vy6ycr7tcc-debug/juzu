@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../world/materials';
 import { TerrainSystem } from '../world/terrain';
+import { IncaMasonrySystem } from '../world/masonry';
 
 export interface TraversalMoveSpec {
   readonly speedMetersPerSec: number;
@@ -81,17 +82,13 @@ export class TraversalSystem {
       facingYaw: Math.PI, // Player faces North (-Z) into the crag wall
     });
 
-    // Build visible 3D climbable crag face with protruding stone handholds
-    const cliffGeo = new THREE.BoxGeometry(2.6, 4.6, 0.9, 5, 8, 3);
-    const pos = cliffGeo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vy = pos.getY(i);
-      const vz = pos.getZ(i);
-      const n = Math.sin(vx * 3.8 + vy * 4.5) * 0.08 + Math.cos(vy * 6.2 - vz * 3.1) * 0.05;
-      pos.setXYZ(i, vx + n, vy + n * 0.4, vz + n);
-    }
-    cliffGeo.computeVertexNormals();
+    // Build visible 3D climbable crag face with authentic coursed Inca pillow masonry & stone bosses
+    const cliffGeo = IncaMasonrySystem.createIncaPillowWallGeometry(2.8, 4.6, 1.1, {
+      courses: 6,
+      stonesPerCourse: 3,
+      pillowBulge: 0.055,
+      jointDepth: 0.026,
+    });
     this.geometries.push(cliffGeo);
 
     const cliffMesh = new THREE.Mesh(cliffGeo, materials.fieldstoneRough);
@@ -100,21 +97,23 @@ export class TraversalSystem {
     cliffMesh.receiveShadow = true;
     this.group.add(cliffMesh);
 
-    const holdGeo = new THREE.BoxGeometry(0.46, 0.14, 0.24, 2, 2, 2);
+    // Authentic carved stone climbing bosses / corbels (ñaupa piedras)
+    const holdGeo = new THREE.CylinderGeometry(0.18, 0.24, 0.22, 10);
+    holdGeo.rotateX(Math.PI * 0.5);
     this.geometries.push(holdGeo);
     for (let h = 0; h < 9; h++) {
       const hx = cragX + ((h % 2 === 0 ? -0.42 : 0.42) + Math.sin(h * 1.9) * 0.18);
       const hy = baseY + 0.55 + h * 0.44;
       const hold = new THREE.Mesh(holdGeo, materials.andesiteCut);
       hold.position.set(hx, hy, cragZ + 0.04);
-      hold.rotation.z = Math.sin(h * 2.3) * 0.08;
+      hold.rotation.z = Math.sin(h * 2.3) * 0.12;
       hold.castShadow = true;
       hold.receiveShadow = true;
       this.group.add(hold);
     }
 
     // Top platform ledge at the top of the climbable crag
-    const ledgeGeo = new THREE.BoxGeometry(2.8, 0.36, 2.2);
+    const ledgeGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(1.6, 0.36, 18);
     this.geometries.push(ledgeGeo);
     const ledgeMesh = new THREE.Mesh(ledgeGeo, materials.andesiteCut);
     ledgeMesh.position.set(cragX, topY - 0.12, cragZ - 1.1);
@@ -123,11 +122,11 @@ export class TraversalSystem {
     this.group.add(ledgeMesh);
     terrain.registerWalkable(ledgeMesh);
 
-    // 2. High-Tension Rope Zipline spanning from North Overlook (x=3.2, z=-18.5) to South Terrace (x=3.6, z=7.2)
+    // 2. High-Tension Rope Zipline spanning from North Overlook (x=3.2, z=-18.5) to South Terrace (x=6.4, z=8.8)
     const startY = terrain.getTerrainHeightAt(3.2, -18.5) + 3.1;
-    const endY = terrain.getTerrainHeightAt(3.6, 7.2) + 1.85;
+    const endY = terrain.getTerrainHeightAt(6.4, 8.8) + 2.4;
     const startVec = new THREE.Vector3(3.2, startY, -18.5);
-    const endVec = new THREE.Vector3(3.6, endY, 7.2);
+    const endVec = new THREE.Vector3(6.4, endY, 8.8);
     const spanLen = Math.hypot(endVec.x - startVec.x, endVec.y - startVec.y, endVec.z - startVec.z);
 
     this.ziplines.push({

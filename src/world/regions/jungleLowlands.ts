@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../materials';
 import { TerrainSystem } from '../terrain';
+import { IncaMasonrySystem } from '../masonry';
 import { InteractableTarget } from './cloudForest';
 
 export class JungleLowlandsRegion {
@@ -472,19 +473,13 @@ export class JungleLowlandsRegion {
   }
 
   private createBatteredWallGeometry(w: number, h: number, d: number): THREE.BufferGeometry {
-    const geo = new THREE.BoxGeometry(w, h, d, 5, 4, 4);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vy = pos.getY(i);
-      const vz = pos.getZ(i);
-      const normY = (vy + h * 0.5) / h;
-      const batter = 1.0 - normY * 0.14;
-      const irreg = Math.sin(vx * 4.1 + vy * 6.3 + vz * 5.2) * 0.028;
-      pos.setXYZ(i, vx * batter + irreg, vy + irreg * 0.5, vz * batter + irreg);
-    }
-    geo.computeVertexNormals();
-    return geo;
+    return IncaMasonrySystem.createIncaPillowWallGeometry(w, h, d, {
+      courses: Math.max(3, Math.round(h / 0.65)),
+      stonesPerCourse: Math.max(3, Math.round(w / 0.85)),
+      pillowBulge: 0.048,
+      jointDepth: 0.024,
+      batter: 0.08,
+    });
   }
 
   private createAnnularTierGeometry(

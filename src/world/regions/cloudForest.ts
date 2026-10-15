@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../materials';
 import { TerrainSystem } from '../terrain';
+import { IncaMasonrySystem } from '../masonry';
 
 export interface InteractableTarget {
   id: string;
@@ -60,9 +61,20 @@ export class CloudForestRegion {
     this.bridgeGroup.name = 'RavineHangingBridge';
 
     // Stone anchor towers & battered Inca abutments on South (z = +6.0) and North (z = -6.0) rims
-    const abutmentGeo = this.createChippedBlockGeometry(4.2, 3.4, 2.6);
-    const pillarGeo = this.createBatteredWallGeometry(0.85, 2.65, 0.85);
-    const capGeo = this.createChippedBlockGeometry(0.96, 0.28, 0.96);
+    const abutmentGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.2, 3.4, 2.6, {
+      courses: 5,
+      stonesPerCourse: 5,
+      pillowBulge: 0.052,
+      jointDepth: 0.026,
+      batter: 0.08,
+    });
+    const pillarGeo = IncaMasonrySystem.createIncaPillarGeometry(0.92, 2.65, 0.92, {
+      courses: 5,
+      pillowBulge: 0.042,
+      jointDepth: 0.022,
+      batter: 0.07,
+    });
+    const capGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(0.68, 0.28, 16);
     const bolsterBeamGeo = new THREE.CylinderGeometry(0.14, 0.14, 3.6, 12);
     bolsterBeamGeo.rotateZ(Math.PI * 0.5);
     const ropeWrapGeo = new THREE.TorusGeometry(0.19, 0.055, 8, 16);
@@ -73,15 +85,25 @@ export class CloudForestRegion {
       const ez = ends[e];
       const baseY = terrain.getTerrainHeightAt(0, ez);
 
-      // Massive stepped andesite abutment foundation
+      // Massive stepped andesite abutment foundation with coursed pillow masonry
       const abutment = new THREE.Mesh(abutmentGeo, materials.andesiteCut);
       abutment.position.set(0, baseY - 1.15, ez);
+      if (e === 1) abutment.rotation.y = Math.PI;
       abutment.castShadow = true;
       abutment.receiveShadow = true;
       this.group.add(abutment);
       terrain.registerWalkable(abutment);
 
-      // Left & Right battered stone anchor towers
+      // Natural earth/moss footing berm along the base of the abutment
+      const abutmentBermGeo = IncaMasonrySystem.createWallFootingBermGeometry(4.4, 0.35, 0.45);
+      this.geometries.push(abutmentBermGeo);
+      const abutmentBerm = new THREE.Mesh(abutmentBermGeo, materials.groundForestFloor);
+      abutmentBerm.position.set(0, baseY - 0.25, ez + (e === 0 ? 1.3 : -1.3));
+      if (e === 1) abutmentBerm.rotation.y = Math.PI;
+      abutmentBerm.receiveShadow = true;
+      this.group.add(abutmentBerm);
+
+      // Left & Right battered coursed stone anchor towers
       const sides = [-1.52, 1.52];
       for (let s = 0; s < sides.length; s++) {
         const sx = sides[s];
@@ -91,7 +113,7 @@ export class CloudForestRegion {
         pillar.receiveShadow = true;
         this.group.add(pillar);
 
-        const cap = new THREE.Mesh(capGeo, materials.moss);
+        const cap = new THREE.Mesh(capGeo, materials.andesiteCut);
         cap.position.set(sx, baseY + 2.58, ez);
         cap.castShadow = true;
         cap.receiveShadow = true;
@@ -309,18 +331,24 @@ export class CloudForestRegion {
 
     // Battered Inca polygonal retaining walls flanking the valley path & ravine rim
     const wallSpecs = [
-      { x: -4.6, z: 8.8, w: 4.8, h: 2.6, d: 1.1, rotY: 0.28 },
-      { x: 4.8, z: 9.2, w: 4.6, h: 2.5, d: 1.1, rotY: -0.26 },
-      { x: -5.2, z: -9.5, w: 5.5, h: 3.1, d: 1.2, rotY: -0.18 },
-      { x: 5.4, z: -10.2, w: 5.2, h: 3.0, d: 1.2, rotY: 0.22 },
-      { x: -7.5, z: -18.5, w: 6.4, h: 3.4, d: 1.3, rotY: 0.12 },
-      { x: 7.2, z: -19.0, w: 6.0, h: 3.2, d: 1.3, rotY: -0.15 },
+      { x: -5.4, z: 9.0, w: 4.8, h: 2.6, d: 1.1, rotY: 0.32 },
+      { x: 5.6, z: 9.6, w: 4.6, h: 2.5, d: 1.1, rotY: -0.32 },
+      { x: -5.8, z: -9.8, w: 5.5, h: 3.1, d: 1.2, rotY: -0.22 },
+      { x: 5.8, z: -10.5, w: 5.2, h: 3.0, d: 1.2, rotY: 0.25 },
+      { x: -7.8, z: -18.5, w: 6.4, h: 3.4, d: 1.3, rotY: 0.12 },
+      { x: 7.6, z: -19.0, w: 6.0, h: 3.2, d: 1.3, rotY: -0.15 },
     ];
 
     for (let i = 0; i < wallSpecs.length; i++) {
       const w = wallSpecs[i];
       const wy = terrain.getTerrainHeightAt(w.x, w.z);
-      const wGeo = this.createBatteredWallGeometry(w.w, w.h, w.d);
+      const wGeo = IncaMasonrySystem.createIncaPillowWallGeometry(w.w, w.h, w.d, {
+        courses: Math.max(3, Math.round(w.h / 0.65)),
+        stonesPerCourse: Math.max(4, Math.round(w.w / 0.85)),
+        pillowBulge: 0.05,
+        jointDepth: 0.026,
+        batter: 0.09,
+      });
       this.geometries.push(wGeo);
       const wall = new THREE.Mesh(wGeo, materials.andesiteCut);
       wall.position.set(w.x, wy + w.h * 0.35, w.z);
@@ -328,15 +356,39 @@ export class CloudForestRegion {
       wall.castShadow = true;
       wall.receiveShadow = true;
       this.group.add(wall);
+      terrain.registerWalkable(wall);
 
-      // Moss cap along the top of the retaining wall (§2.2 moss on horizontal surfaces)
-      const mossCapGeo = this.createChippedBlockGeometry(w.w * 0.92, 0.22, w.d * 0.88);
-      this.geometries.push(mossCapGeo);
-      const mossCap = new THREE.Mesh(mossCapGeo, materials.moss);
-      mossCap.position.set(w.x, wy + w.h * 0.85, w.z);
-      mossCap.rotation.y = w.rotY;
-      mossCap.receiveShadow = true;
-      this.group.add(mossCap);
+      // Footing berm along the base of the retaining wall to eliminate harsh 90-degree intersection
+      const bermGeo = IncaMasonrySystem.createWallFootingBermGeometry(w.w * 0.98, 0.32, 0.42);
+      this.geometries.push(bermGeo);
+      const berm = new THREE.Mesh(bermGeo, materials.groundForestFloor);
+      berm.position.set(
+        w.x - Math.sin(w.rotY) * (w.d * 0.42),
+        wy + 0.02,
+        w.z + Math.cos(w.rotY) * (w.d * 0.42)
+      );
+      berm.rotation.y = w.rotY;
+      berm.receiveShadow = true;
+      this.group.add(berm);
+
+      // Natural weathered scree cobbles along the base
+      for (let s = 0; s < 3; s++) {
+        const scGeo = IncaMasonrySystem.createRiverCobbleGeometry(0.16 + s * 0.04, i * 4 + s);
+        this.geometries.push(scGeo);
+        const scMesh = new THREE.Mesh(
+          scGeo,
+          s % 2 === 0 ? materials.andesiteCut : materials.fieldstoneRough
+        );
+        const sxOffset = (-0.35 + s * 0.35) * w.w;
+        scMesh.position.set(
+          w.x + Math.cos(w.rotY) * sxOffset - Math.sin(w.rotY) * (w.d * 0.48),
+          wy + 0.08,
+          w.z + Math.sin(w.rotY) * sxOffset + Math.cos(w.rotY) * (w.d * 0.48)
+        );
+        scMesh.castShadow = true;
+        scMesh.receiveShadow = true;
+        this.group.add(scMesh);
+      }
     }
   }
 
@@ -349,8 +401,16 @@ export class CloudForestRegion {
     const shZ = -15.5;
     const shY = terrain.getTerrainHeightAt(shX, shZ);
 
-    const backWallGeo = this.createBatteredWallGeometry(3.6, 2.3, 0.55);
-    const sideWallGeo = this.createBatteredWallGeometry(0.55, 2.1, 2.6);
+    const backWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 2.3, 0.55, {
+      courses: 4,
+      stonesPerCourse: 5,
+      pillowBulge: 0.045,
+    });
+    const sideWallGeo = IncaMasonrySystem.createIncaPillowWallGeometry(2.6, 2.1, 0.55, {
+      courses: 4,
+      stonesPerCourse: 4,
+      pillowBulge: 0.045,
+    });
     const beamGeo = this.createChippedBlockGeometry(4.0, 0.18, 0.22);
     const thatchRoofGeo = this.createChippedBlockGeometry(4.2, 0.14, 3.2);
     const bannerGeo = new THREE.PlaneGeometry(0.85, 1.45);
@@ -426,8 +486,8 @@ export class CloudForestRegion {
     const stZ = -16.2;
     const stY = terrain.getTerrainHeightAt(stX, stZ);
 
-    const plinthGeo = this.createChippedBlockGeometry(2.1, 0.45, 2.1);
-    const steleGeo = this.createBatteredWallGeometry(0.95, 2.35, 0.48);
+    const plinthGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(1.4, 0.45, 18);
+    const steleGeo = IncaMasonrySystem.createIncaWakaSteleGeometry(0.46, 2.35, 12);
     const sunDiscGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16);
     sunDiscGeo.rotateX(Math.PI / 2);
 
@@ -543,48 +603,84 @@ export class CloudForestRegion {
     const cpZ = 8.4;
     const cpY = terrain.getTerrainHeightAt(cpX, cpZ);
 
-    const ringStoneGeo = this.createChippedBlockGeometry(0.42, 0.35, 0.32);
-    const markerGeo = this.createBatteredWallGeometry(0.48, 1.15, 0.48);
-    this.geometries.push(ringStoneGeo, markerGeo);
+    // Authentic circular stepped Inca Usnu altar platform embedded into the forest loam
+    const daisGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(1.65, 0.22, 20);
+    const innerDaisGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(1.22, 0.16, 20);
+    // Sacred carved Inca Waka monolith with stepped Chakana collars
+    const markerGeo = IncaMasonrySystem.createIncaWakaSteleGeometry(0.32, 1.25, 12);
+    this.geometries.push(daisGeo, innerDaisGeo, markerGeo);
 
-    for (let i = 0; i < 8; i++) {
-      const ang = (i / 8) * Math.PI * 2;
-      const rx = cpX + Math.cos(ang) * 1.25;
-      const rz = cpZ + Math.sin(ang) * 1.25;
+    const dais = new THREE.Mesh(daisGeo, materials.andesiteCut);
+    dais.position.set(cpX, cpY + 0.08, cpZ);
+    dais.castShadow = true;
+    dais.receiveShadow = true;
+    this.group.add(dais);
+    terrain.registerWalkable(dais);
+
+    const innerDais = new THREE.Mesh(innerDaisGeo, materials.andesiteCut);
+    innerDais.position.set(cpX, cpY + 0.22, cpZ);
+    innerDais.castShadow = true;
+    innerDais.receiveShadow = true;
+    this.group.add(innerDais);
+
+    // 10 Natural, rounded river-worn / moraine andesite cobbles nestled around the dais
+    for (let i = 0; i < 10; i++) {
+      const ang = (i / 10) * Math.PI * 2 + Math.sin(i * 1.7) * 0.15;
+      const rad = 1.62 + Math.sin(i * 2.3) * 0.12;
+      const rx = cpX + Math.cos(ang) * rad;
+      const rz = cpZ + Math.sin(ang) * rad;
       const ry = terrain.getTerrainHeightAt(rx, rz);
-      const stone = new THREE.Mesh(ringStoneGeo, materials.andesiteCut);
-      stone.position.set(rx, ry + 0.1, rz);
-      stone.rotation.y = -ang;
-      stone.castShadow = true;
-      stone.receiveShadow = true;
-      this.group.add(stone);
+      const cobbleGeo = IncaMasonrySystem.createRiverCobbleGeometry(0.18 + (i % 3) * 0.04, i * 2.3);
+      this.geometries.push(cobbleGeo);
+      const cobble = new THREE.Mesh(
+        cobbleGeo,
+        i % 2 === 0 ? materials.andesiteCut : materials.fieldstoneRough
+      );
+      cobble.position.set(rx, ry + 0.08, rz);
+      cobble.rotation.set(Math.sin(i * 1.5) * 0.2, ang, Math.cos(i * 1.9) * 0.2);
+      cobble.castShadow = true;
+      cobble.receiveShadow = true;
+      this.group.add(cobble);
     }
 
     const marker = new THREE.Mesh(markerGeo, materials.andesiteCut);
-    marker.position.set(cpX, cpY + 0.5, cpZ);
+    marker.position.set(cpX, cpY + 0.85, cpZ);
     marker.castShadow = true;
     marker.receiveShadow = true;
     this.group.add(marker);
 
-    // Bronze ceremonial brazier and glowing ember atop the sanctuary marker
-    const brazierGeo = new THREE.CylinderGeometry(0.24, 0.16, 0.18, 12);
-    const emberGeo = new THREE.SphereGeometry(0.14, 12, 8);
-    this.geometries.push(brazierGeo, emberGeo);
+    // Authentic ceremonial Inca bronze Kero / Qonopa vessel brazier
+    const brazierGeo = new THREE.CylinderGeometry(0.28, 0.18, 0.22, 16);
+    const brazierBaseGeo = new THREE.CylinderGeometry(0.20, 0.24, 0.08, 16);
+    const brazierLipGeo = new THREE.TorusGeometry(0.28, 0.025, 8, 16);
+    brazierLipGeo.rotateX(Math.PI * 0.5);
+    const emberGeo = new THREE.SphereGeometry(0.18, 14, 10);
+    this.geometries.push(brazierGeo, brazierBaseGeo, brazierLipGeo, emberGeo);
 
     const brazier = new THREE.Mesh(brazierGeo, materials.metalBronze);
-    brazier.position.set(cpX, cpY + 1.15, cpZ);
+    brazier.position.set(cpX, cpY + 1.55, cpZ);
     brazier.castShadow = true;
     this.group.add(brazier);
 
+    const brazierBase = new THREE.Mesh(brazierBaseGeo, materials.metalBronze);
+    brazierBase.position.set(cpX, cpY + 1.44, cpZ);
+    brazierBase.castShadow = true;
+    this.group.add(brazierBase);
+
+    const brazierLip = new THREE.Mesh(brazierLipGeo, materials.metalBronze);
+    brazierLip.position.set(cpX, cpY + 1.66, cpZ);
+    brazierLip.castShadow = true;
+    this.group.add(brazierLip);
+
     const ember = new THREE.Mesh(emberGeo, materials.goldOrnamental);
-    ember.position.set(cpX, cpY + 1.25, cpZ);
+    ember.position.set(cpX, cpY + 1.64, cpZ);
     this.group.add(ember);
 
     this.interactables.push({
       id: 'checkpoint_south_trail',
       label: 'Sanctuary Checkpoint',
       promptText: '[E] Rest at Sanctuary Marker',
-      position: new THREE.Vector3(cpX, cpY + 0.8, cpZ),
+      position: new THREE.Vector3(cpX, cpY + 1.0, cpZ),
       radius: 2.8,
     });
 
@@ -593,16 +689,16 @@ export class CloudForestRegion {
     const vpZ = -24.5;
     const vpY = terrain.getTerrainHeightAt(vpX, vpZ);
 
-    const daisGeo = this.createChippedBlockGeometry(3.2, 0.55, 3.2);
-    const perchGeo = this.createBatteredWallGeometry(0.55, 1.65, 0.55);
-    this.geometries.push(daisGeo, perchGeo);
+    const daisVpGeo = IncaMasonrySystem.createIncaAltarDaisGeometry(2.4, 0.45, 24);
+    const perchGeo = IncaMasonrySystem.createIncaWakaSteleGeometry(0.42, 1.75, 12);
+    this.geometries.push(daisVpGeo, perchGeo);
 
-    const dais = new THREE.Mesh(daisGeo, materials.andesiteCut);
-    dais.position.set(vpX, vpY + 0.2, vpZ);
-    dais.castShadow = true;
-    dais.receiveShadow = true;
-    this.group.add(dais);
-    terrain.registerWalkable(dais);
+    const vpDais = new THREE.Mesh(daisVpGeo, materials.andesiteCut);
+    vpDais.position.set(vpX, vpY + 0.2, vpZ);
+    vpDais.castShadow = true;
+    vpDais.receiveShadow = true;
+    this.group.add(vpDais);
+    terrain.registerWalkable(vpDais);
 
     const perch = new THREE.Mesh(perchGeo, materials.andesiteCut);
     perch.position.set(vpX, vpY + 1.15, vpZ - 1.1);

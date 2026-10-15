@@ -25,6 +25,8 @@ interface GradeSpec {
   bounceIntensity: number;
   rimColor: number;
   rimIntensity: number;
+  ambientColor: number;
+  ambientIntensity: number;
   fogColor: number;
   fogDensity: number;
   exposure: number;
@@ -37,12 +39,14 @@ const GRADES: Record<TimeOfDayGrade, GradeSpec> = {
     sunColor: 0xffc8a6,
     sunIntensity: 3.1,
     skyColor: 0x88b0d0,
-    groundColor: 0x45543e,
-    hemiIntensity: 1.15,
+    groundColor: 0x56644f,
+    hemiIntensity: 1.35,
     bounceColor: 0x788c72,
-    bounceIntensity: 0.68,
+    bounceIntensity: 0.95,
     rimColor: 0xffd8be,
     rimIntensity: 0.52,
+    ambientColor: 0x6e8090,
+    ambientIntensity: 0.65,
     fogColor: 0xb6cad8,
     fogDensity: 0.0018,
     exposure: 1.12,
@@ -53,12 +57,14 @@ const GRADES: Record<TimeOfDayGrade, GradeSpec> = {
     sunColor: 0xfff8eb,
     sunIntensity: 3.5,
     skyColor: 0x7cb0e0,
-    groundColor: 0x4e5c42,
-    hemiIntensity: 1.28,
+    groundColor: 0x607056,
+    hemiIntensity: 1.48,
     bounceColor: 0x7a926a,
-    bounceIntensity: 0.75,
+    bounceIntensity: 1.10,
     rimColor: 0xe4f2ff,
     rimIntensity: 0.45,
+    ambientColor: 0x7c8e9c,
+    ambientIntensity: 0.72,
     fogColor: 0xb8d0e4,
     fogDensity: 0.0014,
     exposure: 1.10,
@@ -69,12 +75,14 @@ const GRADES: Record<TimeOfDayGrade, GradeSpec> = {
     sunColor: 0xffebc8,
     sunIntensity: 3.5,
     skyColor: 0x88b5d8,
-    groundColor: 0x48583e,
-    hemiIntensity: 1.32,
+    groundColor: 0x5a6a50,
+    hemiIntensity: 1.55,
     bounceColor: 0x829670,
-    bounceIntensity: 0.85,
+    bounceIntensity: 1.20,
     rimColor: 0xffedd0,
     rimIntensity: 0.78,
+    ambientColor: 0x7e8c96,
+    ambientIntensity: 0.75,
     fogColor: 0xadc4bd,
     fogDensity: 0.0016,
     exposure: 1.18,
@@ -85,12 +93,14 @@ const GRADES: Record<TimeOfDayGrade, GradeSpec> = {
     sunColor: 0xff9454,
     sunIntensity: 2.5,
     skyColor: 0x66749c,
-    groundColor: 0x3b3430,
-    hemiIntensity: 0.92,
+    groundColor: 0x48423e,
+    hemiIntensity: 1.08,
     bounceColor: 0x6a564b,
-    bounceIntensity: 0.55,
+    bounceIntensity: 0.75,
     rimColor: 0xffa86b,
     rimIntensity: 0.55,
+    ambientColor: 0x5e6670,
+    ambientIntensity: 0.52,
     fogColor: 0x887e8e,
     fogDensity: 0.0024,
     exposure: 1.08,
@@ -101,12 +111,14 @@ const GRADES: Record<TimeOfDayGrade, GradeSpec> = {
     sunColor: 0x8bb0e0,
     sunIntensity: 1.15,
     skyColor: 0x243654,
-    groundColor: 0x1e2b24,
-    hemiIntensity: 0.68,
+    groundColor: 0x24322a,
+    hemiIntensity: 0.78,
     bounceColor: 0x304258,
-    bounceIntensity: 0.42,
+    bounceIntensity: 0.52,
     rimColor: 0x98c0f2,
     rimIntensity: 0.42,
+    ambientColor: 0x2b3748,
+    ambientIntensity: 0.38,
     fogColor: 0x243448,
     fogDensity: 0.0028,
     exposure: 1.02,
@@ -115,6 +127,7 @@ const GRADES: Record<TimeOfDayGrade, GradeSpec> = {
 
 const _sunOffset = new THREE.Vector3();
 const _rimOffset = new THREE.Vector3();
+const _bounceOffset = new THREE.Vector3();
 
 export class LightRig {
   public readonly group: THREE.Group = new THREE.Group();
@@ -122,6 +135,7 @@ export class LightRig {
   public readonly skyFill: THREE.HemisphereLight;
   public readonly bounceLight: THREE.DirectionalLight;
   public readonly rimLight: THREE.DirectionalLight;
+  public readonly ambientLight: THREE.AmbientLight;
   public readonly localLights: THREE.PointLight[] = [];
 
   private currentGrade: TimeOfDayGrade = 'afternoon';
@@ -152,6 +166,8 @@ export class LightRig {
     this.rimLight = new THREE.DirectionalLight(0xffe6bc, 0.48);
     this.rimLight.castShadow = false;
 
+    this.ambientLight = new THREE.AmbientLight(0x7e8c96, 0.75);
+
     this.group.add(
       this.sunLight,
       this.sunLight.target,
@@ -159,7 +175,8 @@ export class LightRig {
       this.bounceLight,
       this.bounceLight.target,
       this.rimLight,
-      this.rimLight.target
+      this.rimLight.target,
+      this.ambientLight
     );
 
     for (let i = 0; i < 4; i++) {
@@ -216,6 +233,9 @@ export class LightRig {
     this.rimLight.color.setHex(spec.rimColor);
     this.rimLight.intensity = spec.rimIntensity;
 
+    this.ambientLight.color.setHex(spec.ambientColor);
+    this.ambientLight.intensity = spec.ambientIntensity;
+
     if (renderer) {
       renderer.toneMappingExposure = spec.exposure;
     }
@@ -241,6 +261,12 @@ export class LightRig {
     this.rimLight.position.copy(focusPosition).add(_rimOffset);
     this.rimLight.target.position.copy(focusPosition);
     this.rimLight.target.updateMatrixWorld();
+
+    _bounceOffset.copy(sharedUniforms.uSunDir.value).multiplyScalar(-36);
+    _bounceOffset.y = -6;
+    this.bounceLight.position.copy(focusPosition).add(_bounceOffset);
+    this.bounceLight.target.position.copy(focusPosition);
+    this.bounceLight.target.updateMatrixWorld();
 
     for (let i = 0; i < this.localLights.length; i++) {
       const pt = this.localLights[i];

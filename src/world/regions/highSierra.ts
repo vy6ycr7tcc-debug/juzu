@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../materials';
 import { TerrainSystem } from '../terrain';
+import { IncaMasonrySystem } from '../masonry';
 import { InteractableTarget } from './cloudForest';
 
 export class HighSierraRegion {
@@ -867,23 +868,13 @@ export class HighSierraRegion {
    * Builds an authentic inward-battered dwelling wall geometry (3.5-degree slope).
    */
   private createBatteredHouseWallsGeometry(w: number, h: number, d: number): THREE.BufferGeometry {
-    const geo = new THREE.BoxGeometry(w, h, d, 4, 3, 4);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    const batter = 0.14; // Inward taper towards the top
-
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vy = pos.getY(i);
-      const vz = pos.getZ(i);
-
-      const normY = (vy + h * 0.5) / h;
-      const taper = 1.0 - normY * batter;
-      const chip = Math.sin(vx * 4.2 + vy * 5.8 + vz * 4.9) * 0.022;
-
-      pos.setXYZ(i, vx * taper + chip, vy + h * 0.5 + chip * 0.5, vz * taper + chip);
-    }
-    geo.computeVertexNormals();
-    return geo;
+    return IncaMasonrySystem.createIncaPillowWallGeometry(w, h, d, {
+      courses: Math.max(3, Math.round(h / 0.65)),
+      stonesPerCourse: Math.max(3, Math.round(w / 0.85)),
+      pillowBulge: 0.048,
+      jointDepth: 0.024,
+      batter: 0.12,
+    });
   }
 
   /**
@@ -1107,19 +1098,13 @@ export class HighSierraRegion {
    * Builds a weathered stone block with chipped edges and subtle batter.
    */
   private createWeatheredBlock(w: number, h: number, d: number): THREE.BufferGeometry {
-    const geo = new THREE.BoxGeometry(w, h, d, 4, 3, 4);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vy = pos.getY(i);
-      const vz = pos.getZ(i);
-      const normY = (vy + h * 0.5) / h;
-      const batter = 1.0 - normY * 0.08;
-      const chip = Math.sin(vx * 4.7 + vy * 6.3 + vz * 5.1) * 0.022;
-      pos.setXYZ(i, vx * batter + chip, vy + chip * 0.5, vz * batter + chip);
-    }
-    geo.computeVertexNormals();
-    return geo;
+    return IncaMasonrySystem.createIncaPillowWallGeometry(w, h, d, {
+      courses: Math.max(2, Math.round(h / 0.65)),
+      stonesPerCourse: Math.max(3, Math.round(w / 0.85)),
+      pillowBulge: 0.045,
+      jointDepth: 0.022,
+      batter: 0.08,
+    });
   }
 
   /**

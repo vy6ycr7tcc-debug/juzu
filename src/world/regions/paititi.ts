@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../materials';
 import { TerrainSystem } from '../terrain';
+import { IncaMasonrySystem } from '../masonry';
 import { InteractableTarget } from './cloudForest';
 
 export class PaititiRegion {
@@ -93,18 +94,28 @@ export class PaititiRegion {
 
     // Sacred Imperial Double-Jamb Sun Portal (Doble Jamba) atop the upper temple terrace
     const portalFloorY = ptY + 4.1; // Surface of upper terrace
-    const plinthGeo = new THREE.BoxGeometry(7.2, 2.8, 4.2);
+    const plinthGeo = IncaMasonrySystem.createIncaPillowWallGeometry(7.2, 2.8, 4.2, {
+      courses: 5,
+      stonesPerCourse: 7,
+      pillowBulge: 0.052,
+    });
     
     // Outer battered jambs
-    const outerJambGeo = new THREE.BoxGeometry(0.92, 4.4, 1.15);
+    const outerJambGeo = IncaMasonrySystem.createIncaPillarGeometry(0.92, 4.4, 1.15, {
+      courses: 7,
+      pillowBulge: 0.045,
+    });
     // Inner recessed jambs creating the authentic double-jamb Inca recess
-    const innerJambGeo = new THREE.BoxGeometry(0.45, 3.9, 0.85);
+    const innerJambGeo = IncaMasonrySystem.createIncaPillarGeometry(0.45, 3.9, 0.85, {
+      courses: 6,
+      pillowBulge: 0.035,
+    });
 
     // Stepped imperial lintels & Chakana pediment
-    const lintelLowerGeo = new THREE.BoxGeometry(4.4, 0.55, 1.25);
-    const lintelUpperGeo = new THREE.BoxGeometry(5.2, 0.45, 1.35);
-    const pedimentGeo = new THREE.BoxGeometry(3.6, 0.65, 1.15);
-    const chakanaCrestGeo = new THREE.BoxGeometry(2.2, 0.55, 1.05);
+    const lintelLowerGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.4, 0.55, 1.25, { courses: 1, stonesPerCourse: 4, pillowBulge: 0.035 });
+    const lintelUpperGeo = IncaMasonrySystem.createIncaPillowWallGeometry(5.2, 0.45, 1.35, { courses: 1, stonesPerCourse: 5, pillowBulge: 0.035 });
+    const pedimentGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.6, 0.65, 1.15, { courses: 1, stonesPerCourse: 3, pillowBulge: 0.035 });
+    const chakanaCrestGeo = IncaMasonrySystem.createIncaPillowWallGeometry(2.2, 0.55, 1.05, { courses: 1, stonesPerCourse: 2, pillowBulge: 0.035 });
 
     this.geometries.push(
       plinthGeo,
@@ -246,8 +257,8 @@ export class PaititiRegion {
 
     // 3. Grand Quipu Archive Chamber on the South Sanctuary Plaza (z = 7.8)
     // Authentic trapezoidal Inca ashlar stone sanctuary building
-    const archBackGeo = new THREE.BoxGeometry(4.8, 3.2, 0.65);
-    const archSideGeo = new THREE.BoxGeometry(0.65, 3.2, 3.2);
+    const archBackGeo = IncaMasonrySystem.createIncaPillowWallGeometry(4.8, 3.2, 0.65, { courses: 5, stonesPerCourse: 5, pillowBulge: 0.045 });
+    const archSideGeo = IncaMasonrySystem.createIncaPillowWallGeometry(3.2, 3.2, 0.65, { courses: 5, stonesPerCourse: 4, pillowBulge: 0.045 });
     const archRoofGeo = new THREE.BoxGeometry(5.2, 0.42, 3.6);
     const nicheGeo = new THREE.BoxGeometry(0.65, 0.85, 0.45);
     this.geometries.push(archBackGeo, archSideGeo, archRoofGeo, nicheGeo);

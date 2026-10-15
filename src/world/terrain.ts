@@ -348,8 +348,6 @@ export class TerrainSystem {
       const x = pos.getX(i);
       const z = pos.getZ(i);
 
-      uv.setXY(i, (x / width + 0.5) * 8.0, (z / depth + 0.5) * 8.0);
-
       const nx = x / (width * 0.5);
       const nz = z / (depth * 0.5);
       const dist = Math.hypot(nx, nz);
@@ -384,7 +382,16 @@ export class TerrainSystem {
     for (let i = 0; i < count; i++) {
       const hNorm = rawH[i] / maxRaw;
       normHeights[i] = hNorm;
-      pos.setY(i, hNorm * maxHeight);
+      const y = hNorm * maxHeight;
+      pos.setY(i, y);
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      // Project UV with vertical slope contribution so steep cliff faces do not stretch textures vertically
+      uv.setXY(
+        i,
+        (x / width + 0.5) * 6.0 + (y / maxHeight) * 2.5,
+        (z / depth + 0.5) * 6.0 + (y / maxHeight) * 2.5
+      );
     }
 
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));

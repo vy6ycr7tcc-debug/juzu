@@ -135,7 +135,7 @@ export class JuzuEngine {
 
     // Place sanctuary brazier flickering torch light (index 0)
     const cpY = this.terrain.getTerrainHeightAt(-2.2, 8.4);
-    this.lightRig.placeTorchLight(0, -2.2, cpY + 1.25, 8.4, 2.5);
+    this.lightRig.placeTorchLight(0, -2.2, cpY + 1.65, 8.4, 3.2);
 
     // 4. Naira Quispe rigged GLB character + Sol Negro operatives + camera
     await this.physics.build();
