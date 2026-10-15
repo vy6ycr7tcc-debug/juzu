@@ -222,10 +222,10 @@ export class TerrainSystem {
     const cRock = new THREE.Color(0xc8c4ba);
     const cRiverBed = new THREE.Color(0x688274);
 
-    const cPunaGold = new THREE.Color(0xd8c696);
-    const cTerraceSoil = new THREE.Color(0xa48e6c);
-    const cSierraGranite = new THREE.Color(0.85, 0.98, 1.38);
-    const cGlacialSnow = new THREE.Color(1.88, 2.22, 3.35);
+    const cPunaGold = new THREE.Color(0xd2be88);
+    const cTerraceSoil = new THREE.Color(0x9a8462);
+    const cSierraGranite = new THREE.Color(0.84, 0.82, 0.80);
+    const cGlacialSnow = new THREE.Color(1.22, 1.28, 1.35);
     const cScratch = new THREE.Color();
 
     for (let i = 0; i < count; i++) {
@@ -252,7 +252,13 @@ export class TerrainSystem {
             cScratch.copy(cTerraceSoil).lerp(cPunaGold, 0.48 * noise);
           }
         } else {
-          cScratch.copy(cPunaGold).lerp(cTerraceSoil, 0.28 * (1.0 - noise));
+          const pathDist = Math.abs(vx);
+          if (pathDist < 1.6) {
+            // Road bed under the Qhapaq Ñan: packed earth and crushed stone
+            cScratch.copy(cTerraceSoil).lerp(cSierraGranite, 0.42 * noise);
+          } else {
+            cScratch.copy(cPunaGold).lerp(cSierraGranite, 0.38 * noise).lerp(cTerraceSoil, 0.24);
+          }
         }
       } else {
         const pathFactor = Math.exp(-(vx * vx) * 0.14);
@@ -393,21 +399,23 @@ export class TerrainSystem {
     const meta = geo as unknown as { _normHeights?: Float32Array };
     if (!colAttr || !meta._normHeights || !normAttr) return;
 
-    // Physically accurate PBR Andean rock and snow albedos
-    const cRock = new THREE.Color(0.20, 0.22, 0.26);
-    const cSnow = new THREE.Color(0.92, 0.95, 0.98);
-    const cIce = new THREE.Color(0.68, 0.82, 0.88);
+    // Physically accurate PBR Andean rock and snow albedos (compensated for dark albedo texture)
+    const cRock = new THREE.Color(2.2, 2.3, 2.5);
+    const cSnow = new THREE.Color(5.2, 5.4, 5.8);
+    const cIce = new THREE.Color(3.6, 4.4, 5.2);
     const cScratch = new THREE.Color();
 
     for (let i = 0; i < meta._normHeights.length; i++) {
       const h = meta._normHeights[i];
       const ny = normAttr.getY(i);
 
-      // Vertical cliff faces (ny < 0.38) shed snow, revealing dark rock
-      const slopeFactor = Math.max(0, Math.min(1.0, (ny - 0.38) / 0.28));
+      // Fluted Andean snow clings to slopes down to ~75 degrees (ny > 0.16)
+      const slopeFactor = Math.max(0, Math.min(1.0, (ny - 0.16) / 0.22));
 
-      if (h > snowlineNorm && slopeFactor > 0.15) {
-        const tSnow = Math.min(1.0, (h - snowlineNorm) / 0.18) * slopeFactor;
+      if (h > snowlineNorm && (slopeFactor > 0.1 || h > 0.72)) {
+        const summitBoost = h > 0.75 ? Math.min(1.0, (h - 0.75) / 0.15) : 0.0;
+        const effectiveSlope = Math.max(slopeFactor, summitBoost * 0.85);
+        const tSnow = Math.min(1.0, (h - snowlineNorm) / 0.22) * effectiveSlope;
         const snowShade = cIce.clone().lerp(cSnow, Math.min(1.0, (h - snowlineNorm) / 0.12));
         cScratch.copy(cRock).lerp(snowShade, tSnow);
       } else {
