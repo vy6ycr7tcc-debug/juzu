@@ -258,8 +258,6 @@ export class TerrainSystem {
   }
 
   public getHighSierraHeightAt(x: number, z: number): number {
-    const absX = Math.abs(x);
-
     let passRise = 0;
     if (z < -4.0) {
       const nz = Math.min(45.0, -4.0 - z);
@@ -268,26 +266,37 @@ export class TerrainSystem {
       passRise = Math.min(20.0, z - 6.0) * 0.04;
     }
 
+    // Natural winding valley center and organic fluctuating valley floor width
+    const valleyCenter = Math.sin(z * 0.07) * 1.5 + Math.sin(z * 0.14) * 0.6;
+    const valleyWidth = 9.2 + Math.sin(z * 0.09 + 1.2) * 2.2 + Math.cos(z * 0.04) * 1.4;
+    const lateralDist = Math.abs(x - valleyCenter);
+
     let terraceRise = 0;
-    if (absX > 9.5) {
-      const distOut = absX - 9.5;
-      const stepWidth = 3.4;
-      const stepHeight = 1.25;
-      const stepIndex = Math.floor(distOut / stepWidth);
-      const frac = (distOut % stepWidth) / stepWidth;
-      const ramp = frac < 0.24 ? frac / 0.24 : 1.0;
-      if (stepIndex < 5) {
-        terraceRise = (stepIndex + ramp) * stepHeight;
+    if (lateralDist > valleyWidth) {
+      const distOut = lateralDist - valleyWidth;
+      // Contour line curvature tracking mountain topography
+      const contourJitter = Math.sin(z * 0.18 + x * 0.12) * 0.6 + Math.cos(z * 0.08) * 0.4;
+      const adjustedDist = Math.max(0, distOut + contourJitter);
+      const stepWidth = 3.6;
+      const stepHeight = 1.15;
+      const stepIndex = Math.floor(adjustedDist / stepWidth);
+      const frac = (adjustedDist % stepWidth) / stepWidth;
+      // Smooth organic stone coping and rounded terrace lip
+      const ramp = Math.min(1.0, Math.max(0.0, (frac - 0.06) / 0.32));
+      const smoothRamp = ramp * ramp * (3.0 - 2.0 * ramp);
+      if (stepIndex < 4) {
+        terraceRise = (stepIndex + smoothRamp) * stepHeight;
       } else {
-        const alpineX = distOut - 5 * stepWidth;
-        terraceRise = 5 * stepHeight + alpineX * 0.48 + Math.sin(x * 0.25 + z * 0.2) * 0.55;
+        const alpineDist = adjustedDist - 4 * stepWidth;
+        terraceRise = 4 * stepHeight + Math.pow(alpineDist, 1.18) * 0.42 + Math.sin(x * 0.22 + z * 0.18) * 0.55;
       }
     }
 
-    const centerClearance = Math.min(1.0, Math.hypot(x, z + 6.0) / 7.0);
+    const centerClearance = Math.min(1.0, Math.hypot(x - valleyCenter, z + 6.0) / 7.0);
     const micro =
       (Math.sin(x * 0.19 + z * 0.17) * 0.14 +
-        Math.cos(x * 0.41 - z * 0.37) * 0.07) *
+        Math.cos(x * 0.41 - z * 0.37) * 0.07 +
+        Math.sin(x * 0.72 + z * 0.65) * 0.04) *
       centerClearance;
 
     return 2.0 + passRise + terraceRise + micro;
@@ -366,21 +375,30 @@ export class TerrainSystem {
         } else if (vy > snowThreshold) {
           const snowT = (vy - snowThreshold) / 1.8;
           cScratch.copy(cSierraGranite).lerp(cGlacialSnow, snowT);
-        } else if (Math.abs(vx) > 9.5) {
-          const distOut = Math.abs(vx) - 9.5;
-          const frac = (distOut % 3.4) / 3.4;
-          if (frac < 0.25) {
-            cScratch.copy(cSierraGranite);
-          } else {
-            cScratch.copy(cTerraceSoil).lerp(cPunaGold, 0.48 * noise);
-          }
         } else {
-          const pathDist = Math.abs(vx);
-          if (pathDist < 1.6) {
-            // Road bed under the Qhapaq Ñan: packed earth and crushed stone
-            cScratch.copy(cTerraceSoil).lerp(cSierraGranite, 0.42 * noise);
+          const valleyCenter = Math.sin(vz * 0.07) * 1.5 + Math.sin(vz * 0.14) * 0.6;
+          const valleyWidth = 9.2 + Math.sin(vz * 0.09 + 1.2) * 2.2 + Math.cos(vz * 0.04) * 1.4;
+          const lateralDist = Math.abs(vx - valleyCenter);
+
+          if (lateralDist > valleyWidth) {
+            const distOut = lateralDist - valleyWidth;
+            const contourJitter = Math.sin(vz * 0.18 + vx * 0.12) * 0.6 + Math.cos(vz * 0.08) * 0.4;
+            const adjustedDist = Math.max(0, distOut + contourJitter);
+            const frac = (adjustedDist % 3.6) / 3.6;
+            if (frac < 0.28) {
+              cScratch.copy(cSierraGranite).lerp(cTerraceSoil, 0.22 * noise);
+            } else {
+              cScratch.copy(cTerraceSoil).lerp(cPunaGold, 0.52 * noise);
+            }
           } else {
-            cScratch.copy(cPunaGold).lerp(cSierraGranite, 0.38 * noise).lerp(cTerraceSoil, 0.24);
+            const roadCenter = Math.sin(vz * 0.08) * 0.45;
+            const pathDist = Math.abs(vx - roadCenter);
+            if (pathDist < 1.6) {
+              // Road bed under the Qhapaq Ñan: packed earth and crushed stone
+              cScratch.copy(cTerraceSoil).lerp(cSierraGranite, 0.42 * noise);
+            } else {
+              cScratch.copy(cPunaGold).lerp(cSierraGranite, 0.38 * noise).lerp(cTerraceSoil, 0.24);
+            }
           }
         }
       } else {

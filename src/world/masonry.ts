@@ -538,4 +538,80 @@ export class IncaMasonrySystem {
 
     return geo;
   }
+
+  /**
+   * Generates a monumental living-bedrock Inca Ushnu altar outcrop.
+   * Sculpted from living mountain granite with asymmetric ceremonial planes (Chakana),
+   * carved ritual seats (tianas), chiseled rock facets, and organic boulder shoulders.
+   */
+  public static createIncaUshnuBedrockGeometry(
+    width: number,
+    height: number,
+    depth: number
+  ): THREE.BufferGeometry {
+    const segX = 24;
+    const segY = 16;
+    const segZ = 24;
+    const geo = new THREE.BoxGeometry(width, height, depth, segX, segY, segZ);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+
+    const hw = width * 0.5;
+    const hh = height * 0.5;
+    const hd = depth * 0.5;
+
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+
+      const normX = x / hw;
+      const normY = (y + hh) / height;
+      const normZ = z / hd;
+
+      // 1. Natural seismic batter: wall slopes inward toward the top
+      const batterFactor = 1.0 - normY * 0.12;
+      x *= batterFactor;
+      z *= batterFactor;
+
+      // 2. Asymmetric living bedrock sculpting:
+      // Lower ceremonial seat/shelf on the left (x < -0.2)
+      // High sacred Hanan Pacha altar plane on the right (x > 0.0)
+      if (normY > 0.62) {
+        if (normX < -0.22) {
+          // Carved ceremonial throne / tiana recessed platform
+          const seatDrop = Math.min(1.0, (-normX - 0.22) / 0.5) * (height * 0.26);
+          y -= seatDrop;
+        } else if (normX > 0.15) {
+          // Raised sacred gnomon plinth
+          const plinthRise = Math.min(1.0, (normX - 0.15) / 0.45) * (height * 0.14);
+          y += plinthRise;
+        }
+      }
+
+      // 3. Organic boulder rounding on outer shoulders and corners (anti-boxiness)
+      const cornerDist = Math.hypot(normX, normZ);
+      if (cornerDist > 0.78) {
+        const roundFactor = (cornerDist - 0.78) * 0.20;
+        x *= 1.0 - roundFactor;
+        z *= 1.0 - roundFactor;
+      }
+
+      // 4. Hand-pecked cyclopean chiseled rock fracture relief
+      const noise =
+        Math.sin(x * 4.5 + y * 5.2 + z * 3.8) * 0.038 +
+        Math.cos(x * 9.2 - z * 8.4) * 0.018 +
+        Math.sin(y * 12.0) * 0.012;
+
+      // 5. Front ceremonial niche carving (+Z face, near center)
+      if (normZ > 0.72 && Math.abs(normX) < 0.32 && normY > 0.22 && normY < 0.62) {
+        const nicheDepth = Math.sin((normZ - 0.72) / 0.28 * Math.PI) * 0.18;
+        z -= nicheDepth;
+      }
+
+      pos.setXYZ(i, x + noise, y + noise * 0.5, z + noise);
+    }
+
+    geo.computeVertexNormals();
+    return geo;
+  }
 }

@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../materials';
 import { TerrainSystem } from '../terrain';
 import { IncaMasonrySystem } from '../masonry';
+import { applyNanoHexagonRelief } from '../../rendering/nanoHex';
 import { InteractableTarget } from './cloudForest';
 
 export class HighSierraRegion {
@@ -85,7 +86,7 @@ export class HighSierraRegion {
     const gutterGeo = this.createWeatheredBlock(2.7, 0.08, 0.28);
     this.geometries.push(flagGeo, curbGeo, gutterGeo);
 
-    // Paved flagstone causeway running from z = 9.6 to z = -6.0
+    // Paved flagstone causeway running from z = 9.6 to z = -6.0 with gentle mountain pass meander
     const startZ = 9.6;
     const endZ = -6.0;
     const rows = 26;
@@ -94,10 +95,11 @@ export class HighSierraRegion {
     for (let r = 0; r < rows; r++) {
       const tz = r / (rows - 1);
       const rz = startZ + tz * (endZ - startZ);
+      const roadCenterX = Math.sin(rz * 0.08) * 0.45;
       const cols = 4;
       for (let c = 0; c < cols; c++) {
         const tx = (c / (cols - 1)) * 2 - 1;
-        const rx = tx * (roadWidth * 0.42) + Math.sin(r * 2.1 + c * 1.7) * 0.06;
+        const rx = roadCenterX + tx * (roadWidth * 0.44) + Math.sin(r * 2.1 + c * 1.7) * 0.08;
         const ry = hAt(rx, rz);
 
         const flag = new THREE.Mesh(flagGeo, materials.andesiteCut);
@@ -110,22 +112,25 @@ export class HighSierraRegion {
       }
     }
 
-    // Border curb stones (albarradas) along left and right edges
+    // Border curb stones (albarradas) along left and right edges tracing the meander
     const curbSteps = 14;
     for (let i = 0; i < curbSteps; i++) {
       const cz = startZ - (i * (startZ - endZ)) / curbSteps - 0.5;
-      const leftY = hAt(-1.35, cz);
-      const rightY = hAt(1.35, cz);
+      const roadCenterX = Math.sin(cz * 0.08) * 0.45;
+      const leftX = roadCenterX - 1.38;
+      const rightX = roadCenterX + 1.38;
+      const leftY = hAt(leftX, cz);
+      const rightY = hAt(rightX, cz);
 
       const curbL = new THREE.Mesh(curbGeo, materials.fieldstoneRough);
-      curbL.position.set(-1.35, leftY + 0.08, cz);
-      curbL.rotation.y = ((i % 3) - 1) * 0.04;
+      curbL.position.set(leftX, leftY + 0.08, cz);
+      curbL.rotation.y = Math.cos(cz * 0.08) * 0.08 + ((i % 3) - 1) * 0.04;
       curbL.receiveShadow = true;
       roadGroup.add(curbL);
 
       const curbR = new THREE.Mesh(curbGeo, materials.fieldstoneRough);
-      curbR.position.set(1.35, rightY + 0.08, cz);
-      curbR.rotation.y = ((i % 3) - 1) * -0.04;
+      curbR.position.set(rightX, rightY + 0.08, cz);
+      curbR.rotation.y = Math.cos(cz * 0.08) * 0.08 + ((i % 3) - 1) * -0.04;
       curbR.receiveShadow = true;
       roadGroup.add(curbR);
     }
@@ -133,9 +138,11 @@ export class HighSierraRegion {
     // Transverse stone drainage gutters (cunetas) with carved runnels
     const gutterZs = [4.5, 0.0, -4.0];
     for (const gz of gutterZs) {
-      const gy = hAt(0, gz);
+      const gCenterX = Math.sin(gz * 0.08) * 0.45;
+      const gy = hAt(gCenterX, gz);
       const gutter = new THREE.Mesh(gutterGeo, materials.andesiteCut);
-      gutter.position.set(0, gy + 0.02, gz);
+      gutter.position.set(gCenterX, gy + 0.02, gz);
+      gutter.rotation.y = Math.cos(gz * 0.08) * 0.08;
       gutter.receiveShadow = true;
       roadGroup.add(gutter);
     }
@@ -162,11 +169,9 @@ export class HighSierraRegion {
     // 1. Deep foundation retaining base (buries into the slope so the front NEVER floats)
     const baseGeo = this.createWeatheredBlock(8.8, 2.4, 8.8);
     const tier1Geo = this.createWeatheredBlock(7.6, 0.85, 7.2);
-    const tier2Geo = this.createWeatheredBlock(5.4, 0.85, 5.0);
-    const altarBaseGeo = this.createWeatheredBlock(2.8, 0.65, 2.8);
-    const altarStep2Geo = this.createWeatheredBlock(2.2, 0.55, 2.2);
-    const altarTopGeo = this.createWeatheredBlock(1.5, 0.45, 1.5);
-    this.geometries.push(baseGeo, tier1Geo, tier2Geo, altarBaseGeo, altarStep2Geo, altarTopGeo);
+    // Monumental living-bedrock Ushnu monolith sculpted from mountain granite (replaces concentric boxes)
+    const ushnuBedrockGeo = IncaMasonrySystem.createIncaUshnuBedrockGeometry(5.4, 2.2, 4.8);
+    this.geometries.push(baseGeo, tier1Geo, ushnuBedrockGeo);
 
     // Deep base foundation
     const base = new THREE.Mesh(baseGeo, materials.fieldstoneRough);
@@ -182,46 +187,27 @@ export class HighSierraRegion {
     tier1.receiveShadow = true;
     complex.add(tier1);
 
-    // Upper platform terrace
-    const tier2 = new THREE.Mesh(tier2Geo, materials.andesiteCut);
-    tier2.position.set(0, obsY + 1.22, obsZ - 0.2);
-    tier2.castShadow = true;
-    tier2.receiveShadow = true;
-    complex.add(tier2);
+    // Monumental sculpted bedrock altar with asymmetrical ritual seats & sacred Chakana levels
+    const ushnu = new THREE.Mesh(ushnuBedrockGeo, materials.andesiteCut);
+    ushnu.position.set(0, obsY + 1.85, obsZ - 0.25);
+    ushnu.castShadow = true;
+    ushnu.receiveShadow = true;
+    complex.add(ushnu);
 
-    // Stepped Chakana Altar (3 cosmic levels: Uku, Kay, Hanan Pacha)
-    const altar1 = new THREE.Mesh(altarBaseGeo, materials.andesiteCut);
-    altar1.position.set(0, obsY + 1.95, obsZ - 0.3);
-    altar1.castShadow = true;
-    altar1.receiveShadow = true;
-    complex.add(altar1);
-
-    const altar2 = new THREE.Mesh(altarStep2Geo, materials.andesiteCut);
-    altar2.position.set(0, obsY + 2.48, obsZ - 0.3);
-    altar2.castShadow = true;
-    altar2.receiveShadow = true;
-    complex.add(altar2);
-
-    const altar3 = new THREE.Mesh(altarTopGeo, materials.andesiteCut);
-    altar3.position.set(0, obsY + 2.92, obsZ - 0.3);
-    altar3.castShadow = true;
-    altar3.receiveShadow = true;
-    complex.add(altar3);
-
-    // Intihuatana Gnomon: Faceted polygonal monolith pillar with angled celestial bevel apex
+    // Intihuatana Gnomon: Faceted polygonal monolith pillar rising seamlessly from Hanan Pacha tier
     const gnomonGeo = this.createIntihuatanaGnomonGeometry();
     this.geometries.push(gnomonGeo);
     const gnomon = new THREE.Mesh(gnomonGeo, materials.andesiteCut);
-    gnomon.position.set(0, obsY + 3.15, obsZ - 0.3);
+    gnomon.position.set(0.45, obsY + 3.12, obsZ - 0.45);
     gnomon.castShadow = true;
     gnomon.receiveShadow = true;
     complex.add(gnomon);
 
-    // Ceremonial Golden Qero (chicha beaker) on the sacred altar ledge
+    // Ceremonial Golden Qero (chicha beaker) on the sacred Uku/Kay Pacha altar ledge
     const qeroGeo = new THREE.CylinderGeometry(0.09, 0.06, 0.22, 12);
     this.geometries.push(qeroGeo);
     const qero = new THREE.Mesh(qeroGeo, materials.goldOrnamental);
-    qero.position.set(0.65, obsY + 2.38, obsZ + 0.5);
+    qero.position.set(-0.85, obsY + 2.45, obsZ + 0.35);
     qero.castShadow = true;
     complex.add(qero);
 
@@ -587,6 +573,12 @@ export class HighSierraRegion {
       metalness: 0.0,
       vertexColors: true,
       side: THREE.DoubleSide,
+    });
+    applyNanoHexagonRelief(thatchMat, {
+      scale: 64.0,
+      reliefStrength: 0.38,
+      grooveDepth: 0.24,
+      hexTiling: false,
     });
     this.materials.push(thatchMat);
 
@@ -1194,13 +1186,19 @@ export class HighSierraRegion {
     };
 
     const strawCol = (ts: number, x: number): [number, number, number] => {
-      const flute = 0.94 + 0.06 * Math.sin(x * 18.0);
+      // Authentic aged Andean ichu bunchgrass: natural bundles with subtle sun-bleached fluting
+      const bundleGrain = 0.94 + 0.06 * Math.sin(x * 22.0);
+      const agingNoise = 0.92 + 0.16 * Math.abs(Math.sin(x * 6.5 + ts * 4.2));
+      const flute = bundleGrain * agingNoise;
       if (ts < 0.25) {
-        return [1.02 * flute, 0.84 * flute, 0.50 * flute];
+        // Sun-bleached tawny upper thatch & ridge cap
+        return [0.46 * flute, 0.40 * flute, 0.30 * flute];
       } else if (ts < 0.75) {
-        return [0.88 * flute, 0.68 * flute, 0.36 * flute];
+        // Mid-slope weathered golden-amber grass
+        return [0.41 * flute, 0.35 * flute, 0.26 * flute];
       } else {
-        return [0.72 * flute, 0.52 * flute, 0.26 * flute];
+        // Lower eaves shadow and weathered aged straw
+        return [0.33 * flute, 0.28 * flute, 0.21 * flute];
       }
     };
 
@@ -1268,8 +1266,8 @@ export class HighSierraRegion {
 
       // Rounded volumetric eave overhang lip curling downward
       const eaveZ = side * od;
-      const eaveFaceCol: [number, number, number] = [0.58, 0.44, 0.22];
-      const eaveUnderCol: [number, number, number] = [0.32, 0.24, 0.12];
+      const eaveFaceCol: [number, number, number] = [0.34, 0.29, 0.22];
+      const eaveUnderCol: [number, number, number] = [0.18, 0.15, 0.11];
       for (let ix = 0; ix < stepsX; ix++) {
         const tx0 = (ix / stepsX) * 2 - 1;
         const tx1 = ((ix + 1) / stepsX) * 2 - 1;
@@ -1323,7 +1321,7 @@ export class HighSierraRegion {
     }
 
     // 3D Gable verge edge faces closing the left (-X) and right (+X) ends
-    const vergeCol: [number, number, number] = [0.68, 0.52, 0.28];
+    const vergeCol: [number, number, number] = [0.38, 0.32, 0.24];
     for (let end = -1; end <= 1; end += 2) {
       const vx = end * ow;
       const normalX = end;
