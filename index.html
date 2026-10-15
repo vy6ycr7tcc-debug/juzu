@@ -11,8 +11,17 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Juzu" />
     <meta name="theme-color" content="#000000" />
-    <link rel="apple-touch-icon" href="/juzu/icons/apple-touch-icon.png" />
-    <title>Juzu</title>
+    <link rel="icon" type="image/svg+xml" href="/juzu/favicon.svg" />
+    <meta name="description" content="Realistic third-person open-world action-adventure game set in the Inca Andes. Built on three.js with WebGPU & WebGL2 fallback." />
+    <!-- Open Graph & Social Cards -->
+    <meta property="og:title" content="Juzu — The Search for Paititi" />
+    <meta property="og:description" content="Realistic third-person open-world action-adventure game set in the Inca Andes. WebGPU primary + WebGL2 fallback." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vy6ycr7tcc-debug.github.io/juzu/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Juzu — The Search for Paititi" />
+    <meta name="twitter:description" content="Realistic third-person action-adventure in the Inca Andes. Three.js WebGPU + WebGL2." />
+    <title>Juzu — The Search for Paititi</title>
     <style>
       body, #app canvas {
         touch-action: none;
@@ -32,6 +41,21 @@
       }
       #ui-root button {
         touch-action: manipulation;
+      }
+
+      /* Pillar C: Accessibility & High-Contrast Mode Styles */
+      body.high-contrast-mode [data-hud-element] {
+        background: rgba(0, 0, 0, 0.95) !important;
+        color: #ffffff !important;
+        border-color: #ffd700 !important;
+        font-weight: 700 !important;
+        text-shadow: 0 2px 4px #000000 !important;
+        box-shadow: 0 0 12px rgba(255, 215, 0, 0.6) !important;
+      }
+      body.high-contrast-mode #juzu-pause-menu,
+      body.high-contrast-mode #juzu-settings-menu,
+      body.high-contrast-mode #juzu-victory-screen {
+        filter: contrast(1.22);
       }
 
       @keyframes juzuChakanaGlow {

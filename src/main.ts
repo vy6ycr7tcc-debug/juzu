@@ -200,7 +200,8 @@ export class JuzuEngine {
       regionId => {
         this.setActiveRegion(regionId as SaveData['regionId']);
         this.placeNairaAt(0.0, 8.2, Math.PI, 'idle');
-      }
+      },
+      this.cameraRig
     );
 
     if (typeof window !== 'undefined') {
@@ -705,6 +706,33 @@ export class JuzuEngine {
         oz - 0.5,
         48
       );
+    } else if (shot === 'settings_modal') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(0.0, 8.2, Math.PI, 'idle');
+      this.menus.openSettings();
+    } else if (shot === 'high_contrast_hud') {
+      this.setActiveRegion('cloudForest');
+      this.placeNairaAt(0.0, 7.8, Math.PI, 'aim');
+      this.input.state.aimHeld = true;
+      document.body.classList.add('high-contrast-mode');
+      this.activeInteractable = {
+        id: 'stele_cf_intro',
+        label: 'Read',
+        promptText: '[E] Read Carved Inca Stele',
+        position: new THREE.Vector3(0, 0, 7.8),
+        radius: 5,
+      };
+      this.hud.update(
+        0.016,
+        'Cross the hanging bridge and read the carved Inca stele by the running water channel [E].',
+        true,
+        '[E] Read Carved Inca Stele',
+        82,
+        true,
+        'bodkin',
+        8,
+        85
+      );
     }
   }
 
@@ -873,7 +901,8 @@ export class JuzuEngine {
       this.paititi.update(dt);
       this.lightRig.update(dt, this.naira.position);
       this.weather.updateTorch(this.naira.position);
-      this.weather.update(dt, this.cameraRig.camera.position);
+      const isNearWater = this.naira.position.y <= -1.4 || (this.activeRegion === 'jungleLowlands' && this.naira.position.y <= 0.8);
+      this.audio.setAmbientEnvironment(this.activeRegion, isNearWater);
       this.audio.update(dt);
 
       this.updateInteractables();

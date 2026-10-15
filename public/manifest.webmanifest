@@ -1,0 +1,26 @@
+{
+  "name": "Juzu — The Search for Paititi",
+  "short_name": "Juzu",
+  "description": "Realistic third-person open-world action-adventure game set in the Inca Andes. Built on three.js with WebGPU & WebGL2 dual-path rendering.",
+  "start_url": "/juzu/",
+  "scope": "/juzu/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#060908",
+  "theme_color": "#d4b888",
+  "categories": ["games", "action", "adventure"],
+  "icons": [
+    {
+      "src": "/juzu/assets/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/juzu/assets/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

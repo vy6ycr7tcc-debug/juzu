@@ -20,6 +20,7 @@ export type SfxId =
   | 'arrow_impact'
   | 'arrow_whoosh'
   | 'condor_cry'
+  | 'jungle_bird'
   | 'journal_turn'
   | 'checkpoint_chime'
   | 'collectible_chime'
@@ -38,12 +39,20 @@ export class AudioManager {
   private masterGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
+  private ambientGain: GainNode | null = null;
+  private windGain: GainNode | null = null;
+  private windFilter: BiquadFilterNode | null = null;
+  private waterGain: GainNode | null = null;
+  private waterFilter: BiquadFilterNode | null = null;
 
   private masterVolume: number = 0.85;
   private musicVolume: number = 0.55;
   private sfxVolume: number = 0.85;
   private currentMood: MusicMood = 'exploration';
+  private currentRegion: string = 'cloudForest';
+  private isNearWater: boolean = false;
   private stemTimer: number = 0;
+  private ambientCallTimer: number = 0;
 
   // Cooldown map: no sound repeats more than once per 0.5s (§4.3)
   private readonly lastPlayedSec: Record<string, number> = {
@@ -57,6 +66,7 @@ export class AudioManager {
     arrow_impact: -1,
     arrow_whoosh: -1,
     condor_cry: -1,
+    jungle_bird: -1,
     journal_turn: -1,
     checkpoint_chime: -1,
     collectible_chime: -1,
@@ -87,14 +97,60 @@ export class AudioManager {
       this.masterGain = this.ctx.createGain();
       this.musicGain = this.ctx.createGain();
       this.sfxGain = this.ctx.createGain();
+      this.ambientGain = this.ctx.createGain();
 
       this.masterGain.gain.value = this.masterVolume;
       this.musicGain.gain.value = this.musicVolume;
       this.sfxGain.gain.value = this.sfxVolume;
+      this.ambientGain.gain.value = 1.0;
 
       this.musicGain.connect(this.masterGain);
       this.sfxGain.connect(this.masterGain);
+      this.ambientGain.connect(this.masterGain);
       this.masterGain.connect(this.ctx.destination);
+
+      // Procedural pink/brownish noise generator for ambient wind & rapids roar
+      const bufferSize = Math.floor(this.ctx.sampleRate * 2.5);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        output[i] = (b0 + b1 + b2 + white * 0.5362) * 0.12;
+      }
+
+      // 1. High Andean Wind Ambience Loop
+      const windSource = this.ctx.createBufferSource();
+      windSource.buffer = noiseBuffer;
+      windSource.loop = true;
+      this.windFilter = this.ctx.createBiquadFilter();
+      this.windFilter.type = 'lowpass';
+      this.windFilter.frequency.value = 360;
+      this.windGain = this.ctx.createGain();
+      this.windGain.gain.value = 0.04;
+      windSource.connect(this.windFilter);
+      this.windFilter.connect(this.windGain);
+      this.windGain.connect(this.ambientGain);
+      windSource.start();
+
+      // 2. River Rapids Water Churn Loop
+      const waterSource = this.ctx.createBufferSource();
+      waterSource.buffer = noiseBuffer;
+      waterSource.loop = true;
+      this.waterFilter = this.ctx.createBiquadFilter();
+      this.waterFilter.type = 'bandpass';
+      this.waterFilter.frequency.value = 460;
+      this.waterFilter.Q.value = 1.35;
+      this.waterGain = this.ctx.createGain();
+      this.waterGain.gain.value = 0.005;
+      waterSource.connect(this.waterFilter);
+      this.waterFilter.connect(this.waterGain);
+      this.waterGain.connect(this.ambientGain);
+      waterSource.start();
+
       return true;
     } catch {
       return false;
@@ -108,12 +164,42 @@ export class AudioManager {
   }
 
   public setVolumes(master: number, music: number, sfx: number): void {
-    this.masterVolume = Math.max(0, Math.min(1, master));
-    this.musicVolume = Math.max(0, Math.min(1, music));
-    this.sfxVolume = Math.max(0, Math.min(1, sfx));
-    if (this.masterGain) this.masterGain.gain.value = this.masterVolume;
-    if (this.musicGain) this.musicGain.gain.value = this.musicVolume;
-    if (this.sfxGain) this.sfxGain.gain.value = this.sfxVolume;
+    this.setMasterVolume(master);
+    this.setMusicVolume(music);
+    this.setSfxVolume(sfx);
+  }
+
+  public setMasterVolume(v: number): void {
+    this.masterVolume = Math.max(0, Math.min(1, v));
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setValueAtTime(this.masterVolume, this.ctx.currentTime);
+    }
+  }
+
+  public setMusicVolume(v: number): void {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    if (this.musicGain && this.ctx) {
+      this.musicGain.gain.setValueAtTime(this.musicVolume, this.ctx.currentTime);
+    }
+  }
+
+  public setSfxVolume(v: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    if (this.sfxGain && this.ctx) {
+      this.sfxGain.gain.setValueAtTime(this.sfxVolume, this.ctx.currentTime);
+    }
+  }
+
+  public getMasterVolume(): number {
+    return this.masterVolume;
+  }
+
+  public getMusicVolume(): number {
+    return this.musicVolume;
+  }
+
+  public getSfxVolume(): number {
+    return this.sfxVolume;
   }
 
   public getVolumes(): { master: number; music: number; sfx: number } {
@@ -122,6 +208,11 @@ export class AudioManager {
       music: this.musicVolume,
       sfx: this.sfxVolume,
     };
+  }
+
+  public setAmbientEnvironment(regionId: string, nearWater: boolean): void {
+    this.currentRegion = regionId;
+    this.isNearWater = nearWater;
   }
 
   public setMood(mood: MusicMood): void {
@@ -196,6 +287,23 @@ export class AudioManager {
       gain.connect(this.sfxGain);
       osc.start(now);
       osc.stop(now + 0.72);
+      return;
+    }
+
+    if (id === 'jungle_bird') {
+      osc.type = 'sine';
+      filter.frequency.value = 3200;
+      osc.frequency.setValueAtTime(1650, now);
+      osc.frequency.exponentialRampToValueAtTime(2280, now + 0.12);
+      osc.frequency.setValueAtTime(1750, now + 0.16);
+      osc.frequency.exponentialRampToValueAtTime(2450, now + 0.28);
+      gain.gain.setValueAtTime(0.09 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.34);
       return;
     }
 
@@ -350,6 +458,37 @@ export class AudioManager {
   public update(dt: number): void {
     this.elapsedSec += dt;
     this.stemTimer += dt;
+    this.ambientCallTimer += dt;
+
+    // Continuous dynamic ambient soundscapes (wind & water rapids)
+    if (this.ctx && this.ctx.state === 'running') {
+      const now = this.ctx.currentTime;
+      if (this.windGain && this.windFilter) {
+        const gust = Math.sin(this.elapsedSec * 0.42) * 0.016 + Math.cos(this.elapsedSec * 0.21) * 0.01;
+        const targetWindGain =
+          this.currentRegion === 'highSierra' ? 0.065 + gust :
+          this.currentRegion === 'cloudForest' ? 0.038 + gust * 0.6 : 0.024;
+        const targetFreq = this.currentRegion === 'highSierra' ? 580 : 380;
+        this.windGain.gain.setValueAtTime(Math.max(0.005, targetWindGain), now);
+        this.windFilter.frequency.setValueAtTime(targetFreq, now);
+      }
+
+      if (this.waterGain && this.waterFilter) {
+        const targetWaterGain = this.isNearWater ? 0.068 : 0.003;
+        this.waterGain.gain.setValueAtTime(targetWaterGain, now);
+      }
+    }
+
+    // Sparse environmental atmospheric calls (Condors across high crags, jungle canopy birds)
+    if (this.ambientCallTimer > 21.0) {
+      this.ambientCallTimer = 0;
+      if (this.currentRegion === 'highSierra') {
+        this.playSfx('condor_cry', 0);
+      } else if (this.currentRegion === 'jungleLowlands' || this.currentRegion === 'cloudForest') {
+        this.playSfx('jungle_bird', 0);
+      }
+    }
+
     // Sparse adaptive Andean Quena/Charango stem pulse every 9–14s when audio context is active
     if (this.stemTimer > 11.5 && this.ctx && this.ctx.state === 'running' && this.musicGain) {
       this.stemTimer = 0;
