@@ -18,6 +18,7 @@ export type SfxId =
   | 'bow_draw'
   | 'bow_release'
   | 'arrow_impact'
+  | 'arrow_whoosh'
   | 'condor_cry'
   | 'journal_turn'
   | 'checkpoint_chime'
@@ -26,6 +27,10 @@ export type SfxId =
   | 'poultice_heal'
   | 'zipline_slide'
   | 'stone_grind'
+  | 'rope_creak'
+  | 'water_stroke'
+  | 'enemy_flinch'
+  | 'takedown_grapple'
   | 'puzzle_solved';
 
 export class AudioManager {
@@ -50,12 +55,20 @@ export class AudioManager {
     bow_draw: -1,
     bow_release: -1,
     arrow_impact: -1,
+    arrow_whoosh: -1,
     condor_cry: -1,
     journal_turn: -1,
     checkpoint_chime: -1,
     collectible_chime: -1,
     whistle_lure: -1,
     poultice_heal: -1,
+    zipline_slide: -1,
+    stone_grind: -1,
+    rope_creak: -1,
+    water_stroke: -1,
+    enemy_flinch: -1,
+    takedown_grapple: -1,
+    puzzle_solved: -1,
   };
 
   private elapsedSec: number = 0;
@@ -188,16 +201,121 @@ export class AudioManager {
 
     if (id === 'stone_grind') {
       osc.type = 'sawtooth';
-      filter.frequency.value = 350;
-      osc.frequency.setValueAtTime(110, now);
-      osc.frequency.exponentialRampToValueAtTime(75, now + 0.35);
-      gain.gain.setValueAtTime(0.18 * atten, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(280, now);
+      filter.Q.value = 2.0;
+      osc.frequency.setValueAtTime(92, now);
+      osc.frequency.exponentialRampToValueAtTime(54, now + 0.48);
+      gain.gain.setValueAtTime(0.24 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(this.sfxGain);
       osc.start(now);
-      osc.stop(now + 0.4);
+      osc.stop(now + 0.54);
+      return;
+    }
+
+    if (id === 'rope_creak') {
+      osc.type = 'triangle';
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(680, now);
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.linearRampToValueAtTime(240, now + 0.16);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.34);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.19 * atten, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.38);
+      return;
+    }
+
+    if (id === 'water_stroke') {
+      osc.type = 'triangle';
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(320, now);
+      filter.frequency.exponentialRampToValueAtTime(140, now + 0.3);
+      filter.Q.value = 1.4;
+      osc.frequency.setValueAtTime(125, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.3);
+      gain.gain.setValueAtTime(0.22 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.34);
+      return;
+    }
+
+    if (id === 'bow_draw') {
+      osc.type = 'sine';
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1200, now);
+      osc.frequency.setValueAtTime(130, now);
+      osc.frequency.exponentialRampToValueAtTime(360, now + 0.55);
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.18 * atten, now + 0.45);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.6);
+      return;
+    }
+
+    if (id === 'arrow_whoosh') {
+      osc.type = 'sine';
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(840, now);
+      filter.frequency.exponentialRampToValueAtTime(380, now + 0.22);
+      filter.Q.value = 2.8;
+      osc.frequency.setValueAtTime(940, now);
+      osc.frequency.exponentialRampToValueAtTime(320, now + 0.22);
+      gain.gain.setValueAtTime(0.21 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.25);
+      return;
+    }
+
+    if (id === 'arrow_impact' || id === 'enemy_flinch') {
+      osc.type = 'triangle';
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(450, now);
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.18);
+      gain.gain.setValueAtTime(0.28 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.24);
+      return;
+    }
+
+    if (id === 'takedown_grapple') {
+      osc.type = 'sawtooth';
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(260, now);
+      osc.frequency.setValueAtTime(115, now);
+      osc.frequency.exponentialRampToValueAtTime(38, now + 0.38);
+      gain.gain.setValueAtTime(0.26 * atten, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.45);
       return;
     }
 

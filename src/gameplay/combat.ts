@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { PbrMaterialLibrary } from '../world/materials';
 import { EnemyManager } from '../character/enemies';
+import { AudioManager } from '../core/audio';
 import { ArrowType } from './crafting';
 
 export interface ArrowProjectile {
@@ -41,6 +42,7 @@ export class CombatSystem {
 
   private readonly arrowPool: ArrowProjectile[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
+  private wasAiming: boolean = false;
 
   public build(scene?: THREE.Scene, materials?: PbrMaterialLibrary): void {
     this.health = 100;
@@ -49,6 +51,7 @@ export class CombatSystem {
     this.dodgeTimer = 0;
     this.poulticeTimer = 0;
     this.isInvulnerable = false;
+    this.wasAiming = false;
 
     if (!scene || !materials) return;
     this.group.name = 'CombatProjectiles';
@@ -80,7 +83,8 @@ export class CombatSystem {
   public fireArrow(
     origin: THREE.Vector3,
     direction: THREE.Vector3,
-    arrowType: ArrowType
+    arrowType: ArrowType,
+    audio?: AudioManager
   ): boolean {
     for (let i = 0; i < this.arrowPool.length; i++) {
       const p = this.arrowPool[i];
@@ -98,6 +102,10 @@ export class CombatSystem {
           p.position.z + p.velocity.z
         );
         p.mesh.visible = true;
+        if (audio) {
+          audio.playSfx('arrow_whoosh', 0);
+          audio.playSfx('bow_release', 0);
+        }
         return true;
       }
     }
@@ -134,13 +142,18 @@ export class CombatSystem {
   public update(
     dt: number,
     aimHeld: boolean,
-    enemies?: EnemyManager
+    enemies?: EnemyManager,
+    audio?: AudioManager
   ): void {
     if (aimHeld) {
+      if (!this.wasAiming && audio) {
+        audio.playSfx('bow_draw', 0);
+      }
       this.drawProgress = Math.min(1.0, this.drawProgress + dt / CombatSystem.BOW_FULL_DRAW_SEC);
     } else {
       this.drawProgress = 0;
     }
+    this.wasAiming = aimHeld;
 
     if (this.dodgeTimer > 0) {
       this.dodgeTimer = Math.max(0, this.dodgeTimer - dt);
@@ -177,10 +190,15 @@ export class CombatSystem {
         const hitOp = enemies.applyHitAt(
           p.position,
           p.type === 'bodkin' ? 100 : 55,
-          1.15
+          1.15,
+          p.position
         );
         if (hitOp) {
           enemies.alertToNoise(p.position, p.type === 'sonicLure' ? 45.0 : 22.0);
+          if (audio) {
+            audio.playSfx('arrow_impact', 0);
+            audio.playSfx('enemy_flinch', 0);
+          }
           p.active = false;
           p.mesh.visible = false;
           continue;

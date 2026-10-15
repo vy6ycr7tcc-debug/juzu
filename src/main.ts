@@ -662,6 +662,49 @@ export class JuzuEngine {
       this.placeNairaAt(0.0, 6.4, Math.PI, 'idle');
       this.cameraRig.mode = 'overShoulder';
       this.cameraRig.build(this.naira.position, this.naira.yaw);
+    } else if (shot === 'stealth_takedown') {
+      this.setActiveRegion('cloudForest');
+      const op = this.enemies.operatives[0];
+      const ox = op ? op.position.x : -3.2;
+      const oz = op ? op.position.z : -21.0;
+      this.placeNairaAt(ox, oz + 1.15, Math.PI, 'idle');
+      this.naira.triggerTakedownGrapple();
+      if (op) {
+        this.enemies.executeStealthTakedown(op);
+      }
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        ox + 1.6,
+        ny + 1.35,
+        oz + 2.8,
+        ox,
+        ny + 0.95,
+        oz,
+        50
+      );
+    } else if (shot === 'combat_juice') {
+      this.setActiveRegion('cloudForest');
+      const op = this.enemies.operatives[0];
+      const ox = op ? op.position.x : -3.2;
+      const oz = op ? op.position.z : -21.0;
+      this.placeNairaAt(ox - 0.9, oz + 2.6, Math.PI, 'aim');
+      this.input.state.aimHeld = true;
+      if (op) {
+        op.yaw = 0.0;
+        op.flinchPitch = 0.38;
+        op.staggerTimer = 0.45;
+        this.enemies.applyHitAt(op.position, 45, 2.0, this.naira.position);
+      }
+      const ny = this.naira.position.y;
+      this.cameraRig.snapToShot(
+        ox + 1.1,
+        ny + 1.45,
+        oz + 4.2,
+        ox - 0.2,
+        ny + 1.1,
+        oz - 0.5,
+        48
+      );
     }
   }
 
@@ -770,7 +813,7 @@ export class JuzuEngine {
             0.06,
             Math.cos(this.naira.yaw)
           );
-          this.combat.fireArrow(_arrowOrigin, _aimDir, this.crafting.selectedArrow);
+          this.combat.fireArrow(_arrowOrigin, _aimDir, this.crafting.selectedArrow, this.audio);
         }
       }
 
@@ -818,7 +861,7 @@ export class JuzuEngine {
           if (dead) this.handlePlayerDeath();
         }
       );
-      this.combat.update(dt, this.input.state.aimHeld, this.enemies);
+      this.combat.update(dt, this.input.state.aimHeld, this.enemies, this.audio);
       this.puzzles.update(dt);
       this.quests.update(dt);
       this.sky.update(dt);
@@ -883,7 +926,9 @@ export class JuzuEngine {
       };
       if (this.input.state.takedownPressed || this.input.state.interactPressed) {
         this.enemies.executeStealthTakedown(takedownTarget);
+        this.naira.triggerTakedownGrapple();
         this.combat.triggerAxeSwing(this.naira.position);
+        this.audio.playSfx('takedown_grapple', 0);
         this.audio.playSfx('cloth_rustle', 0);
         this.audio.playSfx('breath_exert', 0);
         this.activeInteractable = null;
