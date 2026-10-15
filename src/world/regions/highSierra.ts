@@ -18,7 +18,7 @@ import { InteractableTarget } from './cloudForest';
 export class HighSierraRegion {
   public readonly group: THREE.Group = new THREE.Group();
   public readonly interactables: InteractableTarget[] = [];
-  private solarMirrorMesh: THREE.Mesh | null = null;
+  private solarMirrorMesh: THREE.Object3D | null = null;
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
   private elapsedSec: number = 0;
@@ -46,13 +46,16 @@ export class HighSierraRegion {
     this.buildSnowlineRidges(materials, hAt);
 
     // 4. Intihuatana Stepped Solar Observatory on the Central Ceremonial Plateau (x = 0, z = -10.5)
+    // 4. Intihuatana Stepped Solar Observatory on the Central Ceremonial Plateau (x = 0, z = -10.5)
     const obsZ = -10.5;
     const obsY = hAt(0, obsZ);
 
     const tier1Geo = this.createWeatheredBlock(7.6, 0.78, 7.6);
-    const tier2Geo = this.createWeatheredBlock(5.0, 0.78, 5.0);
-    const altarGeo = this.createWeatheredBlock(2.2, 0.88, 2.2);
-    const gnomonGeo = this.createWeatheredBlock(0.48, 1.4, 0.48);
+    const tier2Geo = this.createWeatheredBlock(5.2, 0.78, 5.2);
+    const altarGeo = this.createWeatheredBlock(2.6, 0.88, 2.6);
+    // Prismatic 4-sided tapered obelisk gnomon pillar with angled celestial apex
+    const gnomonGeo = new THREE.CylinderGeometry(0.24, 0.44, 1.55, 4);
+    gnomonGeo.rotateY(Math.PI * 0.25);
     this.geometries.push(tier1Geo, tier2Geo, altarGeo, gnomonGeo);
 
     const tier1 = new THREE.Mesh(tier1Geo, materials.andesiteCut);
@@ -74,8 +77,8 @@ export class HighSierraRegion {
     this.group.add(altar);
 
     const gnomon = new THREE.Mesh(gnomonGeo, materials.andesiteCut);
-    gnomon.position.set(0, obsY + 2.75, obsZ);
-    gnomon.rotation.x = -0.22;
+    gnomon.position.set(0, obsY + 2.82, obsZ);
+    gnomon.rotation.x = -0.24;
     gnomon.castShadow = true;
     gnomon.receiveShadow = true;
     this.group.add(gnomon);
@@ -84,22 +87,91 @@ export class HighSierraRegion {
     const mirX = 1.65;
     const mirZ = 6.2;
     const mirY = hAt(mirX, mirZ);
-    const pedGeo = this.createWeatheredBlock(0.74, 1.15, 0.74);
-    const discGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.1, 20);
-    discGeo.rotateX(Math.PI * 0.46);
-    this.geometries.push(pedGeo, discGeo);
 
-    const ped = new THREE.Mesh(pedGeo, materials.andesiteCut);
-    ped.position.set(mirX, mirY + 0.5, mirZ);
-    ped.castShadow = true;
-    ped.receiveShadow = true;
-    this.group.add(ped);
+    // Sculpted stone pedestal with stepped Chakana profile
+    const pedBaseGeo = this.createWeatheredBlock(0.88, 0.42, 0.88);
+    const pedColGeo = this.createWeatheredBlock(0.64, 0.75, 0.64);
+    const pedCapGeo = this.createWeatheredBlock(0.78, 0.22, 0.78);
+    const forkGeo = new THREE.TorusGeometry(0.52, 0.05, 12, 24, Math.PI);
+    forkGeo.rotateZ(Math.PI);
+    this.geometries.push(pedBaseGeo, pedColGeo, pedCapGeo, forkGeo);
 
-    this.solarMirrorMesh = new THREE.Mesh(discGeo, materials.goldOrnamental);
-    this.solarMirrorMesh.position.set(mirX, mirY + 1.44, mirZ);
-    this.solarMirrorMesh.rotation.y = -0.35;
-    this.solarMirrorMesh.castShadow = true;
-    this.group.add(this.solarMirrorMesh);
+    const pedGroup = new THREE.Group();
+    pedGroup.position.set(mirX, mirY, mirZ);
+
+    const pb = new THREE.Mesh(pedBaseGeo, materials.andesiteCut);
+    pb.position.set(0, 0.21, 0);
+    pb.castShadow = true;
+    pb.receiveShadow = true;
+    pedGroup.add(pb);
+
+    const pc = new THREE.Mesh(pedColGeo, materials.andesiteCut);
+    pc.position.set(0, 0.78, 0);
+    pc.castShadow = true;
+    pc.receiveShadow = true;
+    pedGroup.add(pc);
+
+    const pcap = new THREE.Mesh(pedCapGeo, materials.andesiteCut);
+    pcap.position.set(0, 1.25, 0);
+    pcap.castShadow = true;
+    pcap.receiveShadow = true;
+    pedGroup.add(pcap);
+
+    const fork = new THREE.Mesh(forkGeo, materials.metalBronze);
+    fork.position.set(0, 1.48, 0);
+    fork.castShadow = true;
+    pedGroup.add(fork);
+
+    this.group.add(pedGroup);
+
+    // Ornate Bronze Solar Mirror Assembly (Inti sun rays, central boss, concentric bezels)
+    const mirrorAssembly = new THREE.Group();
+    mirrorAssembly.position.set(mirX, mirY + 1.48, mirZ);
+    mirrorAssembly.rotation.x = 0.18;
+
+    const rimGeo = new THREE.CylinderGeometry(0.58, 0.58, 0.06, 36);
+    rimGeo.rotateX(Math.PI * 0.5);
+    const faceGeo = new THREE.CylinderGeometry(0.50, 0.50, 0.07, 36);
+    faceGeo.rotateX(Math.PI * 0.5);
+    const bossGeo = new THREE.SphereGeometry(0.14, 16, 12);
+    const rayGeo = new THREE.ConeGeometry(0.045, 0.18, 4);
+    rayGeo.rotateX(Math.PI * 0.5);
+    const pivotGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.18, 12);
+    pivotGeo.rotateZ(Math.PI * 0.5);
+    this.geometries.push(rimGeo, faceGeo, bossGeo, rayGeo, pivotGeo);
+
+    const rim = new THREE.Mesh(rimGeo, materials.metalBronze);
+    rim.castShadow = true;
+    mirrorAssembly.add(rim);
+
+    const face = new THREE.Mesh(faceGeo, materials.goldOrnamental);
+    face.castShadow = true;
+    mirrorAssembly.add(face);
+
+    const boss = new THREE.Mesh(bossGeo, materials.goldOrnamental);
+    boss.position.set(0, 0, 0.04);
+    boss.castShadow = true;
+    mirrorAssembly.add(boss);
+
+    for (let r = 0; r < 12; r++) {
+      const ang = (r / 12) * Math.PI * 2;
+      const ray = new THREE.Mesh(rayGeo, materials.goldOrnamental);
+      const rad = 0.62;
+      ray.position.set(Math.cos(ang) * rad, Math.sin(ang) * rad, 0);
+      ray.rotation.z = ang - Math.PI * 0.5;
+      ray.castShadow = true;
+      mirrorAssembly.add(ray);
+    }
+
+    const trunnionL = new THREE.Mesh(pivotGeo, materials.metalBronze);
+    trunnionL.position.set(-0.56, 0, 0);
+    mirrorAssembly.add(trunnionL);
+    const trunnionR = new THREE.Mesh(pivotGeo, materials.metalBronze);
+    trunnionR.position.set(0.56, 0, 0);
+    mirrorAssembly.add(trunnionR);
+
+    this.solarMirrorMesh = mirrorAssembly;
+    this.group.add(mirrorAssembly);
 
     this.interactables.push({
       id: 'sierra_solar_mirror',
@@ -243,11 +315,13 @@ export class HighSierraRegion {
   ): void {
     const thatchMat = new THREE.MeshStandardMaterial({
       name: 'AndeanIchuThatchRoof',
-      color: new THREE.Color(0xb89654),
+      color: new THREE.Color(0xa27e44),
       map: materials.woodAged.map,
       normalMap: materials.woodAged.normalMap,
+      normalScale: new THREE.Vector2(0.65, 0.65),
       roughness: 0.92,
       metalness: 0.0,
+      side: THREE.DoubleSide,
     });
     this.materials.push(thatchMat);
 
@@ -270,10 +344,11 @@ export class HighSierraRegion {
       const bodyGeo = this.createWeatheredBlock(hs.w, hs.h, hs.d);
       const lintelGeo = this.createWeatheredBlock(1.25, 0.28, 0.36);
       const doorRecessGeo = new THREE.BoxGeometry(0.85, 1.55, 0.18);
-      // Pitched gabled thatch roof
-      const roofGeo = new THREE.ConeGeometry(Math.hypot(hs.w, hs.d) * 0.58, 1.65, 4);
-      roofGeo.rotateY(Math.PI * 0.25);
-      this.geometries.push(plinthGeo, bodyGeo, lintelGeo, doorRecessGeo, roofGeo);
+      // Authentic Andean hipped-gable thatched ichu roof with eaves overhang
+      const roofGeo = this.createAndeanThatchRoofGeometry(hs.w, hs.d, 1.45);
+      const rafterGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.75, 8);
+      rafterGeo.rotateX(Math.PI * 0.5);
+      this.geometries.push(plinthGeo, bodyGeo, lintelGeo, doorRecessGeo, roofGeo, rafterGeo);
 
       const plinth = new THREE.Mesh(plinthGeo, materials.fieldstoneRough);
       plinth.position.set(0, -0.35, 0);
@@ -287,6 +362,17 @@ export class HighSierraRegion {
       body.receiveShadow = true;
       houseGrp.add(body);
 
+      // Protruding timber roof rafters under the gables
+      for (let r = -1; r <= 1; r += 2) {
+        const rafterF = new THREE.Mesh(rafterGeo, materials.woodAged);
+        rafterF.position.set(r * (hs.w * 0.32), hs.h + 0.1, hs.d * 0.5 + 0.22);
+        houseGrp.add(rafterF);
+
+        const rafterB = new THREE.Mesh(rafterGeo, materials.woodAged);
+        rafterB.position.set(r * (hs.w * 0.32), hs.h + 0.1, -hs.d * 0.5 - 0.22);
+        houseGrp.add(rafterB);
+      }
+
       const lintel = new THREE.Mesh(lintelGeo, materials.fieldstoneRough);
       lintel.position.set(0, 1.62, hs.d * 0.5);
       houseGrp.add(lintel);
@@ -298,8 +384,7 @@ export class HighSierraRegion {
       houseGrp.add(door);
 
       const roof = new THREE.Mesh(roofGeo, thatchMat);
-      roof.position.set(0, hs.h + 0.72, 0);
-      roof.scale.set(1.08, 1.0, 0.92);
+      roof.position.set(0, hs.h, 0);
       roof.castShadow = true;
       roof.receiveShadow = true;
       houseGrp.add(roof);
@@ -404,6 +489,133 @@ export class HighSierraRegion {
     geo.setIndex(indices);
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  private createAndeanThatchRoofGeometry(w: number, d: number, h: number): THREE.BufferGeometry {
+    const posList: number[] = [];
+    const uvList: number[] = [];
+    const idxList: number[] = [];
+    let vOffset = 0;
+
+    const ow = w * 0.5 + 0.42;
+    const od = d * 0.5 + 0.42;
+    const ridgeHalfX = Math.max(0.35, (w - d * 0.5) * 0.55);
+    const ridgeY = h;
+    const eaveY = 0.0;
+    const thickness = 0.22;
+
+    const addQuad = (
+      p0: [number, number, number],
+      p1: [number, number, number],
+      p2: [number, number, number],
+      p3: [number, number, number]
+    ) => {
+      posList.push(
+        p0[0], p0[1], p0[2],
+        p1[0], p1[1], p1[2],
+        p2[0], p2[1], p2[2],
+        p3[0], p3[1], p3[2]
+      );
+      uvList.push(0, 0, 1, 0, 1, 1, 0, 1);
+      idxList.push(vOffset, vOffset + 1, vOffset + 2, vOffset, vOffset + 2, vOffset + 3);
+      vOffset += 4;
+    };
+
+    const stepsX = 6;
+    const stepsY = 4;
+    for (let iy = 0; iy < stepsY; iy++) {
+      const ty0 = iy / stepsY;
+      const ty1 = (iy + 1) / stepsY;
+
+      const y0 = ridgeY * (1 - ty0) + eaveY * ty0 + Math.sin(ty0 * Math.PI) * -0.05;
+      const y1 = ridgeY * (1 - ty1) + eaveY * ty1 + Math.sin(ty1 * Math.PI) * -0.05;
+
+      const z0 = ty0 * od;
+      const z1 = ty1 * od;
+
+      const spanX0 = ridgeHalfX * (1 - ty0) + ow * ty0;
+      const spanX1 = ridgeHalfX * (1 - ty1) + ow * ty1;
+
+      for (let ix = 0; ix < stepsX; ix++) {
+        const tx0 = (ix / stepsX) * 2 - 1;
+        const tx1 = ((ix + 1) / stepsX) * 2 - 1;
+
+        const x00 = tx0 * spanX0;
+        const x10 = tx1 * spanX0;
+        const x01 = tx0 * spanX1;
+        const x11 = tx1 * spanX1;
+
+        // Front slope quad (CCW winding: bottom-left -> bottom-right -> top-right -> top-left)
+        addQuad(
+          [x01, y1, z1],
+          [x11, y1, z1],
+          [x10, y0, z0],
+          [x00, y0, z0]
+        );
+        // Back slope quad (CCW winding facing -Z)
+        addQuad(
+          [x11, y1, -z1],
+          [x01, y1, -z1],
+          [x00, y0, -z0],
+          [x10, y0, -z0]
+        );
+      }
+    }
+
+    // Left and Right hipped hip-triangles
+    for (let iy = 0; iy < stepsY; iy++) {
+      const ty0 = iy / stepsY;
+      const ty1 = (iy + 1) / stepsY;
+      const y0 = ridgeY * (1 - ty0) + eaveY * ty0;
+      const y1 = ridgeY * (1 - ty1) + eaveY * ty1;
+
+      const zSpan0 = ty0 * od;
+      const zSpan1 = ty1 * od;
+
+      const x0 = ridgeHalfX + (ow - ridgeHalfX) * ty0;
+      const x1 = ridgeHalfX + (ow - ridgeHalfX) * ty1;
+
+      // Right hip (facing +X)
+      addQuad(
+        [x1, y1, -zSpan1],
+        [x1, y1,  zSpan1],
+        [x0, y0,  zSpan0],
+        [x0, y0, -zSpan0]
+      );
+      // Left hip (facing -X)
+      addQuad(
+        [-x1, y1,  zSpan1],
+        [-x1, y1, -zSpan1],
+        [-x0, y0, -zSpan0],
+        [-x0, y0,  zSpan0]
+      );
+    }
+
+    // Add thick eave fascia strip hanging down 0.22m
+    const eavePts: Array<[number, number, number]> = [
+      [-ow, eaveY, -od],
+      [ ow, eaveY, -od],
+      [ ow, eaveY,  od],
+      [-ow, eaveY,  od],
+      [-ow, eaveY, -od]
+    ];
+    for (let i = 0; i < 4; i++) {
+      const pA = eavePts[i];
+      const pB = eavePts[i + 1];
+      addQuad(
+        [pA[0], pA[1], pA[2]],
+        [pB[0], pB[1], pB[2]],
+        [pB[0], pB[1] - thickness, pB[2]],
+        [pA[0], pA[1] - thickness, pA[2]]
+      );
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setIndex(idxList);
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posList), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvList), 2));
     geo.computeVertexNormals();
     return geo;
   }
