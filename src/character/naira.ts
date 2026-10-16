@@ -286,20 +286,30 @@ export class NairaController {
     }
 
     const compSize = new Int32Array(vCount);
+    const minX = new Float32Array(vCount).fill(Infinity);
+    const maxX = new Float32Array(vCount).fill(-Infinity);
     const minY = new Float32Array(vCount).fill(Infinity);
     const maxZ = new Float32Array(vCount).fill(-Infinity);
     const minZ = new Float32Array(vCount).fill(Infinity);
+    const minU = new Float32Array(vCount).fill(Infinity);
+    const maxU = new Float32Array(vCount).fill(-Infinity);
     const maxUvY = new Float32Array(vCount).fill(-Infinity);
 
     for (let v = 0; v < vCount; v++) {
       const r = find(v);
       compSize[r]++;
+      const px = pos.getX(v);
       const py = pos.getY(v);
       const pz = pos.getZ(v);
+      const ux = uv.getX(v);
       const uy = uv.getY(v);
+      if (px < minX[r]) minX[r] = px;
+      if (px > maxX[r]) maxX[r] = px;
       if (py < minY[r]) minY[r] = py;
       if (pz > maxZ[r]) maxZ[r] = pz;
       if (pz < minZ[r]) minZ[r] = pz;
+      if (ux < minU[r]) minU[r] = ux;
+      if (ux > maxU[r]) maxU[r] = ux;
       if (uy > maxUvY[r]) maxUvY[r] = uy;
     }
     // Tailor mesh UVs and vertex positions into Naira field attire (§1.3 & §2.7)
@@ -339,16 +349,20 @@ export class NairaController {
 
       let remove = false;
       if (minY[r] > 1.35) {
-        // Sunglasses (all frames, bridge, and lenses have UV in top strip maxUvY < 0.15)
+        // 1. Sunglasses (all frames, bridge, and lenses have UV in top strip maxUvY < 0.15)
         if (maxUvY[r] < 0.15) {
           remove = true;
         }
-        // Headphones (earcups at sides minX < -0.10 or maxX > 0.10 with compSize >= 400)
-        if (compSize[r] >= 400 && (maxZ[r] <= 0.06 && minZ[r] >= -0.06)) {
+        // 2. Headphone earcups (isolated components at sides |X| > 0.09, count = 461)
+        else if (compSize[r] === 461 && (maxX[r] < -0.09 || minX[r] > 0.09)) {
           remove = true;
         }
-        // Side pigtail hair-puff balls (outside natural head silhouette: |X| > 0.11, Z < 0.02)
-        if (compSize[r] <= 120 && maxZ[r] <= 0.03 && (minY[r] > 1.38)) {
+        // 3. Headphone headband (narrow band across crown with U in [0.30, 0.36], count = 875)
+        else if (compSize[r] === 875 && minU[r] > 0.30 && maxU[r] < 0.36) {
+          remove = true;
+        }
+        // 4. Side pigtail hair-puff balls (outside natural head silhouette: |X| > 0.14, count <= 100)
+        else if (compSize[r] <= 100 && (maxX[r] > 0.14 || minX[r] < -0.14)) {
           remove = true;
         }
       }
@@ -439,24 +453,24 @@ export class NairaController {
       [-0.04, -0.06, 0.0],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.leftArmBone, idleTimes, [
-      [1.12, 0.04, 0.28],
-      [1.14, 0.04, 0.28],
-      [1.12, 0.04, 0.28],
+      [0.96, 0.02, 0.0],
+      [0.98, 0.02, 0.0],
+      [0.96, 0.02, 0.0],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.rightArmBone, idleTimes, [
-      [1.12, -0.04, -0.28],
-      [1.14, -0.04, -0.28],
-      [1.12, -0.04, -0.28],
+      [0.96, -0.02, 0.0],
+      [0.98, -0.02, 0.0],
+      [0.96, -0.02, 0.0],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.leftForeArmBone, idleTimes, [
-      [0.22, 0.02, 0.06],
-      [0.24, 0.02, 0.06],
-      [0.22, 0.02, 0.06],
+      [0.18, 0.02, 0.0],
+      [0.20, 0.02, 0.0],
+      [0.18, 0.02, 0.0],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.rightForeArmBone, idleTimes, [
-      [0.22, -0.02, -0.06],
-      [0.24, -0.02, -0.06],
-      [0.22, -0.02, -0.06],
+      [0.18, -0.02, 0.0],
+      [0.20, -0.02, 0.0],
+      [0.18, -0.02, 0.0],
     ]));
     addT(idleTracks, composeTrack(this.leftUpLegBone, idleTimes, [
       [0.02, 0.0, -0.02],
@@ -527,36 +541,36 @@ export class NairaController {
 
       // Direct Euler shoulder swing: Left arm swings backward at t=0 when Left leg is forward
       addT(trs, composeDirectEulerTrack(this.leftArmBone, t, [
-        [1.01, -armSwing * 0.28, 0.16 - armSwing * 0.18], // t=0.0: back
-        [1.16, 0.02, 0.18],                                // t=0.25: pass
-        [1.02, armSwing * 0.28, 0.16 + armSwing * 0.18],  // t=0.50: forward
-        [1.16, 0.02, 0.18],                                // t=0.75: pass
-        [1.01, -armSwing * 0.28, 0.16 - armSwing * 0.18], // t=1.00: back
+        [0.96, 0.0, -armSwing * 0.42], // t=0.0: back
+        [0.96, 0.0, 0.0],              // t=0.25: pass
+        [0.96, 0.0, armSwing * 0.42],  // t=0.50: forward
+        [0.96, 0.0, 0.0],              // t=0.75: pass
+        [0.96, 0.0, -armSwing * 0.42], // t=1.00: back
       ]));
 
-      // Right arm swings forward at t=0 when Left leg is forward
+      // Right arm swings forward at t=0 when Left leg is forward (-Z is forward for right arm)
       addT(trs, composeDirectEulerTrack(this.rightArmBone, t, [
-        [1.02, -armSwing * 0.28, -(0.16 + armSwing * 0.18)], // t=0.0: forward
-        [1.16, -0.02, -0.18],                                  // t=0.25: pass
-        [1.01, armSwing * 0.28, -(0.16 - armSwing * 0.18)],   // t=0.50: back
-        [1.16, -0.02, -0.18],                                  // t=0.75: pass
-        [1.02, -armSwing * 0.28, -(0.16 + armSwing * 0.18)], // t=1.00: forward
+        [0.96, 0.0, -armSwing * 0.42], // t=0.0: forward
+        [0.96, 0.0, 0.0],              // t=0.25: pass
+        [0.96, 0.0, armSwing * 0.42],  // t=0.50: back
+        [0.96, 0.0, 0.0],              // t=0.75: pass
+        [0.96, 0.0, -armSwing * 0.42], // t=1.00: forward
       ]));
 
       // Forearm elbow flexion coordinated with arm drive
       addT(trs, composeDirectEulerTrack(this.leftForeArmBone, t, [
-        [0.15, 0.0, 0.04],
-        [0.18, 0.0, 0.06],
-        [0.22, 0.0, 0.06 + armSwing * 0.32],
-        [0.18, 0.0, 0.06],
-        [0.15, 0.0, 0.04],
+        [0.18, 0.0, 0.0],
+        [0.22, 0.0, 0.0],
+        [0.28 + armSwing * 0.35, 0.0, 0.0],
+        [0.22, 0.0, 0.0],
+        [0.18, 0.0, 0.0],
       ]));
       addT(trs, composeDirectEulerTrack(this.rightForeArmBone, t, [
-        [0.22, 0.0, -(0.06 + armSwing * 0.32)],
-        [0.18, 0.0, -0.06],
-        [0.15, 0.0, -0.04],
-        [0.18, 0.0, -0.06],
-        [0.22, 0.0, -(0.06 + armSwing * 0.32)],
+        [0.28 + armSwing * 0.35, 0.0, 0.0],
+        [0.22, 0.0, 0.0],
+        [0.18, 0.0, 0.0],
+        [0.22, 0.0, 0.0],
+        [0.28 + armSwing * 0.35, 0.0, 0.0],
       ]));
 
       // Left Thigh: forward at t=0, back at t=0.5
@@ -625,28 +639,28 @@ export class NairaController {
       [-0.06, 0.0, 0.0],
     ]));
     addT(jmpTracks, composeDirectEulerTrack(this.leftArmBone, jmpT, [
-      [1.16, 0.02, 0.18],
-      [1.02, 0.14, 0.38],
-      [1.05, 0.10, 0.28],
-      [1.16, 0.02, 0.18],
+      [0.96, 0.0, 0.0],
+      [0.92, 0.0, 0.45],
+      [0.94, 0.0, 0.35],
+      [0.96, 0.0, 0.0],
     ]));
     addT(jmpTracks, composeDirectEulerTrack(this.rightArmBone, jmpT, [
-      [1.16, -0.02, -0.18],
-      [1.02, -0.14, -0.38],
-      [1.05, -0.10, -0.28],
-      [1.16, -0.02, -0.18],
+      [0.96, 0.0, 0.0],
+      [0.92, 0.0, -0.45],
+      [0.94, 0.0, -0.35],
+      [0.96, 0.0, 0.0],
     ]));
     addT(jmpTracks, composeDirectEulerTrack(this.leftForeArmBone, jmpT, [
-      [0.15, 0.0, 0.06],
-      [0.26, 0.0, 0.45],
-      [0.24, 0.0, 0.35],
-      [0.15, 0.0, 0.06],
+      [0.18, 0.0, 0.0],
+      [0.32, 0.0, 0.0],
+      [0.28, 0.0, 0.0],
+      [0.18, 0.0, 0.0],
     ]));
     addT(jmpTracks, composeDirectEulerTrack(this.rightForeArmBone, jmpT, [
-      [0.15, 0.0, -0.06],
-      [0.26, 0.0, -0.45],
-      [0.24, 0.0, -0.35],
-      [0.15, 0.0, -0.06],
+      [0.18, 0.0, 0.0],
+      [0.32, 0.0, 0.0],
+      [0.28, 0.0, 0.0],
+      [0.18, 0.0, 0.0],
     ]));
     addT(jmpTracks, composeTrack(this.leftUpLegBone, jmpT, [
       [0.45, 0.04, 0.06],
