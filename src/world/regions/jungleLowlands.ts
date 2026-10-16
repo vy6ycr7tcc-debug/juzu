@@ -128,6 +128,7 @@ export class JungleLowlandsRegion {
     northTerrace.castShadow = true;
     northTerrace.receiveShadow = true;
     this.group.add(northTerrace);
+    terrain.registerWalkable(northTerrace);
 
     const upperTerrace = new THREE.Mesh(upperTerraceGeo, materials.andesiteCut);
     const uY = hAt(0, cenZ - 8.5);
@@ -135,6 +136,7 @@ export class JungleLowlandsRegion {
     upperTerrace.castShadow = true;
     upperTerrace.receiveShadow = true;
     this.group.add(upperTerrace);
+    terrain.registerWalkable(upperTerrace);
 
     // Flanking stone staircase descending gently into the cenote basin
     const stairStepCount = 8;
@@ -163,6 +165,7 @@ export class JungleLowlandsRegion {
       sub.position.set(0, cenY - 0.45 - s * 0.25, cenZ - 1.8 - s * 0.75);
       sub.receiveShadow = true;
       this.group.add(sub);
+      terrain.registerWalkable(sub);
     }
 
     // Submerged Chinkana Amaru Portal (ancient subterranean passage to Paititi unsealed by draining the cenote)
@@ -254,6 +257,7 @@ export class JungleLowlandsRegion {
     altarDais.castShadow = true;
     altarDais.receiveShadow = true;
     this.group.add(altarDais);
+    terrain.registerWalkable(altarDais);
 
     const basin = new THREE.Mesh(basinGeo, materials.andesiteCut);
     basin.position.set(0, altarY + 0.42, altarZ + 0.65);

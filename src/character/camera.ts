@@ -68,7 +68,7 @@ export class OverTheShoulderCamera {
   }
 
   public setFov(fovDegrees: number): void {
-    const clamped = Math.max(35, Math.min(75, fovDegrees));
+    const clamped = Math.max(35, Math.min(82, fovDegrees));
     if (Math.abs(this.camera.fov - clamped) > 0.05) {
       this.camera.fov = clamped;
       this.camera.updateProjectionMatrix();
@@ -80,39 +80,53 @@ export class OverTheShoulderCamera {
    * third of the frame with her full boots-to-head silhouette visible (§2.9):
    * - Never shows Naira's back filling the frame (distance ~ 3.2 m)
    * - Never cuts off her feet awkwardly
+   * - Adapts horizontal shoulder offset and pullback on portrait mobile screens (aspect < 1.0)
    */
   private computeOverShoulderRig(targetFootPos: THREE.Vector3, speed: number, locoMode: LocomotionMode = 'idle'): void {
     _rotQuat.setFromAxisAngle(_yAxis, this.yaw);
+
+    const aspectFactor = Math.max(0.45, Math.min(1.0, this.camera.aspect * 1.08));
+    const portraitPullback = Math.max(0, 1.0 - this.camera.aspect) * 0.65;
 
     if (locoMode === 'zipline') {
       // High-velocity zipline camera: pulled back with subtle aerodynamic wind shake
       const windShakeY = Math.sin(this.elapsedSec * 28.0) * 0.016;
       const windShakeX = Math.cos(this.elapsedSec * 22.0) * 0.014;
-      _shoulderOffset.set(-0.92, 1.25 + windShakeY, -3.85 + windShakeX).applyQuaternion(_rotQuat);
+      _shoulderOffset
+        .set(-0.92 * aspectFactor, 1.25 + windShakeY, -3.85 - portraitPullback + windShakeX)
+        .applyQuaternion(_rotQuat);
       _desiredPos.copy(targetFootPos).add(_shoulderOffset);
-      _lookOffset.set(-0.25, 1.25, 4.8).applyQuaternion(_rotQuat);
+      _lookOffset.set(-0.25 * aspectFactor, 1.25, 4.8).applyQuaternion(_rotQuat);
       _desiredLookAt.copy(targetFootPos).add(_lookOffset);
       return;
     }
 
     if (locoMode === 'climb' || locoMode === 'mantle') {
       // Intimate rock climbing framing
-      _shoulderOffset.set(-0.65, 1.35, -2.45).applyQuaternion(_rotQuat);
+      _shoulderOffset
+        .set(-0.65 * aspectFactor, 1.35, -2.45 - portraitPullback * 0.7)
+        .applyQuaternion(_rotQuat);
       _desiredPos.copy(targetFootPos).add(_shoulderOffset);
-      _lookOffset.set(-0.15, 1.55, 3.2).applyQuaternion(_rotQuat);
+      _lookOffset.set(-0.15 * aspectFactor, 1.55, 3.2).applyQuaternion(_rotQuat);
       _desiredLookAt.copy(targetFootPos).add(_lookOffset);
       return;
     }
 
     // Behind Naira (-Z in character local space) and offset to her right shoulder (-X in character local space)
     // so Naira sits in the left third of the frame while the world fills the right two-thirds (§2.9 & R1).
-    const dist = 3.15 + (speed / 5.5) * 0.35;
-    const height = 1.42 - Math.sin(this.pitch) * dist * 0.6 - (locoMode === 'vault' ? 0.16 : 0.0);
-    _shoulderOffset.set(-0.78, height, -dist).applyQuaternion(_rotQuat);
+    const dist = 3.15 + (speed / 5.5) * 0.35 + portraitPullback;
+    const heightOffset =
+      locoMode === 'vault' || locoMode === 'dodge'
+        ? -0.14
+        : locoMode === 'jump'
+        ? 0.08
+        : 0.0;
+    const height = 1.42 - Math.sin(this.pitch) * dist * 0.6 + heightOffset;
+    _shoulderOffset.set(-0.78 * aspectFactor, height, -dist).applyQuaternion(_rotQuat);
     _desiredPos.copy(targetFootPos).add(_shoulderOffset);
 
     const lookPitchY = 1.12 + Math.sin(this.pitch) * 2.0;
-    _lookOffset.set(-1.05, lookPitchY, 5.2).applyQuaternion(_rotQuat);
+    _lookOffset.set(-1.05 * aspectFactor, lookPitchY, 5.2).applyQuaternion(_rotQuat);
     _desiredLookAt.copy(targetFootPos).add(_lookOffset);
   }
 
@@ -207,23 +221,25 @@ export class OverTheShoulderCamera {
     this.yaw -= input.lookDeltaX * 0.008 * this.sensitivity;
     this.pitch = Math.max(-0.55, Math.min(0.48, this.pitch - input.lookDeltaY * 0.006 * lookYSign * this.sensitivity));
 
-    const targetFov =
+    const portraitFovBoost = Math.max(0, 1.0 - this.camera.aspect) * 14.0;
+    const baseTargetFov =
       locoMode === 'zipline'
         ? 68
         : locoMode === 'climb' || locoMode === 'mantle'
         ? 55
-        : targetSpeed > 3.5
-        ? 60
+        : locoMode === 'jump' || targetSpeed > 3.5
+        ? 61
         : 58;
+    const targetFov = baseTargetFov + portraitFovBoost;
     this.setFov(this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 5));
 
     if (this.mode === 'orbit' || this.mode === 'photo') {
       const r = this.orbitDistance;
       const cosP = Math.cos(this.pitch);
       _desiredPos.set(
-        targetFootPos.x + Math.sin(this.yaw) * cosP * r,
+        targetFootPos.x - Math.sin(this.yaw) * cosP * r,
         targetFootPos.y + 1.15 - Math.sin(this.pitch) * r,
-        targetFootPos.z + Math.cos(this.yaw) * cosP * r
+        targetFootPos.z - Math.cos(this.yaw) * cosP * r
       );
       _desiredLookAt.set(targetFootPos.x, targetFootPos.y + 1.05, targetFootPos.z);
     } else {
@@ -235,7 +251,7 @@ export class OverTheShoulderCamera {
       _desiredPos.y = minGroundY;
     }
 
-    const alpha = Math.min(1.0, dt * 11.0);
+    const alpha = Math.min(1.0, dt * 12.5);
     this.smoothedPos.lerp(_desiredPos, alpha);
     this.smoothedLook.lerp(_desiredLookAt, alpha);
 

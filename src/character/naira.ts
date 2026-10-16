@@ -26,6 +26,8 @@ export type LocomotionMode =
   | 'jog'
   | 'sprint'
   | 'crouch'
+  | 'jump'
+  | 'dodge'
   | 'climb'
   | 'zipline'
   | 'aim'
@@ -52,22 +54,32 @@ export class NairaController {
   public ziplineActive: boolean = false;
   public isMantling: boolean = false;
   public isVaulting: boolean = false;
+  public isDodging: boolean = false;
 
   private mantleTimer: number = 0;
-  private readonly mantleDuration: number = 0.55;
+  private readonly mantleDuration: number = 0.52;
   private readonly mantleStartPos: THREE.Vector3 = new THREE.Vector3();
   private readonly mantleTargetPos: THREE.Vector3 = new THREE.Vector3();
 
   private vaultTimer: number = 0;
-  private readonly vaultDuration: number = 0.48;
+  private readonly vaultDuration: number = 0.46;
   private readonly vaultStartPos: THREE.Vector3 = new THREE.Vector3();
   private readonly vaultTargetPos: THREE.Vector3 = new THREE.Vector3();
   private vaultApexY: number = 0;
 
+  private dodgeTimer: number = 0;
+  private readonly dodgeDuration: number = 0.44;
+  private readonly dodgeDir: THREE.Vector3 = new THREE.Vector3(0, 0, -1);
+
+  private readonly lastMoveDir: THREE.Vector3 = new THREE.Vector3(0, 0, -1);
+  private staminaExhausted: boolean = false;
+  private coyoteTimer: number = 0;
+  private jumpBufferTimer: number = 0;
+
   private ziplineSpan: ZiplineSpan | null = null;
   private ziplineT: number = 0;
   private fallApexY: number = 0;
-  private mixer: THREE.AnimationMixer | null = null;
+  public mixer: THREE.AnimationMixer | null = null;
   private actions: Partial<Record<LocomotionMode, THREE.AnimationAction>> = {};
   private activeAction: THREE.AnimationAction | null = null;
   private modelRoot: THREE.Object3D | null = null;
@@ -97,7 +109,7 @@ export class NairaController {
   private readonly braidVelX: Float32Array = new Float32Array(5);
   private readonly braidVelZ: Float32Array = new Float32Array(5);
 
-  private verticalVelocity: number = 0;
+  public verticalVelocity: number = 0;
   private sprintDurationSec: number = 0;
   private elapsedSec: number = 0;
   private isTakedownActive: boolean = false;
@@ -476,57 +488,71 @@ export class NairaController {
       const trs: THREE.KeyframeTrack[] = [];
 
       addT(trs, composeTrack(this.spineBone, t, [
-        [spineLean, -0.06, 0.02],
-        [spineLean + 0.03, 0.0, 0.0],
-        [spineLean, 0.06, -0.02],
-        [spineLean + 0.03, 0.0, 0.0],
-        [spineLean, -0.06, 0.02],
+        [spineLean, -0.07, 0.025],
+        [spineLean + 0.035, 0.0, 0.0],
+        [spineLean, 0.07, -0.025],
+        [spineLean + 0.035, 0.0, 0.0],
+        [spineLean, -0.07, 0.025],
       ]));
-      addT(trs, composeDirectEulerTrack(this.leftArmBone, t, [
-        [1.15 - armSwing * 0.7, 0.05, -0.15],
-        [1.15, 0.05, -0.15],
-        [1.15 + armSwing * 0.7, 0.05, -0.15],
-        [1.15, 0.05, -0.15],
-        [1.15 - armSwing * 0.7, 0.05, -0.15],
+      addT(trs, composeTrack(this.spine2Bone, t, [
+        [spineLean * 0.35, -0.09, -0.02],
+        [spineLean * 0.35 + 0.02, 0.0, 0.0],
+        [spineLean * 0.35, 0.09, 0.02],
+        [spineLean * 0.35 + 0.02, 0.0, 0.0],
+        [spineLean * 0.35, -0.09, -0.02],
       ]));
-      addT(trs, composeDirectEulerTrack(this.rightArmBone, t, [
-        [1.15 + armSwing * 0.7, -0.05, 0.15],
-        [1.15, -0.05, 0.15],
-        [1.15 - armSwing * 0.7, -0.05, 0.15],
-        [1.15, -0.05, 0.15],
-        [1.15 + armSwing * 0.7, -0.05, 0.15],
+      addT(trs, composeTrack(this.headBone, t, [
+        [-spineLean * 0.45, 0.05, 0.0],
+        [-spineLean * 0.45 - 0.02, 0.0, 0.0],
+        [-spineLean * 0.45, -0.05, 0.0],
+        [-spineLean * 0.45 - 0.02, 0.0, 0.0],
+        [-spineLean * 0.45, 0.05, 0.0],
       ]));
-      addT(trs, composeDirectEulerTrack(this.leftForeArmBone, t, [
-        [0.20 + armSwing * 0.25, 0.0, 0.20],
-        [0.20, 0.0, 0.20],
-        [0.20 - armSwing * 0.15, 0.0, 0.20],
-        [0.20, 0.0, 0.20],
-        [0.20 + armSwing * 0.25, 0.0, 0.20],
+      addT(trs, composeTrack(this.leftArmBone, t, [
+        [1.15, 0.05, -armSwing * 0.85],
+        [1.15, 0.05, 0.05],
+        [1.15, 0.05, armSwing * 0.95],
+        [1.15, 0.05, 0.05],
+        [1.15, 0.05, -armSwing * 0.85],
       ]));
-      addT(trs, composeDirectEulerTrack(this.rightForeArmBone, t, [
-        [0.20 - armSwing * 0.25, 0.0, -0.20],
-        [0.20, 0.0, -0.20],
-        [0.20 + armSwing * 0.15, 0.0, -0.20],
-        [0.20, 0.0, -0.20],
-        [0.20 - armSwing * 0.25, 0.0, -0.20],
+      addT(trs, composeTrack(this.rightArmBone, t, [
+        [1.15, -0.05, -armSwing * 0.95],
+        [1.15, -0.05, -0.05],
+        [1.15, -0.05, armSwing * 0.85],
+        [1.15, -0.05, -0.05],
+        [1.15, -0.05, -armSwing * 0.95],
+      ]));
+      addT(trs, composeTrack(this.leftForeArmBone, t, [
+        [0.18, 0.0, 0.22 + armSwing * 0.25],
+        [0.18, 0.0, 0.32 + armSwing * 0.35],
+        [0.18, 0.0, 0.45 + armSwing * 0.55],
+        [0.18, 0.0, 0.32 + armSwing * 0.35],
+        [0.18, 0.0, 0.22 + armSwing * 0.25],
+      ]));
+      addT(trs, composeTrack(this.rightForeArmBone, t, [
+        [0.18, 0.0, -(0.45 + armSwing * 0.55)],
+        [0.18, 0.0, -(0.32 + armSwing * 0.35)],
+        [0.18, 0.0, -(0.22 + armSwing * 0.25)],
+        [0.18, 0.0, -(0.32 + armSwing * 0.35)],
+        [0.18, 0.0, -(0.45 + armSwing * 0.55)],
       ]));
       addT(trs, composeTrack(this.leftUpLegBone, t, [
         [legSwing, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
+        [0.08, 0.0, 0.0],
         [-legSwing * 0.85, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
+        [0.04, 0.0, 0.0],
         [legSwing, 0.0, 0.0],
       ]));
       addT(trs, composeTrack(this.rightUpLegBone, t, [
         [-legSwing * 0.85, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
+        [0.04, 0.0, 0.0],
         [legSwing, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
+        [0.08, 0.0, 0.0],
         [-legSwing * 0.85, 0.0, 0.0],
       ]));
       addT(trs, composeTrack(this.leftLegBone, t, [
         [-0.12, 0.0, 0.0],
-        [-kneeBend * 0.5, 0.0, 0.0],
+        [-kneeBend * 0.45, 0.0, 0.0],
         [-0.18, 0.0, 0.0],
         [-kneeBend, 0.0, 0.0],
         [-0.12, 0.0, 0.0],
@@ -535,17 +561,135 @@ export class NairaController {
         [-0.18, 0.0, 0.0],
         [-kneeBend, 0.0, 0.0],
         [-0.12, 0.0, 0.0],
-        [-kneeBend * 0.5, 0.0, 0.0],
+        [-kneeBend * 0.45, 0.0, 0.0],
         [-0.18, 0.0, 0.0],
       ]));
 
       return new THREE.AnimationClip(clipName, dur, trs);
     };
 
-    this.actions.walk = this.mixer.clipAction(buildStrideClip('walk', 1.1, 0.34, 0.52, 0.24, 0.08));
-    this.actions.jog = this.mixer.clipAction(buildStrideClip('jog', 0.78, 0.52, 0.78, 0.38, 0.14));
-    this.actions.sprint = this.mixer.clipAction(buildStrideClip('sprint', 0.56, 0.68, 0.95, 0.52, 0.22));
-    this.actions.crouch = this.mixer.clipAction(buildStrideClip('crouch', 1.3, 0.28, 0.65, 0.16, 0.32));
+    this.actions.walk = this.mixer.clipAction(buildStrideClip('walk', 0.96, 0.38, 0.56, 0.28, 0.07));
+    this.actions.jog = this.mixer.clipAction(buildStrideClip('jog', 0.68, 0.56, 0.82, 0.42, 0.14));
+    this.actions.sprint = this.mixer.clipAction(buildStrideClip('sprint', 0.50, 0.74, 1.02, 0.58, 0.22));
+    this.actions.crouch = this.mixer.clipAction(buildStrideClip('crouch', 1.15, 0.32, 0.68, 0.18, 0.34));
+
+    // Dedicated Athletic Jump Clip (push-off -> airborne dynamic knee tuck & forward reach -> landing)
+    const jmpT = [0.0, 0.12, 0.68, 0.92];
+    const jmpTracks: THREE.KeyframeTrack[] = [];
+    addT(jmpTracks, composeTrack(this.spineBone, jmpT, [
+      [0.18, -0.05, 0.0],
+      [0.26, -0.08, 0.0],
+      [0.22, -0.06, 0.0],
+      [0.10, 0.0, 0.0],
+    ]));
+    addT(jmpTracks, composeTrack(this.spine2Bone, jmpT, [
+      [0.08, -0.06, 0.0],
+      [0.12, -0.10, 0.0],
+      [0.10, -0.08, 0.0],
+      [0.04, 0.0, 0.0],
+    ]));
+    addT(jmpTracks, composeTrack(this.headBone, jmpT, [
+      [-0.12, 0.04, 0.0],
+      [-0.18, 0.06, 0.0],
+      [-0.14, 0.05, 0.0],
+      [-0.06, 0.0, 0.0],
+    ]));
+    addT(jmpTracks, composeTrack(this.leftArmBone, jmpT, [
+      [1.05, 0.08, 0.55],
+      [0.95, 0.12, 1.05],
+      [0.98, 0.10, 0.88],
+      [1.12, 0.06, 0.25],
+    ]));
+    addT(jmpTracks, composeTrack(this.rightArmBone, jmpT, [
+      [1.05, -0.08, 0.25],
+      [0.98, -0.12, 0.52],
+      [1.02, -0.10, 0.42],
+      [1.12, -0.06, -0.18],
+    ]));
+    addT(jmpTracks, composeTrack(this.leftForeArmBone, jmpT, [
+      [0.18, 0.0, 0.45],
+      [0.22, 0.0, 0.72],
+      [0.20, 0.0, 0.62],
+      [0.18, 0.0, 0.30],
+    ]));
+    addT(jmpTracks, composeTrack(this.rightForeArmBone, jmpT, [
+      [0.18, 0.0, -0.42],
+      [0.22, 0.0, -0.68],
+      [0.20, 0.0, -0.58],
+      [0.18, 0.0, -0.28],
+    ]));
+    addT(jmpTracks, composeTrack(this.leftUpLegBone, jmpT, [
+      [0.58, 0.04, 0.08],
+      [1.02, 0.06, 0.12],
+      [0.92, 0.05, 0.10],
+      [0.35, 0.02, 0.04],
+    ]));
+    addT(jmpTracks, composeTrack(this.rightUpLegBone, jmpT, [
+      [-0.24, -0.04, -0.06],
+      [-0.44, -0.06, -0.08],
+      [-0.32, -0.05, -0.06],
+      [0.18, -0.02, -0.04],
+    ]));
+    addT(jmpTracks, composeTrack(this.leftLegBone, jmpT, [
+      [-0.68, 0.0, 0.0],
+      [-1.22, 0.0, 0.0],
+      [-1.08, 0.0, 0.0],
+      [-0.42, 0.0, 0.0],
+    ]));
+    addT(jmpTracks, composeTrack(this.rightLegBone, jmpT, [
+      [-0.48, 0.0, 0.0],
+      [-1.04, 0.0, 0.0],
+      [-0.92, 0.0, 0.0],
+      [-0.32, 0.0, 0.0],
+    ]));
+    this.actions.jump = this.mixer.clipAction(new THREE.AnimationClip('jump', 0.92, jmpTracks));
+
+    // Dedicated Dodge Evasion Clip (low tactical tuck & dash)
+    const ddgT = [0.0, 0.14, 0.30, 0.44];
+    const ddgTracks: THREE.KeyframeTrack[] = [];
+    addT(ddgTracks, composeTrack(this.spineBone, ddgT, [
+      [0.28, 0.08, -0.06],
+      [0.48, 0.12, -0.10],
+      [0.32, -0.06, 0.05],
+      [0.08, 0.0, 0.0],
+    ]));
+    addT(ddgTracks, composeTrack(this.leftArmBone, ddgT, [
+      [1.08, 0.10, 0.48],
+      [1.02, 0.14, 0.78],
+      [1.10, 0.08, 0.25],
+      [1.15, 0.05, -0.15],
+    ]));
+    addT(ddgTracks, composeTrack(this.rightArmBone, ddgT, [
+      [1.08, -0.10, -0.48],
+      [1.02, -0.14, -0.78],
+      [1.10, -0.08, -0.25],
+      [1.15, -0.05, 0.15],
+    ]));
+    addT(ddgTracks, composeTrack(this.leftUpLegBone, ddgT, [
+      [0.52, 0.06, 0.08],
+      [0.82, 0.08, 0.12],
+      [0.42, 0.04, 0.06],
+      [0.06, 0.0, -0.02],
+    ]));
+    addT(ddgTracks, composeTrack(this.rightUpLegBone, ddgT, [
+      [-0.28, -0.06, -0.06],
+      [0.58, -0.08, -0.10],
+      [0.28, -0.04, -0.05],
+      [-0.04, 0.0, 0.02],
+    ]));
+    addT(ddgTracks, composeTrack(this.leftLegBone, ddgT, [
+      [-0.65, 0.0, 0.0],
+      [-1.05, 0.0, 0.0],
+      [-0.48, 0.0, 0.0],
+      [-0.08, 0.0, 0.0],
+    ]));
+    addT(ddgTracks, composeTrack(this.rightLegBone, ddgT, [
+      [-0.45, 0.0, 0.0],
+      [-0.92, 0.0, 0.0],
+      [-0.38, 0.0, 0.0],
+      [-0.06, 0.0, 0.0],
+    ]));
+    this.actions.dodge = this.mixer.clipAction(new THREE.AnimationClip('dodge', 0.44, ddgTracks));
 
     // Phase 2 Rock Climbing clip (reaching upward toward stone handholds on crag wall)
     const climbT = [0, 0.35, 0.7, 1.05, 1.4];
@@ -915,6 +1059,33 @@ export class NairaController {
     this.transitionToMode('takedown', true);
   }
 
+  public triggerDodge(cameraYaw: number, input: InputState, audio: AudioManager): void {
+    if (this.isDodging || this.isMantling || this.isVaulting || this.ziplineActive || this.isTakedownActive) return;
+    this.isDodging = true;
+    this.dodgeTimer = this.dodgeDuration;
+
+    const inputMag = Math.hypot(input.moveX, input.moveZ);
+    if (inputMag > 0.08) {
+      _forward.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
+      _right.set(-Math.cos(cameraYaw), 0, Math.sin(cameraYaw));
+      this.dodgeDir
+        .set(0, 0, 0)
+        .addScaledVector(_right, input.moveX)
+        .addScaledVector(_forward, -input.moveZ)
+        .normalize();
+    } else {
+      this.dodgeDir.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
+    }
+
+    this.lastMoveDir.copy(this.dodgeDir);
+    this.yaw = Math.atan2(this.dodgeDir.x, this.dodgeDir.z);
+    _targetQuat.setFromAxisAngle(_upAxis, this.yaw);
+    this.root.quaternion.copy(_targetQuat);
+    this.speed = 5.8;
+    this.transitionToMode('dodge', true);
+    audio.playSfx('cloth_rustle', 0);
+  }
+
   public update(
     dt: number,
     input: InputState,
@@ -932,12 +1103,13 @@ export class NairaController {
       const t = Math.min(1.0, this.mantleTimer / this.mantleDuration);
       // Hermite curve: vertical rise first, then forward translation onto ledge
       const yProg = Math.sin(Math.min(1.0, t * 1.6) * Math.PI * 0.5);
-      const zProg = Math.max(0, (t - 0.25) / 0.75);
-      const smoothZ = zProg * zProg * (3 - 2 * zProg);
+      const xzProg = Math.max(0, (t - 0.22) / 0.78);
+      const smoothXZ = xzProg * xzProg * (3 - 2 * xzProg);
       this.position.y = THREE.MathUtils.lerp(this.mantleStartPos.y, this.mantleTargetPos.y, yProg);
-      this.position.z = THREE.MathUtils.lerp(this.mantleStartPos.z, this.mantleTargetPos.z, smoothZ);
-      this.position.x = this.mantleTargetPos.x;
+      this.position.x = THREE.MathUtils.lerp(this.mantleStartPos.x, this.mantleTargetPos.x, smoothXZ);
+      this.position.z = THREE.MathUtils.lerp(this.mantleStartPos.z, this.mantleTargetPos.z, smoothXZ);
       this.root.position.copy(this.position);
+      if (this.modelRoot) this.modelRoot.position.y = 0;
 
       if (this.contactShadowMesh) this.contactShadowMesh.visible = t > 0.6;
 
@@ -952,6 +1124,7 @@ export class NairaController {
 
       this.updateBraidPhysics(dt);
       if (this.mixer && this.activeAction) {
+        this.activeAction.timeScale = 1.0;
         this.mixer.update(dt);
       }
       return;
@@ -964,21 +1137,52 @@ export class NairaController {
       this.position.x = THREE.MathUtils.lerp(this.vaultStartPos.x, this.vaultTargetPos.x, t);
       this.position.z = THREE.MathUtils.lerp(this.vaultStartPos.z, this.vaultTargetPos.z, t);
       const baseHeight = THREE.MathUtils.lerp(this.vaultStartPos.y, this.vaultTargetPos.y, t);
-      const arc = Math.sin(t * Math.PI) * 0.28;
+      const arc = Math.sin(t * Math.PI) * 0.34;
       this.position.y = baseHeight + arc;
       this.root.position.copy(this.position);
+      if (this.modelRoot) this.modelRoot.position.y = 0;
 
       if (t >= 1.0) {
         this.isVaulting = false;
         this.isGrounded = true;
         this.position.copy(this.vaultTargetPos);
-        const exitMode = input.sprint ? 'sprint' : 'jog';
+        const exitMode = input.sprint && !this.staminaExhausted ? 'sprint' : 'jog';
         this.transitionToMode(exitMode, true);
         audio.playSfx('footstep', 0, 'stone');
       }
 
       this.updateBraidPhysics(dt);
       if (this.mixer && this.activeAction) {
+        this.activeAction.timeScale = 1.0;
+        this.mixer.update(dt);
+      }
+      return;
+    }
+
+    // Handle active evasive dodge dash
+    if (this.isDodging) {
+      this.dodgeTimer -= dt;
+      const progress = 1.0 - Math.max(0, this.dodgeTimer / this.dodgeDuration);
+      const dashSpeed = 6.4 * (1.0 - progress * 0.45);
+      this.position.x = Math.max(-28, Math.min(28, this.position.x + this.dodgeDir.x * dashSpeed * dt));
+      this.position.z = Math.max(-32, Math.min(24, this.position.z + this.dodgeDir.z * dashSpeed * dt));
+      const gY = terrain.sampleGroundY(this.position.x, this.position.z, this.position.y);
+      if (this.isGrounded) {
+        this.position.y = gY;
+      }
+      this.root.position.copy(this.position);
+      if (this.modelRoot) this.modelRoot.position.y = 0;
+
+      if (this.dodgeTimer <= 0) {
+        this.isDodging = false;
+        this.speed = 2.6;
+        this.transitionToMode('jog', true);
+        audio.playSfx('footstep', 0, 'dirt');
+      }
+
+      this.updateBraidPhysics(dt);
+      if (this.mixer && this.activeAction) {
+        this.activeAction.timeScale = 1.0;
         this.mixer.update(dt);
       }
       return;
@@ -993,6 +1197,7 @@ export class NairaController {
       }
       this.updateBraidPhysics(dt);
       if (this.mixer && this.activeAction) {
+        this.activeAction.timeScale = 1.0;
         this.mixer.update(dt);
       }
       return;
@@ -1004,6 +1209,7 @@ export class NairaController {
       this.position.lerpVectors(this.ziplineSpan.start, this.ziplineSpan.end, Math.min(1.0, this.ziplineT));
       this.position.y -= 1.68;
       this.root.position.copy(this.position);
+      if (this.modelRoot) this.modelRoot.position.y = 0;
       const spanDx = this.ziplineSpan.end.x - this.ziplineSpan.start.x;
       const spanDz = this.ziplineSpan.end.z - this.ziplineSpan.start.z;
       this.yaw = Math.atan2(spanDx, spanDz);
@@ -1027,6 +1233,7 @@ export class NairaController {
 
       this.updateBraidPhysics(dt);
       if (this.mixer && this.activeAction) {
+        this.activeAction.timeScale = 1.0;
         this.mixer.update(dt);
       }
       return;
@@ -1045,130 +1252,201 @@ export class NairaController {
       }
     }
 
+    // Update coyote time and jump buffer
+    if (this.isGrounded) {
+      this.coyoteTimer = 0.14;
+    } else {
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    }
+    if (input.jumpPressed) {
+      this.jumpBufferTimer = 0.16;
+    } else {
+      this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+    }
+
+    // Stamina exhaustion hysteresis so sprint never oscillates at 60Hz when low on stamina
+    if (this.stamina <= 2.0) {
+      this.staminaExhausted = true;
+    } else if (this.stamina >= 28.0 || !input.sprint) {
+      this.staminaExhausted = false;
+    }
+
     const inputMag = Math.hypot(input.moveX, input.moveZ);
     let targetSpeed = 0;
     let nextMode: LocomotionMode = 'idle';
 
     const nearbyCrag = traversal ? traversal.findNearbyCrag(this.position, 1.8) : null;
-    const shouldClimb = (nearbyCrag && (input.climbHeld || (!this.isGrounded && input.moveZ < -0.1))) || input.climbHeld;
+    const shouldClimb =
+      nearbyCrag !== null && (input.climbHeld || (!this.isGrounded && input.moveZ < -0.1));
 
-    if (shouldClimb) {
+    if (shouldClimb && nearbyCrag) {
       nextMode = 'climb';
-      targetSpeed = 0.8;
-      if (nearbyCrag) {
-        this.yaw = nearbyCrag.facingYaw;
-        this.root.rotation.set(0, this.yaw, 0);
-        const targetZ = nearbyCrag.centerZ + 0.38;
-        this.position.z = THREE.MathUtils.lerp(this.position.z, targetZ, 0.25);
-      }
+      targetSpeed = 0.85;
+      this.yaw = nearbyCrag.facingYaw;
+      this.root.rotation.set(0, this.yaw, 0);
+      const targetZ = nearbyCrag.centerZ + 0.38;
+      this.position.z = THREE.MathUtils.lerp(this.position.z, targetZ, 0.25);
     } else if (input.aimHeld) {
       nextMode = 'aim';
-      targetSpeed = inputMag > 0.08 ? 1.0 : 0.0;
-    } else if (inputMag > 0.08) {
+      targetSpeed = inputMag > 0.06 ? 1.35 : 0.0;
+    } else if (inputMag > 0.06) {
       if (input.crouch) {
         nextMode = 'crouch';
-        targetSpeed = 0.8;
-      } else if (input.sprint && this.stamina > 5.0) {
+        targetSpeed = 1.15;
+      } else if (input.sprint && !this.staminaExhausted && this.stamina > 2.0) {
         nextMode = 'sprint';
-        targetSpeed = 5.5;
-      } else if (input.walkToggle || inputMag < 0.55) {
+        targetSpeed = 5.8;
+      } else if (input.walkToggle || inputMag < 0.45) {
         nextMode = 'walk';
-        targetSpeed = 1.4;
+        targetSpeed = 1.65;
       } else {
         nextMode = 'jog';
-        targetSpeed = 3.0;
+        targetSpeed = 3.6;
       }
     }
 
+    if (!this.isGrounded && nextMode !== 'climb' && nextMode !== 'aim') {
+      nextMode = 'jump';
+    }
+
     this.transitionToMode(nextMode);
-    if (this.heldBowGroup) this.heldBowGroup.visible = (nextMode === 'aim');
-    if (this.backBowMesh) this.backBowMesh.visible = (nextMode !== 'aim');
+    if (this.heldBowGroup) this.heldBowGroup.visible = nextMode === 'aim';
+    if (this.backBowMesh) this.backBowMesh.visible = nextMode !== 'aim';
 
-    const accel = targetSpeed > this.speed ? 10.0 : 12.0;
+    const accel = targetSpeed > this.speed ? 11.5 : 13.5;
     this.speed += (targetSpeed - this.speed) * Math.min(1.0, accel * dt);
+    if (targetSpeed === 0 && this.speed < 0.04) {
+      this.speed = 0;
+    }
 
-    if (nextMode === 'sprint') {
+    if (nextMode === 'sprint' || (!this.isGrounded && input.sprint && !this.staminaExhausted && inputMag > 0.2)) {
       this.sprintDurationSec += dt;
-      this.stamina = Math.max(0, this.stamina - dt * 14.0);
+      this.stamina = Math.max(0, this.stamina - dt * 11.5);
       if (this.sprintDurationSec > 10.0) {
         audio.playSfx('breath_exert', 0);
       }
     } else {
-      this.sprintDurationSec = Math.max(0, this.sprintDurationSec - dt * 2.0);
-      this.stamina = Math.min(100, this.stamina + dt * 18.0);
+      this.sprintDurationSec = Math.max(0, this.sprintDurationSec - dt * 2.5);
+      this.stamina = Math.min(100, this.stamina + dt * 22.0);
     }
 
-    if (inputMag > 0.08 && this.speed > 0.05 && nextMode !== 'climb') {
-      _forward.set(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
-      _right.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
+    // Camera-relative movement direction (camera looks along (+sin(yaw), 0, +cos(yaw)))
+    if (nextMode !== 'climb') {
+      if (inputMag > 0.06) {
+        _forward.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
+        _right.set(-Math.cos(cameraYaw), 0, Math.sin(cameraYaw));
 
-      _moveVec
-        .set(0, 0, 0)
-        .addScaledVector(_right, input.moveX)
-        .addScaledVector(_forward, -input.moveZ)
-        .normalize();
+        _moveVec
+          .set(0, 0, 0)
+          .addScaledVector(_right, input.moveX)
+          .addScaledVector(_forward, -input.moveZ)
+          .normalize();
 
-      const targetYaw = Math.atan2(_moveVec.x, _moveVec.z);
-      _targetQuat.setFromAxisAngle(_upAxis, targetYaw);
-      this.root.quaternion.slerp(_targetQuat, Math.min(1.0, dt * 10.5));
-      this.yaw = targetYaw;
+        this.lastMoveDir.copy(_moveVec);
 
-      const inWater = this.position.y <= -2.1;
-      const speedMult = inWater ? 0.72 : 1.0;
-      this.position.x += _moveVec.x * this.speed * speedMult * dt;
-      this.position.z += _moveVec.z * this.speed * speedMult * dt;
-
-      this.position.x = Math.max(-28, Math.min(28, this.position.x));
-      this.position.z = Math.max(-32, Math.min(24, this.position.z));
-
-      const onBridge = Math.abs(this.position.x) <= 1.35 && Math.abs(this.position.z) <= 5.85;
-      const onStone = this.position.z < -10.0 || (Math.abs(this.position.x) <= 3.5 && this.position.z > 6.0);
-      const surface = inWater ? 'water' : onBridge ? 'wood' : onStone ? 'stone' : 'dirt';
-      audio.playSfx('footstep', 0, surface);
-      if (onBridge) {
-        audio.playSfx('rope_creak', 0);
+        const desiredYaw = nextMode === 'aim' ? cameraYaw : Math.atan2(_moveVec.x, _moveVec.z);
+        let angleDiff = desiredYaw - this.yaw;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        const turnRate = this.isGrounded ? 12.5 : 6.0;
+        this.yaw += angleDiff * Math.min(1.0, dt * turnRate);
+        _targetQuat.setFromAxisAngle(_upAxis, this.yaw);
+        this.root.quaternion.copy(_targetQuat);
+      } else if (nextMode === 'aim') {
+        let angleDiff = cameraYaw - this.yaw;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        this.yaw += angleDiff * Math.min(1.0, dt * 14.0);
+        _targetQuat.setFromAxisAngle(_upAxis, this.yaw);
+        this.root.quaternion.copy(_targetQuat);
       }
-      if (inWater) {
-        audio.playSfx('water_stroke', 0);
+
+      if (this.speed > 0.04) {
+        const inWater = this.position.y <= -2.1;
+        const airControlMult = this.isGrounded ? 1.0 : 1.08;
+        const speedMult = (inWater ? 0.72 : 1.0) * airControlMult;
+        const nextX = Math.max(-28, Math.min(28, this.position.x + this.lastMoveDir.x * this.speed * speedMult * dt));
+        const nextZ = Math.max(-32, Math.min(24, this.position.z + this.lastMoveDir.z * this.speed * speedMult * dt));
+        this.position.x = nextX;
+        this.position.z = nextZ;
+
+        if (this.isGrounded && inputMag > 0.06) {
+          const onBridge = Math.abs(this.position.x) <= 1.35 && Math.abs(this.position.z) <= 5.85;
+          const onStone = this.position.z < -10.0 || (Math.abs(this.position.x) <= 3.5 && this.position.z > 6.0);
+          const surface = inWater ? 'water' : onBridge ? 'wood' : onStone ? 'stone' : 'dirt';
+          audio.playSfx('footstep', 0, surface);
+          if (onBridge) {
+            audio.playSfx('rope_creak', 0);
+          }
+          if (inWater) {
+            audio.playSfx('water_stroke', 0);
+          }
+        }
       }
     }
 
     // Low-obstacle vault detection while moving at athletic speed (Milestone 3)
-    if (this.isGrounded && this.speed > 2.2 && (input.moveZ < -0.2 || input.jumpPressed) && nextMode !== 'climb') {
+    if (this.isGrounded && this.speed > 2.0 && (inputMag > 0.2 || input.jumpPressed) && nextMode !== 'climb') {
       const probeDist = 0.95;
       const aheadX = this.position.x + Math.sin(this.yaw) * probeDist;
       const aheadZ = this.position.z + Math.cos(this.yaw) * probeDist;
-      const aheadY = terrain.sampleGroundY(aheadX, aheadZ, this.position.y);
+      const ledgeY = terrain.sampleLedgeHeight(aheadX, aheadZ, this.position.y, 1.35);
+      const aheadY = ledgeY !== null ? ledgeY : terrain.sampleGroundY(aheadX, aheadZ, this.position.y, 1.35);
       const heightDelta = aheadY - this.position.y;
 
-      if (heightDelta >= 0.32 && heightDelta <= 1.25) {
-        const landDist = 1.95;
+      if (heightDelta >= 0.35 && heightDelta <= 1.15) {
+        const landDist = 1.85;
         const landX = this.position.x + Math.sin(this.yaw) * landDist;
         const landZ = this.position.z + Math.cos(this.yaw) * landDist;
-        const landY = terrain.sampleGroundY(landX, landZ, aheadY);
-        if (landY <= aheadY + 0.25) {
-          this.isVaulting = true;
-          this.vaultTimer = 0;
-          this.vaultStartPos.copy(this.position);
-          this.vaultTargetPos.set(landX, landY, landZ);
-          this.vaultApexY = aheadY + 0.28;
-          this.transitionToMode('vault', true);
+        const landY = terrain.sampleGroundY(landX, landZ, aheadY, 1.35);
+        if (landY <= aheadY + 0.3) {
+          this.startVault(landX, landY, landZ);
           audio.playSfx('cloth_rustle', 0);
           return;
         }
       }
     }
 
-    if (input.jumpPressed && this.isGrounded && nextMode !== 'climb') {
-      this.verticalVelocity = 3.96;
+    // Athletic Jump + Ledge Mantle on Jump Press (with Coyote Time & Jump Buffering)
+    if (this.jumpBufferTimer > 0 && (this.isGrounded || this.coyoteTimer > 0) && nextMode !== 'climb') {
+      this.jumpBufferTimer = 0;
+      this.coyoteTimer = 0;
+
+      // Check if jumping directly toward an elevated ledge / terrace wall (0.55m - 1.95m above feet)
+      const sinYaw = Math.sin(this.yaw);
+      const cosYaw = Math.cos(this.yaw);
+      const probeNearX = this.position.x + sinYaw * 0.85;
+      const probeNearZ = this.position.z + cosYaw * 0.85;
+      const probeFarX = this.position.x + sinYaw * 1.35;
+      const probeFarZ = this.position.z + cosYaw * 1.35;
+      const nearLedgeY = terrain.sampleLedgeHeight(probeNearX, probeNearZ, this.position.y, 1.95);
+      const farLedgeY = terrain.sampleLedgeHeight(probeFarX, probeFarZ, this.position.y, 1.95);
+      const chosenLedgeY = nearLedgeY !== null ? nearLedgeY : farLedgeY;
+
+      if (chosenLedgeY !== null && chosenLedgeY - this.position.y >= 0.55 && chosenLedgeY - this.position.y <= 1.95) {
+        const targetX = nearLedgeY !== null ? probeNearX + sinYaw * 0.25 : probeFarX;
+        const targetZ = nearLedgeY !== null ? probeNearZ + cosYaw * 0.25 : probeFarZ;
+        this.startMantle(chosenLedgeY, targetZ, targetX);
+        audio.playSfx('climb_grip', 0);
+        return;
+      }
+
+      // Launch athletic leap with forward momentum boost
+      this.verticalVelocity = 5.45;
       this.isGrounded = false;
       this.fallApexY = this.position.y;
+      if (inputMag > 0.08) {
+        this.speed = Math.max(this.speed * 1.14, input.sprint ? 6.1 : 4.2);
+      }
+      this.transitionToMode('jump', true);
+      audio.playSfx('cloth_rustle', 0);
     }
 
     const groundY = terrain.sampleGroundY(this.position.x, this.position.z, this.position.y);
     if (nextMode === 'climb') {
+      if (this.modelRoot) this.modelRoot.position.y = 0;
       if (Math.abs(input.moveZ) > 0.05) {
-        this.position.y += -input.moveZ * 0.8 * dt;
+        this.position.y += -input.moveZ * 0.95 * dt;
         if (Math.sin(this.elapsedSec * 6.5) > 0.96) {
           audio.playSfx('climb_grip', 0);
         }
@@ -1178,7 +1456,7 @@ export class NairaController {
         if (crag) {
           // Lateral shimmy across crag wall (Milestone 3)
           if (Math.abs(input.moveX) > 0.05) {
-            this.position.x += input.moveX * 0.75 * dt;
+            this.position.x += input.moveX * 0.85 * dt;
             const halfW = crag.width * 0.46;
             this.position.x = Math.max(crag.centerX - halfW, Math.min(crag.centerX + halfW, this.position.x));
             if (Math.sin(this.elapsedSec * 7.0) > 0.96) {
@@ -1198,11 +1476,7 @@ export class NairaController {
 
           // Initiate smooth parametric mantle onto platform ledge when reaching top (Milestone 3)
           if (this.position.y >= crag.topY - 0.32 && (-input.moveZ > 0.05 || this.position.y >= crag.topY - 0.08)) {
-            this.isMantling = true;
-            this.mantleTimer = 0;
-            this.mantleStartPos.copy(this.position);
-            this.mantleTargetPos.set(this.position.x, crag.topY, crag.centerZ - 0.95);
-            this.transitionToMode('mantle', true);
+            this.startMantle(crag.topY, crag.centerZ - 0.95, this.position.x);
             audio.playSfx('climb_grip', 0);
             return;
           }
@@ -1210,17 +1484,40 @@ export class NairaController {
       }
       if (this.contactShadowMesh) this.contactShadowMesh.visible = false;
     } else if (!this.isGrounded) {
+      if (this.modelRoot) this.modelRoot.position.y = 0;
       if (this.contactShadowMesh) this.contactShadowMesh.visible = true;
-      this.verticalVelocity -= 9.81 * dt;
+      const gravity = this.verticalVelocity > 0 ? 11.2 : 13.8;
+      this.verticalVelocity -= gravity * dt;
       this.position.y += this.verticalVelocity * dt;
       this.fallApexY = Math.max(this.fallApexY, this.position.y);
+
+      // Automatic mid-air ledge grab / mantle when jumping toward an elevated platform
+      if (this.verticalVelocity > -3.5 && (inputMag > 0.08 || input.jumpPressed || input.climbHeld)) {
+        const sinYaw = Math.sin(this.yaw);
+        const cosYaw = Math.cos(this.yaw);
+        const ledgeX = this.position.x + sinYaw * 0.82;
+        const ledgeZ = this.position.z + cosYaw * 0.82;
+        const ledgeY = terrain.sampleLedgeHeight(ledgeX, ledgeZ, groundY, 2.2);
+        if (
+          ledgeY !== null &&
+          ledgeY - groundY >= 0.5 &&
+          this.position.y >= ledgeY - 0.85 &&
+          this.position.y <= ledgeY + 0.35
+        ) {
+          this.startMantle(ledgeY, ledgeZ + cosYaw * 0.22, ledgeX + sinYaw * 0.22);
+          audio.playSfx('climb_grip', 0);
+          return;
+        }
+      }
+
       if (this.position.y <= groundY) {
         const fallDist = this.fallApexY - groundY;
         this.fallApexY = groundY;
         this.position.y = groundY;
         this.verticalVelocity = 0;
         this.isGrounded = true;
-        if (traversal && onLandDamage && fallDist > 3.0) {
+        audio.playSfx('footstep', 0, 'dirt');
+        if (traversal && onLandDamage && fallDist > 3.5) {
           const dmg = traversal.computeFallDamage(fallDist, groundY <= 0.6);
           if (dmg > 0) {
             onLandDamage(dmg);
@@ -1232,12 +1529,31 @@ export class NairaController {
       this.fallApexY = groundY;
       if (this.contactShadowMesh) this.contactShadowMesh.visible = true;
       this.position.y = groundY;
+      // Subtle grounded stride vertical bounce on modelRoot so feet stay planted at root.y while hips bob naturally
+      if (this.modelRoot) {
+        if (this.speed > 0.25 && (nextMode === 'walk' || nextMode === 'jog' || nextMode === 'sprint')) {
+          const freq = nextMode === 'sprint' ? 11.5 : nextMode === 'jog' ? 8.8 : 6.2;
+          const amp = nextMode === 'sprint' ? 0.032 : nextMode === 'jog' ? 0.022 : 0.012;
+          this.modelRoot.position.y = Math.abs(Math.sin(this.elapsedSec * freq)) * amp;
+        } else {
+          this.modelRoot.position.y = THREE.MathUtils.lerp(this.modelRoot.position.y, 0, Math.min(1.0, dt * 12.0));
+        }
+      }
     }
 
     this.root.position.copy(this.position);
 
     this.updateBraidPhysics(dt);
     if (this.mixer && this.activeAction) {
+      if (nextMode === 'walk') {
+        this.activeAction.timeScale = THREE.MathUtils.clamp(this.speed / 1.5, 0.65, 1.35);
+      } else if (nextMode === 'jog') {
+        this.activeAction.timeScale = THREE.MathUtils.clamp(this.speed / 3.4, 0.7, 1.35);
+      } else if (nextMode === 'sprint') {
+        this.activeAction.timeScale = THREE.MathUtils.clamp(this.speed / 5.4, 0.75, 1.35);
+      } else {
+        this.activeAction.timeScale = 1.0;
+      }
       this.mixer.update(dt);
     }
   }
@@ -1289,11 +1605,11 @@ export class NairaController {
     return tex;
   }
 
-  public startMantle(topY: number, targetZ: number): void {
+  public startMantle(topY: number, targetZ: number, targetX: number = this.position.x): void {
     this.isMantling = true;
     this.mantleTimer = 0;
     this.mantleStartPos.copy(this.position);
-    this.mantleTargetPos.set(this.position.x, topY, targetZ);
+    this.mantleTargetPos.set(targetX, topY, targetZ);
     this.transitionToMode('mantle', true);
   }
 

@@ -83,6 +83,8 @@ export class InputManager {
   private moveOriginY: number = 0;
   private touchMoveX: number = 0;
   private touchMoveZ: number = 0;
+  private touchSprint: boolean = false;
+  private touchClimbHeld: boolean = false;
   private lookTouchId: number = -1;
   private lastTouchLookX: number = 0;
   private lastTouchLookY: number = 0;
@@ -209,15 +211,19 @@ export class InputManager {
     this.state.moveX = mx;
     this.state.moveZ = mz;
 
-    const ySign = this.invertY ? -1 : 1;
-    this.state.lookDeltaX = (this.accumMouseX + gpLookX) * this.sensitivity;
-    this.state.lookDeltaY = (this.accumMouseY + gpLookY) * this.sensitivity * ySign;
+    // Pass raw look deltas; OverTheShoulderCamera applies sensitivity & invertY
+    this.state.lookDeltaX = this.accumMouseX + gpLookX;
+    this.state.lookDeltaY = this.accumMouseY + gpLookY;
     this.accumMouseX = 0;
     this.accumMouseY = 0;
 
-    this.state.sprint = this.keysDown.has('ShiftLeft') || this.keysDown.has('ShiftRight') || gpSprint || this.state.sprint;
+    this.state.sprint =
+      this.keysDown.has('ShiftLeft') ||
+      this.keysDown.has('ShiftRight') ||
+      gpSprint ||
+      this.touchSprint;
     this.state.walkToggle = this.keysDown.has('AltLeft') || this.keysDown.has('ControlLeft');
-    this.state.climbHeld = this.keysDown.has('KeyC') || this.state.climbHeld;
+    this.state.climbHeld = this.keysDown.has('KeyC') || this.touchClimbHeld;
     this.state.radialOpen = this.keysDown.has('Tab');
     this.state.aimHeld = this.state.aimHeld || gpAim;
   }
@@ -225,9 +231,11 @@ export class InputManager {
   public setTouchMovement(x: number, z: number, sprint: boolean = false): void {
     this.touchMoveX = x;
     this.touchMoveZ = z;
-    if (sprint) {
-      this.state.sprint = true;
-    }
+    this.touchSprint = sprint;
+  }
+
+  public setTouchClimbHeld(held: boolean): void {
+    this.touchClimbHeld = held;
   }
 
   public addTouchLookDelta(dx: number, dy: number): void {

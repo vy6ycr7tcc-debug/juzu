@@ -50,6 +50,7 @@ export class PaititiRegion {
     lowerTerrace.castShadow = true;
     lowerTerrace.receiveShadow = true;
     this.group.add(lowerTerrace);
+    terrain.registerWalkable(lowerTerrace);
 
     const portalZ = ptZ - 1.8; // -14.3
     const upperTerrace = new THREE.Mesh(upperTerraceGeo, materials.andesiteCut);
@@ -58,6 +59,7 @@ export class PaititiRegion {
     upperTerrace.castShadow = true;
     upperTerrace.receiveShadow = true;
     this.group.add(upperTerrace);
+    terrain.registerWalkable(upperTerrace);
 
     // Monumental Imperial Stepped Staircase ascending the Coricancha terraces
     const stairStepCount = 14;

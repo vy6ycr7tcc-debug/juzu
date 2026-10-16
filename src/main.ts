@@ -733,6 +733,29 @@ export class JuzuEngine {
         8,
         85
       );
+    } else if (shot === 'jump_apex') {
+      this.setActiveRegion('cloudForest');
+      const baseGround = this.terrain.sampleGroundY(0.0, 6.2, 3.0);
+      this.naira.position.set(0.0, baseGround + 0.92, 6.2);
+      this.naira.yaw = Math.PI;
+      this.naira.isGrounded = false;
+      this.naira.verticalVelocity = 0.5;
+      this.naira.speed = 0;
+      this.naira.root.position.copy(this.naira.position);
+      this.naira.root.rotation.set(0, Math.PI, 0);
+      this.naira.transitionToMode('jump', true);
+      if (this.naira.mixer) {
+        this.naira.mixer.update(0.32);
+      }
+      this.cameraRig.snapToShot(
+        1.65,
+        baseGround + 1.65,
+        8.6,
+        0.0,
+        baseGround + 1.45,
+        5.8,
+        54
+      );
     }
   }
 
@@ -826,8 +849,9 @@ export class JuzuEngine {
       }
       if (this.input.state.dodgePressed) {
         this.combat.triggerDodgeRoll();
+        this.naira.triggerDodge(this.cameraRig.yaw, this.input.state, this.audio);
       }
-      if (this.input.state.shootPressed && this.input.state.aimHeld) {
+      if (this.input.state.shootPressed && (this.input.state.aimHeld || this.naira.mode === 'aim')) {
         const count = this.crafting.getAmmoCount();
         if (count > 0) {
           this.crafting.arrowCounts[this.crafting.selectedArrow]--;
@@ -836,11 +860,15 @@ export class JuzuEngine {
             this.naira.position.y + 1.38,
             this.naira.position.z
           );
-          _aimDir.set(
-            Math.sin(this.naira.yaw),
-            0.06,
-            Math.cos(this.naira.yaw)
-          );
+          const aimYaw = this.input.state.aimHeld ? this.cameraRig.yaw : this.naira.yaw;
+          const aimPitch = this.cameraRig.pitch;
+          _aimDir
+            .set(
+              Math.sin(aimYaw) * Math.cos(aimPitch),
+              Math.max(-0.35, -Math.sin(aimPitch) + 0.04),
+              Math.cos(aimYaw) * Math.cos(aimPitch)
+            )
+            .normalize();
           this.combat.fireArrow(_arrowOrigin, _aimDir, this.crafting.selectedArrow, this.audio);
         }
       }
@@ -851,6 +879,13 @@ export class JuzuEngine {
         this.naira.isGrounded = false;
       } else if (this.activeShotPreset === 'combat') {
         this.input.state.aimHeld = true;
+      } else if (this.activeShotPreset === 'jump_apex') {
+        const baseGround = this.terrain.sampleGroundY(0.0, 6.2, 3.0);
+        this.naira.position.set(0.0, baseGround + 0.92, 6.2);
+        this.naira.isGrounded = false;
+        this.naira.verticalVelocity = 0.5;
+        this.naira.speed = 0;
+        this.naira.mode = 'jump';
       }
 
       this.naira.update(
