@@ -46,6 +46,7 @@ import { JournalOverlay } from './ui/journal';
 import { MenusOverlay } from './ui/menus';
 import { QuipuInspectOverlay } from './ui/quipuInspect';
 import { TouchControlsOverlay } from './ui/touchControls';
+import { offlineManager } from './pwa/offline';
 
 declare global {
   interface Window {
@@ -213,8 +214,12 @@ export class JuzuEngine {
 
       this.applyUrlShotPresetIfPresent();
       window.__juzuEngine = this;
+      (window as any).__juzuOffline = offlineManager;
       window.__juzuReady = true;
       (window as any).__shotReady = true;
+
+      // Register offline Service Worker for precaching and offline play
+      offlineManager.register().catch(err => console.warn('[PWA] SW registration notice:', err));
 
       // Resume Web Audio on first user gesture across mobile & desktop
       const resumeAudio = () => {

@@ -14,6 +14,7 @@ import { SaveManager } from '../core/save';
 import { LightRig, TimeOfDayGrade } from '../gpu/lightRig';
 import { PHOTO_PRESETS, PhotoPresetId, PostProcessor } from '../gpu/post';
 import { OverTheShoulderCamera } from '../character/camera';
+import { offlineManager, OfflineStatus } from '../pwa/offline';
 
 export class MenusOverlay {
   public isPaused: boolean = false;
@@ -65,12 +66,16 @@ export class MenusOverlay {
 
     titleScreen.innerHTML = `
       <div style="text-align:center;max-width:560px;padding:32px 24px;border:1px solid rgba(212,184,136,0.3);background:rgba(12,16,14,0.72);border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,0.85);">
+        <div id="juzu-offline-indicator" style="display:none;position:absolute;top:16px;right:20px;padding:6px 12px;background:rgba(18,24,20,0.92);border:1px solid #c9a468;border-radius:3px;font-size:11px;letter-spacing:0.12em;color:#e6c896;text-transform:uppercase;box-shadow:0 4px 14px rgba(0,0,0,0.7);">📡 Offline Mode · Ready</div>
         <div style="font-size:11px;letter-spacing:0.32em;color:#d4b888;text-transform:uppercase;margin-bottom:10px;">Archaeological Expedition · Inca Andes</div>
         <h1 style="font-size:46px;letter-spacing:0.18em;margin:0 0 6px 0;color:#fdfaf2;text-shadow:0 3px 14px rgba(0,0,0,0.9);font-weight:400;">J U Z U</h1>
         <div style="font-size:15px;letter-spacing:0.1em;color:#e6c896;margin-bottom:26px;font-style:italic;">The Search for Paititi</div>
         <div style="display:flex;flex-direction:column;gap:10px;width:240px;margin:0 auto 24px auto;">
           <button id="juzu-btn-begin" style="padding:11px 16px;background:#384836;color:#fdfaf2;border:1px solid #c9a468;cursor:pointer;font-family:Georgia,serif;font-size:14px;letter-spacing:0.08em;transition:background 0.2s ease;">Begin Expedition</button>
           <button id="juzu-btn-toggle-chapters" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Select Chapter</button>
+          <button id="juzu-btn-title-offline" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;transition:background 0.2s ease;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
+            <span>📥</span><span id="juzu-title-offline-text">Download to Play Offline</span>
+          </button>
           <button id="juzu-btn-title-settings" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Expedition Settings & Audio</button>
           <button id="juzu-btn-title-reload" style="padding:9px 16px;background:rgba(50,30,26,0.85);color:#f2d4d0;border:1px solid #944838;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;transition:background 0.2s ease;">🔄 Load Latest Version (Clear Cache)</button>
         </div>
@@ -297,6 +302,33 @@ export class MenusOverlay {
         </div>
       </div>
 
+      <!-- Offline Play & Device Storage Section -->
+      <div style="margin-bottom:18px;">
+        <div style="font-size:12px;letter-spacing:0.15em;color:#e6c896;text-transform:uppercase;margin-bottom:8px;font-weight:bold;">Offline Play & Device Storage</div>
+        <div style="padding:12px 14px;background:rgba(12,16,14,0.6);border:1px solid rgba(212,184,136,0.18);border-radius:3px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div>
+              <div style="font-size:13px;color:#dcd4c6;font-weight:bold;">Expedition Asset Precache</div>
+              <div id="juzu-offline-subtext" style="font-size:11px;color:#9b9487;margin-top:2px;">Store 3D models, textures, audio & shaders for play without internet.</div>
+            </div>
+            <button id="juzu-btn-download-offline-settings" style="padding:7px 16px;background:#384836;color:#fdfaf2;border:1px solid #c9a468;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;white-space:nowrap;transition:background 0.2s ease;">
+              📥 Download for Offline Play
+            </button>
+          </div>
+          <!-- Progress bar -->
+          <div id="juzu-offline-progress-wrap" style="display:none;width:100%;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin:8px 0 6px 0;">
+            <div id="juzu-offline-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg, #caa05b, #ffd988);transition:width 0.15s ease;"></div>
+          </div>
+          <div id="juzu-offline-status-text" style="font-size:11px;color:#c9a468;margin-bottom:8px;min-height:14px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#8a8377;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;">
+            <span id="juzu-offline-storage-info">Device Storage: Estimating...</span>
+            <button id="juzu-btn-clear-offline" style="background:transparent;border:none;color:#b46858;cursor:pointer;font-size:11px;text-decoration:underline;">
+              Remove Offline Cache
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Keybindings Reference Section -->
       <div style="margin-bottom:20px;padding:12px 14px;background:rgba(12,16,14,0.6);border:1px solid rgba(212,184,136,0.18);border-radius:3px;">
         <div style="font-size:11px;letter-spacing:0.12em;color:#c9a468;text-transform:uppercase;margin-bottom:6px;font-weight:bold;">Keybindings & Exploration Controls</div>
@@ -426,6 +458,96 @@ export class MenusOverlay {
 
     settingsPanel.querySelector('#juzu-btn-settings-close-x')?.addEventListener('click', closeSettingsModal);
     settingsPanel.querySelector('#juzu-btn-settings-done')?.addEventListener('click', closeSettingsModal);
+
+    // Offline play and storage manager wiring
+    const btnTitleOffline = titleScreen.querySelector('#juzu-btn-title-offline') as HTMLButtonElement | null;
+    const txtTitleOffline = titleScreen.querySelector('#juzu-title-offline-text') as HTMLSpanElement | null;
+    const badgeTitleOffline = titleScreen.querySelector('#juzu-offline-indicator') as HTMLDivElement | null;
+
+    const btnSettingsOffline = settingsPanel.querySelector('#juzu-btn-download-offline-settings') as HTMLButtonElement | null;
+    const prgWrap = settingsPanel.querySelector('#juzu-offline-progress-wrap') as HTMLDivElement | null;
+    const prgBar = settingsPanel.querySelector('#juzu-offline-progress-bar') as HTMLDivElement | null;
+    const statusTxt = settingsPanel.querySelector('#juzu-offline-status-text') as HTMLDivElement | null;
+    const subTxt = settingsPanel.querySelector('#juzu-offline-subtext') as HTMLDivElement | null;
+    const storageInfo = settingsPanel.querySelector('#juzu-offline-storage-info') as HTMLSpanElement | null;
+    const btnClearOffline = settingsPanel.querySelector('#juzu-btn-clear-offline') as HTMLButtonElement | null;
+
+    const updateOfflineUI = (status: OfflineStatus) => {
+      if (badgeTitleOffline) {
+        badgeTitleOffline.style.display = status.isOffline ? 'block' : 'none';
+      }
+      if (storageInfo) {
+        if (status.storageUsedMB > 0) {
+          storageInfo.textContent = `Device Storage: ${status.storageUsedMB} MB cached`;
+        } else {
+          storageInfo.textContent = 'Device Storage: Not cached';
+        }
+      }
+
+      if (status.isReady) {
+        if (txtTitleOffline) txtTitleOffline.textContent = '✓ Ready to Play Offline';
+        if (btnSettingsOffline) {
+          btnSettingsOffline.innerHTML = '✓ Ready for Offline Play';
+          btnSettingsOffline.style.background = '#283c26';
+          btnSettingsOffline.style.borderColor = '#7ca868';
+        }
+        if (subTxt) subTxt.textContent = `All ${status.totalCount} assets cached in browser storage. Full game playable without network.`;
+        if (statusTxt) statusTxt.textContent = `Offline status: 100% synchronized (${status.cachedCount}/${status.totalCount} assets).`;
+      } else {
+        if (txtTitleOffline) txtTitleOffline.textContent = 'Download to Play Offline';
+        if (btnSettingsOffline) {
+          btnSettingsOffline.innerHTML = '📥 Download for Offline Play';
+          btnSettingsOffline.style.background = '#384836';
+          btnSettingsOffline.style.borderColor = '#c9a468';
+        }
+        if (subTxt) subTxt.textContent = 'Store 3D models, textures, audio & shaders for play without internet.';
+      }
+    };
+
+    offlineManager.onStatusChange(updateOfflineUI);
+
+    const handleDownloadClick = async () => {
+      if (btnSettingsOffline) btnSettingsOffline.disabled = true;
+      if (btnTitleOffline) btnTitleOffline.disabled = true;
+      if (prgWrap) prgWrap.style.display = 'block';
+      if (statusTxt) statusTxt.textContent = 'Starting precache download...';
+
+      try {
+        await offlineManager.downloadForOffline((p) => {
+          if (prgBar) prgBar.style.width = `${p.progress}%`;
+          if (statusTxt) {
+            statusTxt.textContent = `Downloading assets... ${p.progress}% (${p.completed}/${p.total} files)`;
+          }
+          if (txtTitleOffline) {
+            txtTitleOffline.textContent = `Downloading ${p.progress}%`;
+          }
+        });
+        if (statusTxt) statusTxt.textContent = 'Precache complete! All assets ready for offline play.';
+        if (txtTitleOffline) txtTitleOffline.textContent = '✓ Ready to Play Offline';
+        if (btnSettingsOffline) {
+          btnSettingsOffline.innerHTML = '✓ Ready for Offline Play';
+          btnSettingsOffline.disabled = false;
+        }
+        if (btnTitleOffline) btnTitleOffline.disabled = false;
+        setTimeout(() => {
+          if (prgWrap) prgWrap.style.display = 'none';
+        }, 3000);
+      } catch (err: any) {
+        if (statusTxt) statusTxt.textContent = `Download notice: ${err?.message || err}`;
+        if (btnSettingsOffline) btnSettingsOffline.disabled = false;
+        if (btnTitleOffline) btnTitleOffline.disabled = false;
+      }
+    };
+
+    btnTitleOffline?.addEventListener('click', handleDownloadClick);
+    btnSettingsOffline?.addEventListener('click', handleDownloadClick);
+
+    btnClearOffline?.addEventListener('click', async () => {
+      if (confirm('Remove downloaded offline cache? Your expedition saves and progress will NOT be deleted.')) {
+        await offlineManager.clearOfflineData();
+        if (statusTxt) statusTxt.textContent = 'Offline asset cache cleared. Save files preserved.';
+      }
+    });
 
     // 2. Andean Photo Studio Bar (P) per §3.10
     const photoBar = document.createElement('div');
