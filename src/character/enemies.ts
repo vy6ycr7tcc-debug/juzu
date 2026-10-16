@@ -268,6 +268,7 @@ export class EnemyManager {
     radius: number = 1.1,
     hitOrigin?: THREE.Vector3
   ): SolNegroOperative | null {
+    if (!this.group.visible) return null;
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
       if (!op.active && !op.isDying) continue;
@@ -303,6 +304,7 @@ export class EnemyManager {
     playerPos: THREE.Vector3,
     radius: number = 2.4
   ): SolNegroOperative | null {
+    if (!this.group.visible) return null;
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
       if (!op.active || op.state === 'combat' || op.isDying) continue;
@@ -333,6 +335,7 @@ export class EnemyManager {
   }
 
   public alertToNoise(origin: THREE.Vector3, radius: number = 32.0): void {
+    if (!this.group.visible) return;
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
       if (!op.active || op.state === 'combat' || op.isDying) continue;
@@ -356,6 +359,7 @@ export class EnemyManager {
     terrain?: TerrainSystem,
     onPlayerHit?: (damage: number) => void
   ): void {
+    if (!this.group.visible) return;
     for (let i = 0; i < this.operatives.length; i++) {
       const op = this.operatives[i];
       if (!op.active && !op.isDying) continue;

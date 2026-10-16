@@ -58,7 +58,7 @@ export class HighSierraRegion {
     this.buildStoneVillage(materials, hAt);
 
     // 4. Intihuatana & Usnu Stepped Ceremonial Observatory (x = 0, z = -10.5)
-    this.buildIntihuatanaComplex(materials, hAt);
+    this.buildIntihuatanaComplex(materials, hAt, terrain);
 
     // 5. Interactive Bronze Solar Alignment Mirror (x = 1.65, z = 6.2)
     this.buildSolarAlignmentMirror(materials, hAt);
@@ -165,7 +165,8 @@ export class HighSierraRegion {
    */
   private buildIntihuatanaComplex(
     materials: PbrMaterialLibrary,
-    hAt: (x: number, z: number) => number
+    hAt: (x: number, z: number) => number,
+    terrain?: TerrainSystem
   ): void {
     const obsZ = -10.5;
     const obsY = hAt(0, obsZ);
@@ -265,6 +266,9 @@ export class HighSierraRegion {
     }
 
     this.group.add(complex);
+    if (terrain) {
+      terrain.registerWalkable(complex);
+    }
   }
 
   /**

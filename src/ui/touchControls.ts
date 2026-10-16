@@ -281,13 +281,16 @@ export class TouchControlsOverlay {
       triggerHaptic(14);
       if (this.inputRef) {
         this.inputRef.state.jumpPressed = true;
-        this.inputRef.state.climbHeld = true;
+        this.inputRef.setTouchClimbHeld(true);
       }
     });
-    jumpBtn.addEventListener('pointerup', (e) => {
+    const releaseJumpClimb = (e: Event) => {
       e.stopPropagation();
-      if (this.inputRef) this.inputRef.state.climbHeld = false;
-    });
+      if (this.inputRef) this.inputRef.setTouchClimbHeld(false);
+    };
+    jumpBtn.addEventListener('pointerup', releaseJumpClimb);
+    jumpBtn.addEventListener('pointercancel', releaseJumpClimb);
+    jumpBtn.addEventListener('pointerleave', releaseJumpClimb);
     actionCluster.appendChild(jumpBtn);
 
     // Dodge Roll Button
@@ -351,13 +354,13 @@ export class TouchControlsOverlay {
       aimBtn.style.boxShadow = '0 0 20px rgba(255, 123, 43, 0.8)';
       aimLabel.textContent = 'RELEASE';
     });
-    aimBtn.addEventListener('pointerup', (e) => {
+    const finishAimTouch = (e: Event, shouldFire: boolean) => {
       e.stopPropagation();
       if (this.isAimingTouch) {
         this.isAimingTouch = false;
-        triggerHaptic(24);
+        if (shouldFire) triggerHaptic(24);
         if (this.inputRef) {
-          this.inputRef.state.shootPressed = true;
+          if (shouldFire) this.inputRef.state.shootPressed = true;
           this.inputRef.state.aimHeld = false;
         }
       }
@@ -365,7 +368,9 @@ export class TouchControlsOverlay {
       aimBtn.style.borderColor = 'rgba(235, 160, 80, 0.75)';
       aimBtn.style.boxShadow = '0 8px 24px rgba(0,0,0,0.65)';
       aimLabel.textContent = 'AIM';
-    });
+    };
+    aimBtn.addEventListener('pointerup', (e) => finishAimTouch(e, true));
+    aimBtn.addEventListener('pointercancel', (e) => finishAimTouch(e, false));
     actionCluster.appendChild(aimBtn);
     this.aimBtnEl = aimBtn;
     this.aimLabelEl = aimLabel;
@@ -704,14 +709,27 @@ export class TouchControlsOverlay {
     const stickX = (Math.cos(angle) * clampedDist) / scale;
     const stickY = (Math.sin(angle) * clampedDist) / scale;
 
+    const isSprinting = clampedDist >= effSprint;
     if (this.joystickKnobEl) {
       this.joystickKnobEl.style.transform = `translate3d(${stickX}px, ${stickY}px, 0)`;
+      this.joystickKnobEl.style.borderColor = isSprinting
+        ? '#ffd875'
+        : 'rgba(255, 255, 255, 0.85)';
     }
 
     if (this.inputRef) {
-      const normX = (Math.cos(angle) * clampedDist) / effMax;
-      const normZ = (Math.sin(angle) * clampedDist) / effMax;
-      const isSprinting = clampedDist >= effSprint;
+      const rawMag = clampedDist / effMax;
+      const deadzone = 0.08;
+      if (rawMag <= deadzone) {
+        this.isSprintingActive = false;
+        this.inputRef.setTouchMovement(0, 0, false);
+        return;
+      }
+      const remappedMag = (rawMag - deadzone) / (1.0 - deadzone);
+      // Smooth progressive curve (mix of linear and quadratic for precise walk + responsive jog)
+      const curvedMag = remappedMag * (0.65 + 0.35 * remappedMag);
+      const normX = Math.cos(angle) * curvedMag;
+      const normZ = Math.sin(angle) * curvedMag;
       if (isSprinting && !this.isSprintingActive) {
         triggerHaptic(14);
       }
@@ -724,6 +742,7 @@ export class TouchControlsOverlay {
     this.isSprintingActive = false;
     if (this.joystickKnobEl) {
       this.joystickKnobEl.style.transform = 'translate3d(0, 0, 0)';
+      this.joystickKnobEl.style.borderColor = 'rgba(255, 255, 255, 0.85)';
     }
     if (this.inputRef) {
       this.inputRef.setTouchMovement(0, 0, false);

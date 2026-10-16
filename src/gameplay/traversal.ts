@@ -215,6 +215,7 @@ export class TraversalSystem {
   }
 
   public findNearbyCrag(pos: THREE.Vector3, radius: number = 1.6): ClimbableCrag | null {
+    if (!this.group.visible) return null;
     for (let i = 0; i < this.crags.length; i++) {
       const c = this.crags[i];
       const dx = Math.abs(pos.x - c.centerX);
@@ -227,6 +228,7 @@ export class TraversalSystem {
   }
 
   public findNearbyZipline(pos: THREE.Vector3, radius: number = 2.6): ZiplineSpan | null {
+    if (!this.group.visible) return null;
     for (let i = 0; i < this.ziplines.length; i++) {
       const z = this.ziplines[i];
       const dx = pos.x - z.start.x;

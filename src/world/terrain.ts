@@ -302,7 +302,21 @@ export class TerrainSystem {
     return 2.0 + passRise + terraceRise + micro;
   }
 
-  public sampleGroundY(x: number, z: number, currentY: number = 4.0): number {
+  private isWalkableActive(obj: THREE.Object3D | null): boolean {
+    let curr: THREE.Object3D | null = obj;
+    while (curr) {
+      if (!curr.visible) return false;
+      curr = curr.parent;
+    }
+    return true;
+  }
+
+  public sampleGroundY(
+    x: number,
+    z: number,
+    currentY: number = 4.0,
+    maxStepUp: number = 0.72
+  ): number {
     if (
       this.currentBiome === 'cloudForest' &&
       Math.abs(x) <= 1.35 &&
@@ -313,19 +327,44 @@ export class TerrainSystem {
       return 1.72 - sag;
     }
 
+    const baseTerrainY = this.getTerrainHeightAt(x, z);
+
     if (this.walkableMeshes.length > 0) {
-      _rayOrigin.set(x, currentY + 8.0, z);
+      const maxAllowedY = currentY + maxStepUp;
+      _rayOrigin.set(x, maxAllowedY + 0.35, z);
       _raycaster.set(_rayOrigin, _rayDown);
       _raycaster.near = 0.05;
       _raycaster.far = 30.0;
       _hits.length = 0;
       _raycaster.intersectObjects(this.walkableMeshes, true, _hits);
-      if (_hits.length > 0) {
-        return _hits[0].point.y;
+
+      let bestY = -Infinity;
+      for (let i = 0; i < _hits.length; i++) {
+        const hit = _hits[i];
+        if (!this.isWalkableActive(hit.object)) continue;
+        if (hit.point.y <= maxAllowedY && hit.point.y > bestY) {
+          bestY = hit.point.y;
+        }
+      }
+      if (bestY > -Infinity) {
+        return Math.max(baseTerrainY, bestY);
       }
     }
 
-    return this.getTerrainHeightAt(x, z);
+    return baseTerrainY;
+  }
+
+  /**
+   * Probes for the highest active walkable ledge/platform/terrace top at (x, z)
+   * up to `maxReachAbove` meters above `currentY` for vault and jump-mantle detection.
+   */
+  public sampleLedgeHeight(
+    x: number,
+    z: number,
+    currentY: number,
+    maxReachAbove: number = 2.2
+  ): number {
+    return this.sampleGroundY(x, z, currentY, maxReachAbove);
   }
 
   private createTerrainGeometry(
@@ -420,6 +459,8 @@ export class TerrainSystem {
     pos.needsUpdate = true;
     colAttr.needsUpdate = true;
     geo.computeVertexNormals();
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
   }
 
   /**
