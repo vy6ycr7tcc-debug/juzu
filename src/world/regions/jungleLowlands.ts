@@ -50,17 +50,19 @@ export class JungleLowlandsRegion {
     this.baseWaterY = 1.88;
     this.targetWaterY = this.baseWaterY;
 
-    // Authentic Sunken Turquoise Cenote Pool Water Surface with dynamic normal maps and depth gradient
+    // Authentic Sunken Turquoise Cenote Pool Water Surface with 18 concentric radial depth rings
     const poolR = 3.6;
-    const poolGeo = new THREE.CircleGeometry(poolR, 48);
+    const poolGeo = new THREE.RingGeometry(0.001, poolR, 56, 18);
     poolGeo.rotateX(-Math.PI * 0.5);
 
-    // Color gradient from deep sapphire-emerald abyss to translucent turquoise shallows
+    // Color gradient from deep sapphire-emerald abyss to translucent turquoise shallows & travertine foam rim
     const pos = poolGeo.attributes.position as THREE.BufferAttribute;
+    const uvAttr = poolGeo.attributes.uv as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
-    const deepCol = new THREE.Color(0x0e3630);
-    const midCol = new THREE.Color(0x196e64);
-    const rimCol = new THREE.Color(0x2da898);
+    const deepCol = new THREE.Color(0x062420);
+    const midCol = new THREE.Color(0x0e4e46);
+    const shallowCol = new THREE.Color(0x1e7e70);
+    const rimFoamCol = new THREE.Color(0x5cc4b4);
     const colTmp = new THREE.Color();
 
     for (let i = 0; i < pos.count; i++) {
@@ -68,16 +70,26 @@ export class JungleLowlandsRegion {
       const vz = pos.getZ(i);
       const dist = Math.hypot(vx, vz);
       const ratio = Math.min(1.0, dist / poolR);
-      if (ratio < 0.45) {
-        colTmp.copy(deepCol).lerp(midCol, ratio / 0.45);
+      // Planar world-space UVs for crisp ripple normal mapping
+      uvAttr.setXY(i, vx * 0.12 + 0.5, vz * 0.12 + 0.5);
+      // Subtle initial wave elevation
+      const waveY = Math.sin(dist * 4.5) * 0.018 + Math.cos(vx * 2.4 - vz * 2.1) * 0.012;
+      pos.setY(i, waveY);
+
+      const ripple = 0.5 + 0.5 * Math.sin(dist * 5.2 - Math.atan2(vz, vx) * 3.0);
+      if (ratio < 0.58) {
+        colTmp.copy(deepCol).lerp(midCol, (ratio / 0.58) * (0.82 + 0.18 * ripple));
+      } else if (ratio < 0.90) {
+        colTmp.copy(midCol).lerp(shallowCol, (ratio - 0.58) / 0.32);
       } else {
-        colTmp.copy(midCol).lerp(rimCol, (ratio - 0.45) / 0.55);
+        colTmp.copy(shallowCol).lerp(rimFoamCol, (ratio - 0.90) / 0.10);
       }
       colors[i * 3] = colTmp.r;
       colors[i * 3 + 1] = colTmp.g;
       colors[i * 3 + 2] = colTmp.b;
     }
     poolGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    poolGeo.computeVertexNormals();
     this.geometries.push(poolGeo);
 
     // Low sunken stone curb lining the pool rim flush with rainforest ground
@@ -89,17 +101,14 @@ export class JungleLowlandsRegion {
     this.group.add(basinStone);
 
     this.cenoteWaterMat = materials.water.clone();
+    this.cenoteWaterMat.color.setHex(0xffffff);
     this.cenoteWaterMat.vertexColors = true;
-    this.cenoteWaterMat.roughness = 0.05;
+    this.cenoteWaterMat.roughness = 0.08;
     this.cenoteWaterMat.metalness = 0.08;
+    this.cenoteWaterMat.envMapIntensity = 0.95;
     this.cenoteWaterMat.transparent = true;
-    this.cenoteWaterMat.opacity = 0.92;
-    if (this.cenoteWaterMat.normalMap) {
-      this.cenoteWaterMat.normalMap = this.cenoteWaterMat.normalMap.clone();
-      this.cenoteWaterMat.normalMap.wrapS = THREE.RepeatWrapping;
-      this.cenoteWaterMat.normalMap.wrapT = THREE.RepeatWrapping;
-      this.cenoteWaterMat.normalMap.repeat.set(6, 6);
-    }
+    this.cenoteWaterMat.opacity = 0.94;
+    this.cenoteWaterMat.normalScale.set(1.35, 1.35);
     this.materials.push(this.cenoteWaterMat);
 
     this.poolMesh = new THREE.Mesh(poolGeo, this.cenoteWaterMat);

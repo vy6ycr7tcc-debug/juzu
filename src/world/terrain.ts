@@ -288,7 +288,11 @@ export class TerrainSystem {
         terraceRise = (stepIndex + smoothRamp) * stepHeight;
       } else {
         const alpineDist = adjustedDist - 4 * stepWidth;
-        terraceRise = 4 * stepHeight + Math.pow(alpineDist, 1.18) * 0.42 + Math.sin(x * 0.22 + z * 0.18) * 0.55;
+        const cragRidges =
+          Math.sin(x * 0.22 + z * 0.18) * 0.65 +
+          Math.abs(Math.cos(x * 0.38 - z * 0.31)) * 0.48 +
+          Math.sin(x * 0.75 + z * 0.62) * 0.24;
+        terraceRise = 4 * stepHeight + Math.pow(alpineDist, 1.18) * 0.42 + cragRidges;
       }
     }
 
@@ -386,17 +390,21 @@ export class TerrainSystem {
     const colAttr = geo.attributes.color as THREE.BufferAttribute;
     const count = pos.count;
 
-    const isSierra = this.currentBiome === 'highSierra';
+    const biome = this.currentBiome;
+    const isSierra = biome === 'highSierra';
 
-    const cMoss = new THREE.Color(0xb8d49c);
-    const cEarth = new THREE.Color(0xd4be9e);
-    const cRock = new THREE.Color(0xc8c4ba);
-    const cRiverBed = new THREE.Color(0x688274);
+    const cMoss = new THREE.Color(0x98bc7c);
+    const cDeepMoss = new THREE.Color(0x6e9458);
+    const cEarth = new THREE.Color(0xb89e7c);
+    const cRock = new THREE.Color(0xa6a298);
+    const cRiverBed = new THREE.Color(0x526e62);
 
-    const cPunaGold = new THREE.Color(0xd2be88);
-    const cTerraceSoil = new THREE.Color(0x9a8462);
-    const cSierraGranite = new THREE.Color(0.84, 0.82, 0.80);
-    const cGlacialSnow = new THREE.Color(1.22, 1.28, 1.35);
+    // Calibrated for neutral-dark photographic snow-rock/stonework albedo (0.32 average luminance)
+    const cPunaGold = new THREE.Color(1.62, 1.42, 0.96);
+    const cTerraceSoil = new THREE.Color(1.12, 0.94, 0.72);
+    const cSierraGranite = new THREE.Color(1.48, 1.50, 1.56);
+    const cAlpineSlate = new THREE.Color(1.14, 1.18, 1.24);
+    const cGlacialSnow = new THREE.Color(3.4, 3.6, 3.9);
     const cScratch = new THREE.Color();
 
     for (let i = 0; i < count; i++) {
@@ -406,14 +414,15 @@ export class TerrainSystem {
       pos.setY(i, vy);
 
       const noise = 0.5 + 0.5 * Math.sin(vx * 0.37 + vz * 0.41);
+      const fineNoise = 0.5 + 0.5 * Math.cos(vx * 0.83 - vz * 0.79);
 
       if (isSierra) {
         const snowThreshold = vz < -18.0 ? 5.2 : 6.4;
-        if (vy > snowThreshold + 1.8) {
+        if (vy > snowThreshold + 2.2) {
           cScratch.copy(cGlacialSnow);
         } else if (vy > snowThreshold) {
-          const snowT = (vy - snowThreshold) / 1.8;
-          cScratch.copy(cSierraGranite).lerp(cGlacialSnow, snowT);
+          const snowT = (vy - snowThreshold) / 2.2;
+          cScratch.copy(cSierraGranite).lerp(cGlacialSnow, snowT * (0.45 + 0.55 * fineNoise));
         } else {
           const valleyCenter = Math.sin(vz * 0.07) * 1.5 + Math.sin(vz * 0.14) * 0.6;
           const valleyWidth = 9.2 + Math.sin(vz * 0.09 + 1.2) * 2.2 + Math.cos(vz * 0.04) * 1.4;
@@ -423,33 +432,65 @@ export class TerrainSystem {
             const distOut = lateralDist - valleyWidth;
             const contourJitter = Math.sin(vz * 0.18 + vx * 0.12) * 0.6 + Math.cos(vz * 0.08) * 0.4;
             const adjustedDist = Math.max(0, distOut + contourJitter);
+            const stepIndex = Math.floor(adjustedDist / 3.6);
             const frac = (adjustedDist % 3.6) / 3.6;
-            if (frac < 0.28) {
-              cScratch.copy(cSierraGranite).lerp(cTerraceSoil, 0.22 * noise);
+            if (stepIndex >= 4) {
+              // Steep outer alpine crags: weathered Andean slate & granite with golden lichen & frost
+              cScratch.copy(cAlpineSlate).lerp(cSierraGranite, 0.58 * noise).lerp(cPunaGold, 0.18 * fineNoise);
+            } else if (frac < 0.36) {
+              // Coursed stone terrace riser face
+              cScratch.copy(cAlpineSlate).lerp(cSierraGranite, 0.65 * fineNoise);
             } else {
-              cScratch.copy(cTerraceSoil).lerp(cPunaGold, 0.52 * noise);
+              // Cultivated agricultural terrace bench (rich dark Andean soil + golden ichu tufts)
+              cScratch.copy(cTerraceSoil).lerp(cPunaGold, 0.45 * noise);
             }
           } else {
             const roadCenter = Math.sin(vz * 0.08) * 0.45;
             const pathDist = Math.abs(vx - roadCenter);
-            if (pathDist < 1.6) {
-              // Road bed under the Qhapaq Ñan: packed earth and crushed stone
-              cScratch.copy(cTerraceSoil).lerp(cSierraGranite, 0.42 * noise);
+            if (pathDist < 1.8) {
+              // Road bed under the Qhapaq Ñan: crushed granite & dark earth
+              cScratch.copy(cAlpineSlate).lerp(cTerraceSoil, 0.48 * noise);
             } else {
-              cScratch.copy(cPunaGold).lerp(cSierraGranite, 0.38 * noise).lerp(cTerraceSoil, 0.24);
+              cScratch.copy(cPunaGold).lerp(cSierraGranite, 0.38 * noise).lerp(cTerraceSoil, 0.30 * fineNoise);
             }
           }
         }
+      } else if (biome === 'paititi') {
+        // Paititi Sanctuary: stone ceremonial staircase & emerald caldera terraces
+        const absX = Math.abs(vx);
+        if (absX < 4.6 && vz < 2.0) {
+          cScratch.copy(cRock).lerp(cEarth, 0.25 * noise);
+        } else if (absX > 4.6) {
+          const frac = ((absX - 4.6) % 3.2) / 3.2;
+          if (frac < 0.28) {
+            cScratch.copy(cRock).lerp(cDeepMoss, 0.35 * fineNoise);
+          } else {
+            cScratch.copy(cMoss).lerp(cEarth, 0.32 * noise);
+          }
+        } else {
+          cScratch.copy(cMoss).lerp(cRock, 0.35 * noise);
+        }
+      } else if (biome === 'jungleLowlands') {
+        // Antisuyu Jungle Lowlands: lush emerald rainforest floor & wet limestone cenote basin
+        const distToCenote = Math.hypot(vx, vz + 8.2);
+        if (distToCenote < 4.8) {
+          cScratch.copy(cRiverBed).lerp(cRock, 0.45 * fineNoise);
+        } else if (Math.abs(vx) < 2.4 && vz > -3.5) {
+          cScratch.copy(cEarth).lerp(cDeepMoss, 0.48 * noise);
+        } else {
+          cScratch.copy(cDeepMoss).lerp(cMoss, 0.55 * noise).lerp(cEarth, 0.22 * fineNoise);
+        }
       } else {
+        // Cloud Forest gorge & Inca approach trail
         const pathFactor = Math.exp(-(vx * vx) * 0.14);
         if (vy < -1.2) {
           cScratch.copy(cRiverBed).lerp(cRock, 0.35 * noise);
         } else if (pathFactor > 0.45 && Math.abs(vz) > 5.4) {
-          cScratch.copy(cEarth).lerp(cMoss, 0.28 * noise);
-        } else if (Math.abs(vx) > 16.0) {
-          cScratch.copy(cRock).lerp(cMoss, 0.55 * noise);
+          cScratch.copy(cEarth).lerp(cMoss, 0.32 * noise);
+        } else if (Math.abs(vx) > 12.0) {
+          cScratch.copy(cRock).lerp(cDeepMoss, 0.52 * noise);
         } else {
-          cScratch.copy(cMoss).lerp(cEarth, 0.3 * (1.0 - noise));
+          cScratch.copy(cMoss).lerp(cDeepMoss, 0.35 * fineNoise).lerp(cEarth, 0.25 * (1.0 - noise));
         }
       }
 

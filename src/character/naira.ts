@@ -219,9 +219,10 @@ export class NairaController {
           color: new THREE.Color(0xfffaf2),
           map: nairaAlbedo || oldMat?.map || null,
           normalMap: oldMat?.normalMap || null,
-          normalScale: new THREE.Vector2(0.75, 0.75),
-          roughness: 0.78,
+          normalScale: new THREE.Vector2(0.85, 0.85),
+          roughness: 0.68,
           metalness: 0.04,
+          envMapIntensity: 0.92,
         });
         this.materials.push(nairaMat);
         mesh.material = nairaMat;

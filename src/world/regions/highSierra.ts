@@ -601,26 +601,13 @@ export class HighSierraRegion {
     materials: PbrMaterialLibrary,
     hAt: (x: number, z: number) => number
   ): void {
-    const thatchAlbedo = materials.highSierraPuna.map ? materials.highSierraPuna.map.clone() : null;
-    if (thatchAlbedo) {
-      thatchAlbedo.wrapS = THREE.RepeatWrapping;
-      thatchAlbedo.wrapT = THREE.RepeatWrapping;
-      thatchAlbedo.repeat.set(1.5, 2.0);
-    }
-    const thatchNormal = materials.woodBark.normalMap ? materials.woodBark.normalMap.clone() : null;
-    if (thatchNormal) {
-      thatchNormal.wrapS = THREE.RepeatWrapping;
-      thatchNormal.wrapT = THREE.RepeatWrapping;
-      thatchNormal.repeat.set(3.0, 8.0);
-    }
-
     const thatchMat = new THREE.MeshStandardMaterial({
       name: 'AndeanIchuThatchCombed',
-      color: new THREE.Color(0xffffff), // driven by rich vertex color gradient and maps
-      map: thatchAlbedo,
-      normalMap: thatchNormal,
-      normalScale: new THREE.Vector2(1.5, 3.5),
-      roughness: 0.95,
+      color: new THREE.Color(0xebd6a8),
+      map: materials.ropeBraided.map,
+      normalMap: materials.woodBark.normalMap,
+      normalScale: new THREE.Vector2(1.4, 2.8),
+      roughness: 0.92,
       metalness: 0.0,
       vertexColors: true,
       side: THREE.DoubleSide,
@@ -1072,9 +1059,11 @@ export class HighSierraRegion {
     this.geometries.push(ichuGeo);
     const ichuMat = new THREE.MeshStandardMaterial({
       name: 'HighSierraIchuGrass',
-      color: new THREE.Color(0xd8bc72),
-      map: materials.highSierraPuna.map,
-      roughness: 0.86,
+      color: new THREE.Color(0xdec078),
+      map: materials.ropeBraided.map,
+      normalMap: materials.woodBark.normalMap,
+      normalScale: new THREE.Vector2(0.8, 1.4),
+      roughness: 0.84,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });

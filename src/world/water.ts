@@ -74,16 +74,11 @@ export class WaterSystem {
 
     const riverMat = materials.water.clone();
     riverMat.vertexColors = true;
-    riverMat.roughness = 0.06;
-    riverMat.metalness = 0.04;
+    riverMat.roughness = 0.05;
+    riverMat.metalness = 0.08;
+    riverMat.envMapIntensity = 1.45;
     riverMat.color.setHex(0x32786e);
-    if (riverMat.normalMap) {
-      riverMat.normalMap = riverMat.normalMap.clone();
-      riverMat.normalMap.wrapS = THREE.RepeatWrapping;
-      riverMat.normalMap.wrapT = THREE.RepeatWrapping;
-      riverMat.normalMap.repeat.set(12, 3);
-      this.textures.push(riverMat.normalMap);
-    }
+    riverMat.normalScale.set(1.15, 1.15);
     this.materials.push(riverMat);
 
     this.riverMesh = new THREE.Mesh(riverGeo, riverMat);
@@ -160,9 +155,9 @@ export class WaterSystem {
     const sprayMat = new THREE.PointsMaterial({
       map: sprayTex,
       color: new THREE.Color(0xe6f4f0),
-      size: 1.35,
+      size: 0.62,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.18,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
