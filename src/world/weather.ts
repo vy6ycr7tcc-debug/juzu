@@ -62,10 +62,10 @@ export class WeatherSystem {
 
     const rainTex = this.createDropletTexture(64);
     const rainMat = new THREE.PointsMaterial({
-      size: 0.38,
+      size: 0.22,
       map: rainTex,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.30,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       color: 0xbedcf0,
@@ -97,10 +97,10 @@ export class WeatherSystem {
 
     const snowTex = this.createSnowflakeTexture(64);
     const snowMat = new THREE.PointsMaterial({
-      size: 0.45,
+      size: 0.20,
       map: snowTex,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.42,
       depthWrite: false,
       blending: THREE.NormalBlending,
       color: 0xffffff,
@@ -129,10 +129,10 @@ export class WeatherSystem {
 
     const motesTex = this.createSnowflakeTexture(64);
     const motesMat = new THREE.PointsMaterial({
-      size: 0.22,
+      size: 0.13,
       map: motesTex,
       transparent: true,
-      opacity: 0.36,
+      opacity: 0.24,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       color: 0xffeaae,
@@ -150,10 +150,10 @@ export class WeatherSystem {
       const mat = this.motesPoints.material as THREE.PointsMaterial;
       if (biome === 'highSierra') {
         mat.color.setHex(0xd8eeff);
-        mat.opacity = 0.44;
+        mat.opacity = 0.28;
       } else {
         mat.color.setHex(0xffeaae);
-        mat.opacity = 0.36;
+        mat.opacity = 0.24;
       }
     }
 
@@ -165,7 +165,7 @@ export class WeatherSystem {
       this.currentWeather = 'tropicalMist';
       if (this.rainPoints) {
         this.rainPoints.visible = true;
-        (this.rainPoints.material as THREE.PointsMaterial).opacity = 0.55;
+        (this.rainPoints.material as THREE.PointsMaterial).opacity = 0.34;
       }
       if (this.snowPoints) this.snowPoints.visible = false;
     } else if (biome === 'paititi') {
@@ -177,7 +177,7 @@ export class WeatherSystem {
       this.currentWeather = 'drizzle';
       if (this.rainPoints) {
         this.rainPoints.visible = true;
-        (this.rainPoints.material as THREE.PointsMaterial).opacity = 0.38;
+        (this.rainPoints.material as THREE.PointsMaterial).opacity = 0.26;
       }
       if (this.snowPoints) this.snowPoints.visible = false;
     }

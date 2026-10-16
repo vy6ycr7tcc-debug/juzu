@@ -151,7 +151,8 @@ export class PaititiRegion {
     const facadeNicheGeo = new THREE.BoxGeometry(0.55, 0.78, 0.35);
     const facadeQiruGeo = new THREE.CylinderGeometry(0.12, 0.09, 0.32, 12);
     const facadeBermGeo = IncaMasonrySystem.createWallFootingBermGeometry(5.2, 0.38, 0.55);
-    this.geometries.push(facadeWallGeo, wingReturnGeo, facadeNicheGeo, facadeQiruGeo, facadeBermGeo);
+    const goldFriezeGeo = new THREE.BoxGeometry(4.84, 0.32, 1.48);
+    this.geometries.push(facadeWallGeo, wingReturnGeo, facadeNicheGeo, facadeQiruGeo, facadeBermGeo, goldFriezeGeo);
 
     for (let side = -1; side <= 1; side += 2) {
       // Main facade wing wall sunk 1.65m into terrace floor
@@ -160,6 +161,13 @@ export class PaititiRegion {
       facade.castShadow = true;
       facade.receiveShadow = true;
       this.group.add(facade);
+
+      // Historical Coricancha hammered-gold frieze band (Quri Kancha gold leaf course)
+      const goldFrieze = new THREE.Mesh(goldFriezeGeo, materials.goldOrnamental);
+      goldFrieze.position.set(side * 4.35, portalFloorY + 2.92, portalZ + 0.02);
+      goldFrieze.castShadow = true;
+      goldFrieze.receiveShadow = true;
+      this.group.add(goldFrieze);
 
       // Lateral retaining wing return anchoring into the mountain caldera slopes
       const returnWall = new THREE.Mesh(wingReturnGeo, materials.andesiteCut);

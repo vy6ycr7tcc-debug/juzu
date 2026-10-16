@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { applyNanoHexagonRelief } from '../rendering/nanoHex';
+import { applyNanoHexagonRelief, applyFoliageSubsurfaceShader } from '../rendering/nanoHex';
 
 export class PbrMaterialLibrary {
   public andesiteCut!: THREE.MeshStandardMaterial;
@@ -117,22 +117,22 @@ export class PbrMaterialLibrary {
     const forestFloorAlbedo = this.loadRepeatingTexture(
       loader,
       '/juzu/assets/environment-textures/environment-forest-floor.jpeg',
-      28.0,
-      28.0,
+      64.0,
+      64.0,
       true
     );
     const forestFloorNormal = this.loadRepeatingTexture(
       loader,
       '/juzu/assets/environment-textures/environment-forest-floor-normal.jpg',
-      28.0,
-      28.0,
+      64.0,
+      64.0,
       false
     );
     const forestFloorRoughness = this.loadRepeatingTexture(
       loader,
       '/juzu/assets/environment-textures/environment-forest-floor-roughness.jpg',
-      28.0,
-      28.0,
+      64.0,
+      64.0,
       false
     );
 
@@ -169,16 +169,30 @@ export class PbrMaterialLibrary {
     const snowRockAlbedo = this.loadRepeatingTexture(
       loader,
       '/juzu/assets/environment-textures/environment-snow-rock.jpg',
-      6.0,
-      6.0,
+      10.0,
+      10.0,
       true
     );
     const punaGrassAlbedo = this.loadRepeatingTexture(
       loader,
-      '/juzu/assets/environment-textures/environment-puna-grass.jpg',
-      18.0,
-      18.0,
+      '/juzu/assets/environment-textures/environment-snow-rock.jpg',
+      44.0,
+      44.0,
       true
+    );
+    const punaGrassNormal = this.loadRepeatingTexture(
+      loader,
+      '/juzu/assets/environment-textures/environment-stonework-normal.jpg',
+      44.0,
+      44.0,
+      false
+    );
+    const punaGrassRoughness = this.loadRepeatingTexture(
+      loader,
+      '/juzu/assets/environment-textures/environment-stonework-roughness.jpg',
+      44.0,
+      44.0,
+      false
     );
 
     // Photographic Character & Material Textures
@@ -317,18 +331,24 @@ export class PbrMaterialLibrary {
     // 7. Metal (bronze, iron) — §2.2
     this.metalBronze = new THREE.MeshStandardMaterial({
       name: 'MetalWeatheredBronze',
-      color: new THREE.Color(0x9c7d4e),
+      color: new THREE.Color(0xb28e54),
+      normalMap: stoneworkNormal,
+      normalScale: new THREE.Vector2(0.28, 0.28),
       roughnessMap: stoneworkRoughness,
-      roughness: 0.44,
+      roughness: 0.34,
       metalness: 0.9,
+      envMapIntensity: 1.35,
     });
 
     this.metalIron = new THREE.MeshStandardMaterial({
       name: 'MetalWeatheredIron',
-      color: new THREE.Color(0x4e5258),
+      color: new THREE.Color(0x585e66),
+      normalMap: stoneworkNormal,
+      normalScale: new THREE.Vector2(0.32, 0.32),
       roughnessMap: stoneworkRoughness,
-      roughness: 0.58,
+      roughness: 0.50,
       metalness: 0.86,
+      envMapIntensity: 1.15,
     });
 
     // 8. Skin — §2.2
@@ -336,8 +356,9 @@ export class PbrMaterialLibrary {
       name: 'NairaSkinPBR',
       color: new THREE.Color(0xb87e58),
       map: skinAlbedo,
-      roughness: 0.62,
+      roughness: 0.56,
       metalness: 0.0,
+      envMapIntensity: 0.85,
     });
 
     // 9. Hair — §2.2
@@ -347,18 +368,27 @@ export class PbrMaterialLibrary {
       map: barkAlbedo,
       normalMap: planksNormal,
       normalScale: new THREE.Vector2(0.45, 0.45),
-      roughness: 0.46,
+      roughness: 0.42,
       metalness: 0.0,
+      envMapIntensity: 0.95,
     });
 
     // 10. Water — §2.2
+    const waterNormal = this.loadRepeatingTexture(
+      loader,
+      '/juzu/assets/environment-textures/environment-forest-floor-normal.jpg',
+      12.0,
+      12.0,
+      false
+    );
     this.water = new THREE.MeshStandardMaterial({
       name: 'AndeanRiverWater',
-      color: new THREE.Color(0x2c6b62),
-      normalMap: forestFloorNormal,
-      normalScale: new THREE.Vector2(0.55, 0.55),
-      roughness: 0.08,
-      metalness: 0.0,
+      color: new THREE.Color(0x286e66),
+      normalMap: waterNormal,
+      normalScale: new THREE.Vector2(0.65, 0.65),
+      roughness: 0.05,
+      metalness: 0.06,
+      envMapIntensity: 1.38,
       transparent: true,
       opacity: 0.9,
     });
@@ -369,59 +399,67 @@ export class PbrMaterialLibrary {
 
     this.foliageLeaf = new THREE.MeshStandardMaterial({
       name: 'CloudForestCanopyLeaf',
-      color: new THREE.Color(0x8ebc58),
-      emissive: new THREE.Color(0x0e1c0a),
+      color: new THREE.Color(0x98c64e),
+      emissive: new THREE.Color(0x162408),
       map: foliageCanopyAlbedo,
       alphaMap: leafAlphaTex,
       alphaTest: 0.35,
       transparent: false,
       depthWrite: true,
       normalMap: foliageNormal,
-      normalScale: new THREE.Vector2(0.85, 0.85),
-      roughness: 0.58,
+      normalScale: new THREE.Vector2(0.95, 0.95),
+      roughness: 0.76,
       metalness: 0.0,
+      envMapIntensity: 0.28,
       side: THREE.DoubleSide,
       shadowSide: THREE.DoubleSide,
     });
 
     this.foliageFern = new THREE.MeshStandardMaterial({
       name: 'CloudForestFernFrond',
-      color: new THREE.Color(0x96c860),
-      emissive: new THREE.Color(0x0a1806),
+      color: new THREE.Color(0xa2ce56),
+      emissive: new THREE.Color(0x142206),
       map: foliageFernAlbedo,
       alphaMap: fernAlphaTex,
       alphaTest: 0.35,
       transparent: false,
       depthWrite: true,
       normalMap: foliageNormal,
-      normalScale: new THREE.Vector2(0.75, 0.75),
-      roughness: 0.58,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughness: 0.74,
       metalness: 0.0,
+      envMapIntensity: 0.28,
       side: THREE.DoubleSide,
       shadowSide: THREE.DoubleSide,
     });
 
+    // Apply warm chlorophyll subsurface scattering transmission to canopy & fern foliage
+    applyFoliageSubsurfaceShader(this.foliageLeaf);
+    applyFoliageSubsurfaceShader(this.foliageFern);
+
     // 12. Gold (ornamental) — §2.2
     this.goldOrnamental = new THREE.MeshStandardMaterial({
       name: 'IncaOrnamentalGold',
-      color: new THREE.Color(0xd6a94a),
+      color: new THREE.Color(0xe6b852),
       normalMap: stoneworkNormal,
       normalScale: new THREE.Vector2(0.35, 0.35),
       roughnessMap: stoneworkRoughness,
-      roughness: 0.3,
+      roughness: 0.24,
       metalness: 0.94,
+      envMapIntensity: 1.48,
     });
 
     // 13. Cloud Forest Floor terrain material
     this.groundForestFloor = new THREE.MeshStandardMaterial({
       name: 'CloudForestGroundPBR',
-      color: new THREE.Color(0xe8f0dc),
+      color: new THREE.Color(0xdce6ce),
       map: forestFloorAlbedo,
       normalMap: forestFloorNormal,
-      normalScale: new THREE.Vector2(0.95, 0.95),
+      normalScale: new THREE.Vector2(1.15, 1.15),
       roughnessMap: forestFloorRoughness,
-      roughness: 0.88,
+      roughness: 0.86,
       metalness: 0.0,
+      envMapIntensity: 0.65,
       vertexColors: true,
     });
 
@@ -431,20 +469,23 @@ export class PbrMaterialLibrary {
       color: new THREE.Color(0xf4f8ff),
       map: snowRockAlbedo,
       normalMap: stoneworkNormal,
-      normalScale: new THREE.Vector2(0.85, 0.85),
-      roughness: 0.68,
+      normalScale: new THREE.Vector2(0.95, 0.95),
+      roughness: 0.62,
       metalness: 0.0,
+      envMapIntensity: 0.95,
     });
 
     // 15. High Sierra Puna Steppe & Agricultural Terrace Soil material (§1.7 Region 2)
     this.highSierraPuna = new THREE.MeshStandardMaterial({
       name: 'HighSierraPunaSteppePBR',
-      color: new THREE.Color(0xeae2ce),
+      color: new THREE.Color(0xffffff),
       map: punaGrassAlbedo,
-      normalMap: forestFloorNormal,
-      normalScale: new THREE.Vector2(0.85, 0.85),
-      roughness: 0.89,
+      normalMap: punaGrassNormal,
+      normalScale: new THREE.Vector2(1.25, 1.25),
+      roughnessMap: punaGrassRoughness,
+      roughness: 0.88,
       metalness: 0.0,
+      envMapIntensity: 0.65,
       vertexColors: true,
     });
 
@@ -459,33 +500,39 @@ export class PbrMaterialLibrary {
       metalness: 0.0,
     });
 
-    // Apply nano-hexagonal stochastic micro-relief and non-repeating hex-tiling
+    // Apply nano-hexagonal stochastic micro-relief, non-repeating hex-tiling, and triplanar slope cliff-rock blending
     applyNanoHexagonRelief(this.andesiteCut, {
       scale: 68.0,
-      reliefStrength: 0.30,
-      grooveDepth: 0.18,
+      reliefStrength: 0.34,
+      grooveDepth: 0.22,
       hexTiling: false, // preserve coursed masonry direction while adding hand-pecked mineral relief
     });
 
     applyNanoHexagonRelief(this.fieldstoneRough, {
       scale: 54.0,
-      reliefStrength: 0.40,
-      grooveDepth: 0.26,
+      reliefStrength: 0.42,
+      grooveDepth: 0.28,
       hexTiling: true, // break repeating square patterns on rough rock and boulders
     });
 
     applyNanoHexagonRelief(this.groundForestFloor, {
-      scale: 48.0,
-      reliefStrength: 0.34,
-      grooveDepth: 0.22,
-      hexTiling: true, // break 28x28 square grid repetition on valley terrain
+      scale: 56.0,
+      reliefStrength: 0.38,
+      grooveDepth: 0.24,
+      hexTiling: true, // break square grid repetition on valley terrain
+      slopeRockMap: stoneworkAlbedo,
+      slopeRockNormalMap: stoneworkNormal,
+      slopeThreshold: 0.84,
     });
 
     applyNanoHexagonRelief(this.highSierraPuna, {
-      scale: 52.0,
-      reliefStrength: 0.36,
-      grooveDepth: 0.22,
-      hexTiling: true, // break 18x18 repetition across puna steppe
+      scale: 58.0,
+      reliefStrength: 0.40,
+      grooveDepth: 0.26,
+      hexTiling: true, // break repetition across puna steppe
+      slopeRockMap: stoneworkAlbedo,
+      slopeRockNormalMap: stoneworkNormal,
+      slopeThreshold: 0.84,
     });
 
     // Micro-fibrous relief for braided Andean ichu grass ropes (Q'eswachaka)

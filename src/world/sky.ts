@@ -178,12 +178,15 @@ export class SkySystem {
   public setBiomeMode(biome: RegionBiomeId): void {
     const isSierra = biome === 'highSierra';
     if (this.sceneRef && this.sceneRef.fog instanceof THREE.FogExp2) {
-      this.sceneRef.fog.density = isSierra ? 0.0014 : 0.0020;
+      this.sceneRef.fog.density = isSierra ? 0.0012 : 0.0018;
       this.sceneRef.fog.color.setHex(isSierra ? 0xb8d0e8 : 0xa8c2ba);
       this.sceneRef.background = new THREE.Color(isSierra ? 0x9ec0e0 : 0x9ab8c8);
     }
     for (let i = 0; i < this.mistPlanes.length; i++) {
       this.mistPlanes[i].visible = !isSierra;
+    }
+    for (let i = 0; i < this.godRayGroups.length; i++) {
+      this.godRayGroups[i].visible = !isSierra;
     }
     for (let i = 0; i < this.cloudPlanes.length; i++) {
       this.cloudPlanes[i].position.y = isSierra ? 68 + i * 2 : 56 + i * 2;
@@ -220,12 +223,15 @@ export class SkySystem {
     const data = new Uint8Array(size * size * 4);
     for (let y = 0; y < size; y++) {
       const v = y / size;
-      const vFade = Math.sin(v * Math.PI);
+      // Soft conical vertical taper (stronger near upper canopy,feathering out gently toward ground)
+      const vFade = Math.pow(Math.sin(v * Math.PI), 1.65) * (0.45 + 0.55 * (1.0 - v));
       for (let x = 0; x < size; x++) {
         const u = (x / size) * 2 - 1;
-        const hFade = Math.max(0, 1.0 - u * u);
+        // Smooth Gaussian horizontal feathering with subtle multi-beam breakup
+        const hGauss = Math.exp(-u * u * 4.2) * Math.max(0, 1.0 - u * u);
+        const subRays = 0.78 + 0.22 * Math.cos(u * 9.5);
         const idx = (y * size + x) * 4;
-        const a = hFade * hFade * vFade;
+        const a = hGauss * vFade * subRays;
         data[idx] = 255;
         data[idx + 1] = 242;
         data[idx + 2] = 205;
@@ -302,7 +308,7 @@ export class SkySystem {
       const mat = this.godRayMaterials[i];
       if (mat) {
         const isNight = sunElev < 0.15;
-        const baseOpacity = isNight ? 0.02 : Math.min(0.12, 0.035 + sunElev * 0.09);
+        const baseOpacity = isNight ? 0.012 : Math.min(0.058, 0.022 + sunElev * 0.045);
         const shimmer = 1.0 + Math.sin(t * 1.5 + i * 1.7) * 0.14;
         mat.opacity = baseOpacity * shimmer;
 

@@ -87,15 +87,18 @@ export class HudOverlay {
     obj.setAttribute('data-hud-element', 'true');
     obj.style.cssText = [
       'position:absolute',
-      'top:60px',
-      'left:26px',
-      'max-width:440px',
+      'top:56px',
+      'left:24px',
+      'max-width:450px',
       'font-size:14px',
       'letter-spacing:0.03em',
       'line-height:1.45',
-      'text-shadow:0 1px 4px rgba(0,0,0,0.85)',
+      'padding:6px 14px',
+      'background:linear-gradient(90deg, rgba(8, 10, 9, 0.56) 0%, rgba(8, 10, 9, 0.28) 78%, rgba(8, 10, 9, 0.0) 100%)',
+      'border-left:2px solid rgba(214, 169, 74, 0.72)',
+      'text-shadow:0 1px 4px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.75)',
       'opacity:0',
-      'transition:opacity 0.6s ease',
+      'transition:opacity 0.18s ease',
     ].join(';');
     root.appendChild(obj);
     this.objectiveEl = obj;

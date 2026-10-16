@@ -16,6 +16,7 @@
  */
 
 import * as THREE from 'three';
+import { sharedUniforms } from '../gpu/tsl';
 
 export interface NanoHexOptions {
   /** Frequency / density of the nano-hexagonal micro-relief cells (default: 72.0) */
@@ -28,6 +29,12 @@ export interface NanoHexOptions {
   roughnessVariation?: number;
   /** Enable dual-cell stochastic hex-tiling to break texture repetition (default: true) */
   hexTiling?: boolean;
+  /** Optional cliff rock albedo texture blended automatically on steep terrain slopes */
+  slopeRockMap?: THREE.Texture;
+  /** Optional cliff rock normal map blended automatically on steep terrain slopes */
+  slopeRockNormalMap?: THREE.Texture;
+  /** Normal.y threshold below which cliff rock blends in (default: 0.82) */
+  slopeThreshold?: number;
 }
 
 const NANO_HEX_COMMON_GLSL = /* glsl */ `
@@ -36,6 +43,12 @@ uniform float uNanoHexStrength;
 uniform float uNanoHexGroove;
 uniform float uNanoHexRoughness;
 uniform float uHexTileEnabled;
+uniform float uSlopeRockEnabled;
+uniform float uSlopeThreshold;
+uniform sampler2D uSlopeRockMap;
+uniform sampler2D uSlopeRockNormalMap;
+varying vec3 vNanoWorldPos;
+varying vec3 vNanoWorldNormal;
 
 // 2D Hash functions (Dave_Hoskins / Jarzynski)
 float nanoHexHash12(vec2 p) {
@@ -171,8 +184,9 @@ vec3 sampleHexTiledNormal(sampler2D nMap, vec2 uv) {
 `;
 
 /**
- * Applies procedural nano-hexagonal micro-relief normal perturbation and
- * stochastic hex-tiling to a Three.js MeshStandardMaterial.
+ * Applies procedural nano-hexagonal micro-relief normal perturbation,
+ * stochastic hex-tiling, and optional triplanar slope cliff-rock blending
+ * to a Three.js MeshStandardMaterial.
  */
 export function applyNanoHexagonRelief(
   material: THREE.MeshStandardMaterial,
@@ -183,6 +197,8 @@ export function applyNanoHexagonRelief(
   const grooveDepth = options.grooveDepth ?? 0.28;
   const roughnessVariation = options.roughnessVariation ?? 0.08;
   const hexTiling = options.hexTiling ?? true;
+  const hasSlopeRock = Boolean(options.slopeRockMap && options.slopeRockNormalMap);
+  const slopeThreshold = options.slopeThreshold ?? 0.82;
 
   material.userData.nanoHex = {
     uNanoHexScale: { value: scale },
@@ -190,24 +206,43 @@ export function applyNanoHexagonRelief(
     uNanoHexGroove: { value: grooveDepth },
     uNanoHexRoughness: { value: roughnessVariation },
     uHexTileEnabled: { value: hexTiling ? 1.0 : 0.0 },
+    uSlopeRockEnabled: { value: hasSlopeRock ? 1.0 : 0.0 },
+    uSlopeThreshold: { value: slopeThreshold },
+    uSlopeRockMap: { value: options.slopeRockMap || material.map },
+    uSlopeRockNormalMap: { value: options.slopeRockNormalMap || material.normalMap },
   };
 
   material.customProgramCacheKey = (): string => {
-    return `nanohex_${material.name || 'mat'}_tiling${hexTiling ? '1' : '0'}`;
+    return `nanohex_${material.name || 'mat'}_tiling${hexTiling ? '1' : '0'}_slope${hasSlopeRock ? '1' : '0'}`;
   };
 
   material.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms): void => {
-    // Bind custom uniforms
     shader.uniforms.uNanoHexScale = material.userData.nanoHex.uNanoHexScale;
     shader.uniforms.uNanoHexStrength = material.userData.nanoHex.uNanoHexStrength;
     shader.uniforms.uNanoHexGroove = material.userData.nanoHex.uNanoHexGroove;
     shader.uniforms.uNanoHexRoughness = material.userData.nanoHex.uNanoHexRoughness;
     shader.uniforms.uHexTileEnabled = material.userData.nanoHex.uHexTileEnabled;
+    shader.uniforms.uSlopeRockEnabled = material.userData.nanoHex.uSlopeRockEnabled;
+    shader.uniforms.uSlopeThreshold = material.userData.nanoHex.uSlopeThreshold;
+    shader.uniforms.uSlopeRockMap = material.userData.nanoHex.uSlopeRockMap;
+    shader.uniforms.uSlopeRockNormalMap = material.userData.nanoHex.uSlopeRockNormalMap;
+
+    // Pass world position & normal from vertex shader for triplanar cliff rock & geological strata
+    shader.vertexShader =
+      'varying vec3 vNanoWorldPos;\nvarying vec3 vNanoWorldNormal;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <worldpos_vertex>',
+      /* glsl */ `
+      #include <worldpos_vertex>
+      vNanoWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      vNanoWorldNormal = normalize(mat3(modelMatrix) * objectNormal);
+      `
+    );
 
     // Inject GLSL utilities at top of fragment shader
     shader.fragmentShader = NANO_HEX_COMMON_GLSL + '\n' + shader.fragmentShader;
 
-    // 1. Stochastic Hex-Tiling on diffuse texture (breaks square grid repetition)
+    // 1. Stochastic Hex-Tiling on diffuse texture + Triplanar Slope Cliff Rock Blending
     if (hexTiling) {
       shader.fragmentShader = shader.fragmentShader.replace(
         'vec4 sampledDiffuseColor = texture2D( map, vMapUv );',
@@ -215,11 +250,27 @@ export function applyNanoHexagonRelief(
         vec4 sampledDiffuseColor = (uHexTileEnabled > 0.5)
           ? sampleHexTiled( map, vMapUv )
           : texture2D( map, vMapUv );
+        if (uSlopeRockEnabled > 0.5) {
+          float ny = clamp(vNanoWorldNormal.y, 0.0, 1.0);
+          float strataNoise = 0.06 * sin(vNanoWorldPos.y * 2.4 + vNanoWorldPos.x * 0.25 - vNanoWorldPos.z * 0.25);
+          float slopeFactor = smoothstep(uSlopeThreshold + 0.12, uSlopeThreshold - 0.16, ny + strataNoise);
+          if (slopeFactor > 0.01) {
+            vec2 rockUv = (vNanoWorldPos.xz * 0.45 + vec2(vNanoWorldPos.x + vNanoWorldPos.z, vNanoWorldPos.y * 1.35)) * 0.26;
+            vec4 rockCol = sampleHexTiled(uSlopeRockMap, rockUv);
+            // Geological horizontal rock strata & crevice shading on mountain walls
+            float strataBand = 0.82 + 0.18 * sin(vNanoWorldPos.y * 3.8 + sin(vNanoWorldPos.x * 0.5) * 1.2);
+            rockCol.rgb *= strataBand * 0.92;
+            sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, rockCol.rgb, slopeFactor * 0.88);
+          }
+          // Subtle topographic crevice & slope ambient occlusion
+          float slopeAO = mix(0.78, 1.0, smoothstep(0.35, 0.95, ny));
+          sampledDiffuseColor.rgb *= slopeAO;
+        }
         `
       );
     }
 
-    // 2. Stochastic Hex-Tiling on normal map
+    // 2. Stochastic Hex-Tiling on normal map + Slope Cliff Rock Normal Blending
     if (hexTiling) {
       shader.fragmentShader = shader.fragmentShader.replace(
         'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
@@ -227,6 +278,16 @@ export function applyNanoHexagonRelief(
         vec3 mapN = (uHexTileEnabled > 0.5)
           ? sampleHexTiledNormal( normalMap, vNormalMapUv )
           : (texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0);
+        if (uSlopeRockEnabled > 0.5) {
+          float ny = clamp(vNanoWorldNormal.y, 0.0, 1.0);
+          float slopeFactor = smoothstep(uSlopeThreshold + 0.12, uSlopeThreshold - 0.16, ny);
+          if (slopeFactor > 0.01) {
+            vec2 rockUv = (vNanoWorldPos.xz * 0.45 + vec2(vNanoWorldPos.x + vNanoWorldPos.z, vNanoWorldPos.y * 1.35)) * 0.26;
+            vec3 rockN = sampleHexTiledNormal(uSlopeRockNormalMap, rockUv);
+            rockN.xy *= 1.35;
+            mapN = normalize(mix(mapN, rockN, slopeFactor * 0.9));
+          }
+        }
         `
       );
     }
@@ -270,3 +331,40 @@ export function applyNanoHexagonRelief(
 
   material.needsUpdate = true;
 }
+
+/**
+ * Injects warm Subsurface Scattering (SSS) solar backlight transmission and
+ * hemisphere canopy bounce into foliage materials (`foliageLeaf` & `foliageFern`)
+ * so backlit tree crowns and ferns glow with golden-emerald transmitted sunlight
+ * and shadowed undersides never clip to flat black.
+ */
+export function applyFoliageSubsurfaceShader(material: THREE.MeshStandardMaterial): void {
+  material.customProgramCacheKey = (): string => {
+    return `foliage_sss_${material.name || 'leaf'}`;
+  };
+
+  material.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms): void => {
+    shader.uniforms.uSunDir = sharedUniforms.uSunDir;
+    shader.uniforms.uSunColor = sharedUniforms.uSunColor;
+
+    shader.fragmentShader =
+      'uniform vec3 uSunDir;\nuniform vec3 uSunColor;\n' + shader.fragmentShader;
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      /* glsl */ `
+      // Subsurface backlight transmission through thin chlorophyll leaf blades
+      vec3 viewDir = normalize(vViewPosition);
+      vec3 sunDirNorm = normalize(uSunDir);
+      float backLight = pow( clamp( dot( viewDir, -sunDirNorm ), 0.0, 1.0 ), 2.4 );
+      float leafWrap = clamp( dot( normal, sunDirNorm ) * 0.5 + 0.5, 0.0, 1.0 );
+      vec3 sssTint = diffuseColor.rgb * vec3( 0.95, 1.18, 0.45 ) * uSunColor;
+      outgoingLight += sssTint * ( backLight * 0.34 + leafWrap * 0.14 );
+      #include <opaque_fragment>
+      `
+    );
+  };
+
+  material.needsUpdate = true;
+}
+

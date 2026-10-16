@@ -140,33 +140,35 @@ export class LightRig {
 
   private currentGrade: TimeOfDayGrade = 'afternoon';
   private elapsedSec: number = 0;
+  private sceneRef: THREE.Scene | null = null;
+  private envTextures: Partial<Record<TimeOfDayGrade, THREE.DataTexture>> = {};
 
   constructor(shadowMapSize: number = 2048) {
     this.group.name = 'AndeanLightRig';
 
-    this.sunLight = new THREE.DirectionalLight(0xffebc8, 3.3);
+    this.sunLight = new THREE.DirectionalLight(0xffebc8, 3.4);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
-    this.sunLight.shadow.camera.near = 2.0;
-    this.sunLight.shadow.camera.far = 160.0;
-    const d = 38;
+    this.sunLight.shadow.camera.near = 1.5;
+    this.sunLight.shadow.camera.far = 135.0;
+    const d = 24;
     this.sunLight.shadow.camera.left = -d;
     this.sunLight.shadow.camera.right = d;
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
-    this.sunLight.shadow.bias = -0.0004;
-    this.sunLight.shadow.normalBias = 0.022;
+    this.sunLight.shadow.bias = -0.00025;
+    this.sunLight.shadow.normalBias = 0.016;
 
-    this.skyFill = new THREE.HemisphereLight(0x84b0d2, 0x46563d, 1.18);
+    this.skyFill = new THREE.HemisphereLight(0x88b5d8, 0x526448, 1.35);
     this.skyFill.position.set(0, 60, 0);
 
-    this.bounceLight = new THREE.DirectionalLight(0x788a66, 0.7);
+    this.bounceLight = new THREE.DirectionalLight(0x829670, 0.95);
     this.bounceLight.castShadow = false;
 
-    this.rimLight = new THREE.DirectionalLight(0xffe6bc, 0.48);
+    this.rimLight = new THREE.DirectionalLight(0xffedd0, 0.68);
     this.rimLight.castShadow = false;
 
-    this.ambientLight = new THREE.AmbientLight(0x7e8c96, 0.75);
+    this.ambientLight = new THREE.AmbientLight(0x7e8c96, 0.68);
 
     this.group.add(
       this.sunLight,
@@ -188,6 +190,7 @@ export class LightRig {
   }
 
   public build(scene: THREE.Scene, renderer?: THREE.WebGLRenderer): void {
+    this.sceneRef = scene;
     scene.add(this.group);
     this.applyGrade(this.currentGrade, renderer);
   }
@@ -236,9 +239,125 @@ export class LightRig {
     this.ambientLight.color.setHex(spec.ambientColor);
     this.ambientLight.intensity = spec.ambientIntensity;
 
+    if (this.sceneRef) {
+      let envTex = this.envTextures[grade];
+      if (!envTex) {
+        envTex = this.createAndeanEnvironmentTexture(spec, sharedUniforms.uSunDir.value);
+        this.envTextures[grade] = envTex;
+      }
+      this.sceneRef.environment = envTex;
+      if ('environmentIntensity' in this.sceneRef) {
+        (this.sceneRef as THREE.Scene & { environmentIntensity: number }).environmentIntensity =
+          grade === 'night' ? 0.55 : 0.92;
+      }
+    }
+
     if (renderer) {
       renderer.toneMappingExposure = spec.exposure;
     }
+  }
+
+  /**
+   * Builds a rich 256x128 EquirectangularReflectionMapping Andean IBL panorama
+   * (Rayleigh/Mie sky dome, sunlit cumulus cloud band, snow-capped Cordillera horizon,
+   * solar aureole, and emerald-gold valley bounce) so metallic gold, bronze, water,
+   * wet stones, and character gear have authentic reflections in both WebGPU & WebGL2.
+   */
+  private createAndeanEnvironmentTexture(
+    spec: GradeSpec,
+    sunDir: THREE.Vector3
+  ): THREE.DataTexture {
+    const width = 256;
+    const height = 128;
+    const data = new Uint8Array(width * height * 4);
+
+    const cSky = new THREE.Color(spec.skyColor);
+    const cZenith = cSky.clone().multiplyScalar(0.68);
+    const cHorizon = new THREE.Color(spec.fogColor).lerp(new THREE.Color(0xffffff), 0.18);
+    const cSun = new THREE.Color(spec.sunColor);
+    const cGround = new THREE.Color(spec.groundColor);
+    const cBounce = new THREE.Color(spec.bounceColor);
+    const cPeak = new THREE.Color(0xdce8f2);
+    const cTmp = new THREE.Color();
+    const dir = new THREE.Vector3();
+
+    for (let y = 0; y < height; y++) {
+      // v = 0 at bottom (-pi/2), v = 1 at top (+pi/2)
+      const v = (y + 0.5) / height;
+      const theta = (v - 0.5) * Math.PI;
+      const sinTheta = Math.sin(theta);
+      const cosTheta = Math.cos(theta);
+
+      for (let x = 0; x < width; x++) {
+        const u = (x + 0.5) / width;
+        const phi = (u - 0.5) * Math.PI * 2.0;
+
+        dir.set(Math.cos(phi) * cosTheta, sinTheta, Math.sin(phi) * cosTheta).normalize();
+        const sunDot = Math.max(0, dir.dot(sunDir));
+
+        if (sinTheta >= 0.0) {
+          // Upper sky dome + sunlit cumulus cloud band + Cordillera snow peaks near horizon
+          const elevT = Math.min(1.0, sinTheta / 0.35);
+          if (sinTheta < 0.35) {
+            cTmp.copy(cHorizon).lerp(cSky, elevT);
+          } else {
+            cTmp.copy(cSky).lerp(cZenith, (sinTheta - 0.35) / 0.65);
+          }
+
+          // Distant jagged mountain ridge silhouette along the horizon
+          const ridgeH =
+            0.05 +
+            0.04 * Math.sin(phi * 5.0 + 0.8) +
+            0.025 * Math.cos(phi * 11.0 - 0.4);
+          if (sinTheta < ridgeH) {
+            const snowFactor = Math.max(0, (sinTheta - ridgeH * 0.45) / (ridgeH * 0.55));
+            cTmp.lerp(cPeak, 0.35 + snowFactor * 0.45);
+          } else {
+            // Soft sunlit Andean cloud band
+            const cloudWave =
+              Math.sin(phi * 3.0 + sinTheta * 6.0) * 0.5 +
+              Math.cos(phi * 7.0 - sinTheta * 4.0) * 0.5;
+            const cloudMask =
+              Math.max(0, cloudWave) *
+              Math.exp(-Math.pow((sinTheta - 0.28) * 4.2, 2.0));
+            cTmp.lerp(cHorizon, cloudMask * 0.42);
+          }
+
+          // Warm Mie solar aureole and specular sun core for realistic metal/water glints
+          const halo = Math.pow(sunDot, 6.0) * 0.55 + Math.pow(sunDot, 36.0) * 0.85;
+          cTmp.lerp(cSun, Math.min(1.0, halo));
+          if (sunDot > 0.96) {
+            const core = Math.pow((sunDot - 0.96) / 0.04, 2.0);
+            cTmp.r = Math.min(1.0, cTmp.r + core * 0.45);
+            cTmp.g = Math.min(1.0, cTmp.g + core * 0.42);
+            cTmp.b = Math.min(1.0, cTmp.b + core * 0.35);
+          }
+        } else {
+          // Lower hemisphere: sunlit emerald foliage & warm stone terrace bounce
+          const downT = Math.min(1.0, -sinTheta / 0.55);
+          cTmp.copy(cHorizon).lerp(cBounce, Math.min(1.0, downT * 1.4));
+          cTmp.lerp(cGround, downT * 0.65);
+          const groundVari =
+            0.5 + 0.5 * Math.sin(phi * 6.0 + sinTheta * 8.0);
+          cTmp.lerp(cSun, groundVari * 0.14 * Math.max(0.2, sunDir.y));
+        }
+
+        const idx = (y * width + x) * 4;
+        data[idx] = Math.min(255, Math.round(cTmp.r * 255));
+        data[idx + 1] = Math.min(255, Math.round(cTmp.g * 255));
+        data[idx + 2] = Math.min(255, Math.round(cTmp.b * 255));
+        data[idx + 3] = 255;
+      }
+    }
+
+    const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.needsUpdate = true;
+    return tex;
   }
 
   public placeTorchLight(index: number, x: number, y: number, z: number, intensity: number = 2.4): void {
@@ -283,6 +402,12 @@ export class LightRig {
     if (this.sunLight.shadow.map) {
       this.sunLight.shadow.map.dispose();
     }
+    const grades = Object.keys(this.envTextures) as TimeOfDayGrade[];
+    for (let i = 0; i < grades.length; i++) {
+      const tex = this.envTextures[grades[i]];
+      if (tex) tex.dispose();
+    }
+    this.envTextures = {};
     this.group.removeFromParent();
   }
 }
