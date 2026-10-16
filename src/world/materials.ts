@@ -492,11 +492,11 @@ export class PbrMaterialLibrary {
     // 16. Braided Andean Ichu Grass Rope (Q'eswachaka style) — §2.2
     this.ropeBraided = new THREE.MeshStandardMaterial({
       name: 'RopeBraidedIchu',
-      color: new THREE.Color(0xa08556),
+      color: new THREE.Color(0x3e3224),
       map: canvasAlbedo,
       normalMap: barkNormal,
       normalScale: new THREE.Vector2(1.8, 1.8),
-      roughness: 0.92,
+      roughness: 0.96,
       metalness: 0.0,
     });
 

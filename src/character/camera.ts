@@ -206,9 +206,8 @@ export class OverTheShoulderCamera {
     }
 
     if (this.targetRecenterYaw !== null) {
-      let diff = (this.targetRecenterYaw - this.yaw) % (Math.PI * 2);
-      if (diff > Math.PI) diff -= Math.PI * 2;
-      if (diff < -Math.PI) diff += Math.PI * 2;
+      let diff = this.targetRecenterYaw - this.yaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) < 0.03) {
         this.yaw = this.targetRecenterYaw;
         this.targetRecenterYaw = null;
@@ -246,7 +245,7 @@ export class OverTheShoulderCamera {
       this.computeOverShoulderRig(targetFootPos, targetSpeed, locoMode);
     }
 
-    const minGroundY = terrain.getTerrainHeightAt(_desiredPos.x, _desiredPos.z) + 0.45;
+    const minGroundY = terrain.sampleGroundY(_desiredPos.x, _desiredPos.z, _desiredPos.y) + 0.45;
     if (_desiredPos.y < minGroundY) {
       _desiredPos.y = minGroundY;
     }

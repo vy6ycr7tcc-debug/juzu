@@ -72,6 +72,7 @@ export class MenusOverlay {
           <button id="juzu-btn-begin" style="padding:11px 16px;background:#384836;color:#fdfaf2;border:1px solid #c9a468;cursor:pointer;font-family:Georgia,serif;font-size:14px;letter-spacing:0.08em;transition:background 0.2s ease;">Begin Expedition</button>
           <button id="juzu-btn-toggle-chapters" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Select Chapter</button>
           <button id="juzu-btn-title-settings" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Expedition Settings & Audio</button>
+          <button id="juzu-btn-title-reload" style="padding:9px 16px;background:rgba(50,30,26,0.85);color:#f2d4d0;border:1px solid #944838;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;transition:background 0.2s ease;">🔄 Load Latest Version (Clear Cache)</button>
         </div>
         <div id="juzu-chapter-list" style="display:none;flex-direction:column;gap:6px;margin-bottom:20px;font-size:12px;">
           <button class="juzu-chap-pick" data-region="cloudForest" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter I: Cloud Forest Valleys</button>
@@ -103,6 +104,16 @@ export class MenusOverlay {
 
     titleScreen.querySelector('#juzu-btn-title-settings')?.addEventListener('click', () => {
       this.openSettings();
+    });
+
+    titleScreen.querySelector('#juzu-btn-title-reload')?.addEventListener('click', () => {
+      if (typeof (window as any).__forceReloadLatest === 'function') {
+        (window as any).__forceReloadLatest();
+      } else {
+        const u = new URL(window.location.href);
+        u.searchParams.set('v', String(Date.now()));
+        window.location.href = u.toString();
+      }
     });
 
     const chapList = titleScreen.querySelector('#juzu-chapter-list') as HTMLDivElement | null;
@@ -156,6 +167,7 @@ export class MenusOverlay {
         <button id="juzu-btn-tier" style="padding:9px 14px;background:#252e27;color:#f2ece1;border:1px solid #5c5242;cursor:pointer;">Quality Tier: ${quality.getTier()}</button>
         <button id="juzu-btn-tod" style="padding:9px 14px;background:#252e27;color:#f2ece1;border:1px solid #5c5242;cursor:pointer;">Time of Day: ${lightRig.getGrade().toUpperCase()}</button>
         <button id="juzu-btn-save" style="padding:9px 14px;background:#252e27;color:#f2ece1;border:1px solid #5c5242;cursor:pointer;">Export Save JSON</button>
+        <button id="juzu-btn-pause-reload" style="padding:9px 14px;background:#321c1a;color:#f5d0cc;border:1px solid #944838;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;">🔄 Load Latest Version (Clear Cache)</button>
       </div>
     `;
 
@@ -165,6 +177,15 @@ export class MenusOverlay {
 
     panel.querySelector('#juzu-btn-resume')?.addEventListener('click', () => {
       this.setPaused(false);
+    });
+    panel.querySelector('#juzu-btn-pause-reload')?.addEventListener('click', () => {
+      if (typeof (window as any).__forceReloadLatest === 'function') {
+        (window as any).__forceReloadLatest();
+      } else {
+        const u = new URL(window.location.href);
+        u.searchParams.set('v', String(Date.now()));
+        window.location.href = u.toString();
+      }
     });
     panel.querySelector('#juzu-btn-pause-settings')?.addEventListener('click', () => {
       this.openSettings();

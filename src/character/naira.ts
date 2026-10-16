@@ -84,6 +84,7 @@ export class NairaController {
   private activeAction: THREE.AnimationAction | null = null;
   private modelRoot: THREE.Object3D | null = null;
   private contactShadowMesh: THREE.Mesh | null = null;
+  private contactShadowMat: THREE.MeshBasicMaterial | null = null;
   private heldBowGroup: THREE.Group | null = null;
   private backBowMesh: THREE.Mesh | null = null;
 
@@ -135,13 +136,14 @@ export class NairaController {
       color: new THREE.Color(0x060907),
       map: shadowTex,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.75,
       depthWrite: false,
     });
     const shadowGeo = new THREE.PlaneGeometry(0.85, 0.85);
     shadowGeo.rotateX(-Math.PI / 2);
     this.geometries.push(shadowGeo);
     this.materials.push(shadowMat);
+    this.contactShadowMat = shadowMat;
     this.contactShadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
     this.contactShadowMesh.position.set(0, 0.02, 0);
     this.root.add(this.contactShadowMesh);
@@ -192,20 +194,23 @@ export class NairaController {
     model.position.set(0, 0, 0);
 
     model.traverse(child => {
+      if (child.name.includes(':')) {
+        child.name = child.name.replace(/:/g, '_');
+      }
       const n = child.name;
-      if (n === 'mixamorigHips' || n === 'mixamorig:Hips') this.hipsBone = child;
-      else if (n === 'mixamorigSpine' || n === 'mixamorig:Spine') this.spineBone = child;
-      else if (n === 'mixamorigSpine1' || n === 'mixamorig:Spine1') this.spine1Bone = child;
-      else if (n === 'mixamorigSpine2' || n === 'mixamorig:Spine2') this.spine2Bone = child;
-      else if (n === 'mixamorigHead' || n === 'mixamorig:Head') this.headBone = child;
-      else if (n === 'mixamorigLeftArm' || n === 'mixamorig:LeftArm') this.leftArmBone = child;
-      else if (n === 'mixamorigRightArm' || n === 'mixamorig:RightArm') this.rightArmBone = child;
-      else if (n === 'mixamorigLeftForeArm' || n === 'mixamorig:LeftForeArm') this.leftForeArmBone = child;
-      else if (n === 'mixamorigRightForeArm' || n === 'mixamorig:RightForeArm') this.rightForeArmBone = child;
-      else if (n === 'mixamorigLeftUpLeg' || n === 'mixamorig:LeftUpLeg') this.leftUpLegBone = child;
-      else if (n === 'mixamorigRightUpLeg' || n === 'mixamorig:RightUpLeg') this.rightUpLegBone = child;
-      else if (n === 'mixamorigLeftLeg' || n === 'mixamorig:LeftLeg') this.leftLegBone = child;
-      else if (n === 'mixamorigRightLeg' || n === 'mixamorig:RightLeg') this.rightLegBone = child;
+      if (n === 'mixamorigHips' || n === 'mixamorig_Hips') this.hipsBone = child;
+      else if (n === 'mixamorigSpine' || n === 'mixamorig_Spine') this.spineBone = child;
+      else if (n === 'mixamorigSpine1' || n === 'mixamorig_Spine1') this.spine1Bone = child;
+      else if (n === 'mixamorigSpine2' || n === 'mixamorig_Spine2') this.spine2Bone = child;
+      else if (n === 'mixamorigHead' || n === 'mixamorig_Head') this.headBone = child;
+      else if (n === 'mixamorigLeftArm' || n === 'mixamorig_LeftArm') this.leftArmBone = child;
+      else if (n === 'mixamorigRightArm' || n === 'mixamorig_RightArm') this.rightArmBone = child;
+      else if (n === 'mixamorigLeftForeArm' || n === 'mixamorig_LeftForeArm') this.leftForeArmBone = child;
+      else if (n === 'mixamorigRightForeArm' || n === 'mixamorig_RightForeArm') this.rightForeArmBone = child;
+      else if (n === 'mixamorigLeftUpLeg' || n === 'mixamorig_LeftUpLeg') this.leftUpLegBone = child;
+      else if (n === 'mixamorigRightUpLeg' || n === 'mixamorig_RightUpLeg') this.rightUpLegBone = child;
+      else if (n === 'mixamorigLeftLeg' || n === 'mixamorig_LeftLeg') this.leftLegBone = child;
+      else if (n === 'mixamorigRightLeg' || n === 'mixamorig_RightLeg') this.rightLegBone = child;
 
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh) {
@@ -387,7 +392,7 @@ export class NairaController {
         values[i * 4 + 2] = outQ.z;
         values[i * 4 + 3] = outQ.w;
       }
-      return new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, values);
+      return new THREE.QuaternionKeyframeTrack(`${bone.uuid}.quaternion`, times, values);
     };
 
     const composeDirectEulerTrack = (
@@ -409,7 +414,7 @@ export class NairaController {
         values[i * 4 + 2] = q.z;
         values[i * 4 + 3] = q.w;
       }
-      return new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, values);
+      return new THREE.QuaternionKeyframeTrack(`${bone.uuid}.quaternion`, times, values);
     };
 
     const idleTimes = [0.0, 1.2, 2.4];
@@ -434,24 +439,24 @@ export class NairaController {
       [-0.04, -0.06, 0.0],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.leftArmBone, idleTimes, [
-      [1.15, 0.05, -0.15],
-      [1.18, 0.04, -0.14],
-      [1.15, 0.05, -0.15],
+      [1.12, 0.04, 0.28],
+      [1.14, 0.04, 0.28],
+      [1.12, 0.04, 0.28],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.rightArmBone, idleTimes, [
-      [1.15, -0.05, 0.15],
-      [1.18, -0.04, 0.14],
-      [1.15, -0.05, 0.15],
+      [1.12, -0.04, -0.28],
+      [1.14, -0.04, -0.28],
+      [1.12, -0.04, -0.28],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.leftForeArmBone, idleTimes, [
-      [0.20, 0.0, 0.20],
-      [0.22, 0.0, 0.20],
-      [0.20, 0.0, 0.20],
+      [0.22, 0.02, 0.06],
+      [0.24, 0.02, 0.06],
+      [0.22, 0.02, 0.06],
     ]));
     addT(idleTracks, composeDirectEulerTrack(this.rightForeArmBone, idleTimes, [
-      [0.20, 0.0, -0.20],
-      [0.22, 0.0, -0.20],
-      [0.20, 0.0, -0.20],
+      [0.22, -0.02, -0.06],
+      [0.24, -0.02, -0.06],
+      [0.22, -0.02, -0.06],
     ]));
     addT(idleTracks, composeTrack(this.leftUpLegBone, idleTimes, [
       [0.02, 0.0, -0.02],
@@ -488,82 +493,106 @@ export class NairaController {
       const t = [0.0, dur * 0.25, dur * 0.5, dur * 0.75, dur];
       const trs: THREE.KeyframeTrack[] = [];
 
+      // Pelvis: weight shift and pelvic sway
+      addT(trs, composeTrack(this.hipsBone, t, [
+        [0.015, -spineLean * 0.35, 0.035],
+        [-0.03, 0.0, 0.0],
+        [0.015, spineLean * 0.35, -0.035],
+        [-0.03, 0.0, 0.0],
+        [0.015, -spineLean * 0.35, 0.035],
+      ]));
+
+      // Spine counter-rotation for athletic balance
       addT(trs, composeTrack(this.spineBone, t, [
-        [spineLean, -0.07, 0.025],
-        [spineLean + 0.035, 0.0, 0.0],
-        [spineLean, 0.07, -0.025],
-        [spineLean + 0.035, 0.0, 0.0],
-        [spineLean, -0.07, 0.025],
+        [spineLean, -0.08, 0.03],
+        [spineLean + 0.03, 0.0, 0.0],
+        [spineLean, 0.08, -0.03],
+        [spineLean + 0.03, 0.0, 0.0],
+        [spineLean, -0.08, 0.03],
       ]));
       addT(trs, composeTrack(this.spine2Bone, t, [
-        [spineLean * 0.35, -0.09, -0.02],
-        [spineLean * 0.35 + 0.02, 0.0, 0.0],
-        [spineLean * 0.35, 0.09, 0.02],
-        [spineLean * 0.35 + 0.02, 0.0, 0.0],
-        [spineLean * 0.35, -0.09, -0.02],
+        [spineLean * 0.4, -0.09, -0.025],
+        [spineLean * 0.4 + 0.02, 0.0, 0.0],
+        [spineLean * 0.4, 0.09, 0.025],
+        [spineLean * 0.4 + 0.02, 0.0, 0.0],
+        [spineLean * 0.4, -0.09, -0.025],
       ]));
       addT(trs, composeTrack(this.headBone, t, [
-        [-spineLean * 0.45, 0.05, 0.0],
+        [-spineLean * 0.45, 0.04, 0.0],
         [-spineLean * 0.45 - 0.02, 0.0, 0.0],
-        [-spineLean * 0.45, -0.05, 0.0],
+        [-spineLean * 0.45, -0.04, 0.0],
         [-spineLean * 0.45 - 0.02, 0.0, 0.0],
-        [-spineLean * 0.45, 0.05, 0.0],
+        [-spineLean * 0.45, 0.04, 0.0],
       ]));
-      addT(trs, composeTrack(this.leftArmBone, t, [
-        [1.15, 0.05, -armSwing * 0.85],
-        [1.15, 0.05, 0.05],
-        [1.15, 0.05, armSwing * 0.95],
-        [1.15, 0.05, 0.05],
-        [1.15, 0.05, -armSwing * 0.85],
+
+      // Direct Euler shoulder swing: Left arm swings backward at t=0 when Left leg is forward
+      addT(trs, composeDirectEulerTrack(this.leftArmBone, t, [
+        [1.01, -armSwing * 0.28, 0.16 - armSwing * 0.18], // t=0.0: back
+        [1.16, 0.02, 0.18],                                // t=0.25: pass
+        [1.02, armSwing * 0.28, 0.16 + armSwing * 0.18],  // t=0.50: forward
+        [1.16, 0.02, 0.18],                                // t=0.75: pass
+        [1.01, -armSwing * 0.28, 0.16 - armSwing * 0.18], // t=1.00: back
       ]));
-      addT(trs, composeTrack(this.rightArmBone, t, [
-        [1.15, -0.05, -armSwing * 0.95],
-        [1.15, -0.05, -0.05],
-        [1.15, -0.05, armSwing * 0.85],
-        [1.15, -0.05, -0.05],
-        [1.15, -0.05, -armSwing * 0.95],
+
+      // Right arm swings forward at t=0 when Left leg is forward
+      addT(trs, composeDirectEulerTrack(this.rightArmBone, t, [
+        [1.02, -armSwing * 0.28, -(0.16 + armSwing * 0.18)], // t=0.0: forward
+        [1.16, -0.02, -0.18],                                  // t=0.25: pass
+        [1.01, armSwing * 0.28, -(0.16 - armSwing * 0.18)],   // t=0.50: back
+        [1.16, -0.02, -0.18],                                  // t=0.75: pass
+        [1.02, -armSwing * 0.28, -(0.16 + armSwing * 0.18)], // t=1.00: forward
       ]));
-      addT(trs, composeTrack(this.leftForeArmBone, t, [
-        [0.18, 0.0, 0.22 + armSwing * 0.25],
-        [0.18, 0.0, 0.32 + armSwing * 0.35],
-        [0.18, 0.0, 0.45 + armSwing * 0.55],
-        [0.18, 0.0, 0.32 + armSwing * 0.35],
-        [0.18, 0.0, 0.22 + armSwing * 0.25],
+
+      // Forearm elbow flexion coordinated with arm drive
+      addT(trs, composeDirectEulerTrack(this.leftForeArmBone, t, [
+        [0.15, 0.0, 0.04],
+        [0.18, 0.0, 0.06],
+        [0.22, 0.0, 0.06 + armSwing * 0.32],
+        [0.18, 0.0, 0.06],
+        [0.15, 0.0, 0.04],
       ]));
-      addT(trs, composeTrack(this.rightForeArmBone, t, [
-        [0.18, 0.0, -(0.45 + armSwing * 0.55)],
-        [0.18, 0.0, -(0.32 + armSwing * 0.35)],
-        [0.18, 0.0, -(0.22 + armSwing * 0.25)],
-        [0.18, 0.0, -(0.32 + armSwing * 0.35)],
-        [0.18, 0.0, -(0.45 + armSwing * 0.55)],
+      addT(trs, composeDirectEulerTrack(this.rightForeArmBone, t, [
+        [0.22, 0.0, -(0.06 + armSwing * 0.32)],
+        [0.18, 0.0, -0.06],
+        [0.15, 0.0, -0.04],
+        [0.18, 0.0, -0.06],
+        [0.22, 0.0, -(0.06 + armSwing * 0.32)],
       ]));
+
+      // Left Thigh: forward at t=0, back at t=0.5
       addT(trs, composeTrack(this.leftUpLegBone, t, [
-        [legSwing, 0.0, 0.0],
-        [0.08, 0.0, 0.0],
-        [-legSwing * 0.85, 0.0, 0.0],
+        [legSwing, 0.0, -0.02],
+        [0.06, 0.0, 0.0],
+        [-legSwing * 0.72, 0.0, 0.02],
         [0.04, 0.0, 0.0],
-        [legSwing, 0.0, 0.0],
+        [legSwing, 0.0, -0.02],
       ]));
+
+      // Right Thigh: back at t=0, forward at t=0.5
       addT(trs, composeTrack(this.rightUpLegBone, t, [
-        [-legSwing * 0.85, 0.0, 0.0],
+        [-legSwing * 0.72, 0.0, 0.02],
         [0.04, 0.0, 0.0],
-        [legSwing, 0.0, 0.0],
-        [0.08, 0.0, 0.0],
-        [-legSwing * 0.85, 0.0, 0.0],
+        [legSwing, 0.0, -0.02],
+        [0.06, 0.0, 0.0],
+        [-legSwing * 0.72, 0.0, 0.02],
       ]));
+
+      // Left Knee: bends when leg is behind and swinging through
       addT(trs, composeTrack(this.leftLegBone, t, [
-        [-0.12, 0.0, 0.0],
-        [-kneeBend * 0.45, 0.0, 0.0],
-        [-0.18, 0.0, 0.0],
+        [-0.08, 0.0, 0.0],
+        [-kneeBend * 0.35, 0.0, 0.0],
         [-kneeBend, 0.0, 0.0],
-        [-0.12, 0.0, 0.0],
+        [-kneeBend * 0.55, 0.0, 0.0],
+        [-0.08, 0.0, 0.0],
       ]));
+
+      // Right Knee: bends when leg is behind and swinging through
       addT(trs, composeTrack(this.rightLegBone, t, [
-        [-0.18, 0.0, 0.0],
         [-kneeBend, 0.0, 0.0],
-        [-0.12, 0.0, 0.0],
-        [-kneeBend * 0.45, 0.0, 0.0],
-        [-0.18, 0.0, 0.0],
+        [-kneeBend * 0.55, 0.0, 0.0],
+        [-0.08, 0.0, 0.0],
+        [-kneeBend * 0.35, 0.0, 0.0],
+        [-kneeBend, 0.0, 0.0],
       ]));
 
       return new THREE.AnimationClip(clipName, dur, trs);
@@ -595,53 +624,53 @@ export class NairaController {
       [-0.14, 0.05, 0.0],
       [-0.06, 0.0, 0.0],
     ]));
-    addT(jmpTracks, composeTrack(this.leftArmBone, jmpT, [
-      [1.05, 0.08, 0.55],
-      [0.95, 0.12, 1.05],
-      [0.98, 0.10, 0.88],
-      [1.12, 0.06, 0.25],
+    addT(jmpTracks, composeDirectEulerTrack(this.leftArmBone, jmpT, [
+      [1.16, 0.02, 0.18],
+      [1.02, 0.14, 0.38],
+      [1.05, 0.10, 0.28],
+      [1.16, 0.02, 0.18],
     ]));
-    addT(jmpTracks, composeTrack(this.rightArmBone, jmpT, [
-      [1.05, -0.08, 0.25],
-      [0.98, -0.12, 0.52],
-      [1.02, -0.10, 0.42],
-      [1.12, -0.06, -0.18],
+    addT(jmpTracks, composeDirectEulerTrack(this.rightArmBone, jmpT, [
+      [1.16, -0.02, -0.18],
+      [1.02, -0.14, -0.38],
+      [1.05, -0.10, -0.28],
+      [1.16, -0.02, -0.18],
     ]));
-    addT(jmpTracks, composeTrack(this.leftForeArmBone, jmpT, [
-      [0.18, 0.0, 0.45],
-      [0.22, 0.0, 0.72],
-      [0.20, 0.0, 0.62],
-      [0.18, 0.0, 0.30],
+    addT(jmpTracks, composeDirectEulerTrack(this.leftForeArmBone, jmpT, [
+      [0.15, 0.0, 0.06],
+      [0.26, 0.0, 0.45],
+      [0.24, 0.0, 0.35],
+      [0.15, 0.0, 0.06],
     ]));
-    addT(jmpTracks, composeTrack(this.rightForeArmBone, jmpT, [
-      [0.18, 0.0, -0.42],
-      [0.22, 0.0, -0.68],
-      [0.20, 0.0, -0.58],
-      [0.18, 0.0, -0.28],
+    addT(jmpTracks, composeDirectEulerTrack(this.rightForeArmBone, jmpT, [
+      [0.15, 0.0, -0.06],
+      [0.26, 0.0, -0.45],
+      [0.24, 0.0, -0.35],
+      [0.15, 0.0, -0.06],
     ]));
     addT(jmpTracks, composeTrack(this.leftUpLegBone, jmpT, [
-      [0.58, 0.04, 0.08],
-      [1.02, 0.06, 0.12],
-      [0.92, 0.05, 0.10],
-      [0.35, 0.02, 0.04],
+      [0.45, 0.04, 0.06],
+      [0.92, 0.06, 0.10],
+      [0.82, 0.05, 0.08],
+      [0.25, 0.02, 0.04],
     ]));
     addT(jmpTracks, composeTrack(this.rightUpLegBone, jmpT, [
-      [-0.24, -0.04, -0.06],
-      [-0.44, -0.06, -0.08],
-      [-0.32, -0.05, -0.06],
-      [0.18, -0.02, -0.04],
+      [-0.20, -0.04, -0.05],
+      [-0.38, -0.06, -0.07],
+      [-0.28, -0.05, -0.05],
+      [0.15, -0.02, -0.03],
     ]));
     addT(jmpTracks, composeTrack(this.leftLegBone, jmpT, [
-      [-0.68, 0.0, 0.0],
-      [-1.22, 0.0, 0.0],
-      [-1.08, 0.0, 0.0],
-      [-0.42, 0.0, 0.0],
+      [-0.55, 0.0, 0.0],
+      [-1.10, 0.0, 0.0],
+      [-0.95, 0.0, 0.0],
+      [-0.35, 0.0, 0.0],
     ]));
     addT(jmpTracks, composeTrack(this.rightLegBone, jmpT, [
-      [-0.48, 0.0, 0.0],
-      [-1.04, 0.0, 0.0],
-      [-0.92, 0.0, 0.0],
-      [-0.32, 0.0, 0.0],
+      [-0.42, 0.0, 0.0],
+      [-0.95, 0.0, 0.0],
+      [-0.82, 0.0, 0.0],
+      [-0.28, 0.0, 0.0],
     ]));
     this.actions.jump = this.mixer.clipAction(new THREE.AnimationClip('jump', 0.92, jmpTracks));
 
@@ -983,35 +1012,60 @@ export class NairaController {
       hipKit.scale.setScalar(cmScale);
 
       // Mother's woven Quechua belt fitted to waist (radius 0.112..0.118, scaled elliptical in Z)
-      const beltGeo = new THREE.CylinderGeometry(0.112, 0.118, 0.045, 14);
+      const beltGeo = new THREE.CylinderGeometry(0.112, 0.118, 0.048, 16);
       beltGeo.scale(1.0, 1.0, 0.78);
-      this.geometries.push(beltGeo);
-      const beltMesh = new THREE.Mesh(beltGeo, pbr.clothQuechuaRed);
+      const buckleGeo = new THREE.BoxGeometry(0.034, 0.028, 0.012);
+      this.geometries.push(beltGeo, buckleGeo);
+
+      let beltMat: THREE.Material = pbr.clothQuechuaRed;
+      if (pbr.clothQuechuaRed.map) {
+        const beltTex = pbr.clothQuechuaRed.map.clone();
+        beltTex.repeat.set(10.0, 1.0);
+        beltTex.wrapS = THREE.RepeatWrapping;
+        beltTex.wrapT = THREE.ClampToEdgeWrapping;
+        beltTex.needsUpdate = true;
+        this.textures.push(beltTex);
+        const wovenBeltMat = new THREE.MeshStandardMaterial({
+          name: 'NairaWovenQuechuaBelt',
+          map: beltTex,
+          color: new THREE.Color(0x8a2016),
+          roughness: 0.86,
+          metalness: 0.0,
+        });
+        this.materials.push(wovenBeltMat);
+        beltMat = wovenBeltMat;
+      }
+
+      const beltMesh = new THREE.Mesh(beltGeo, beltMat);
       beltMesh.position.set(0, 0.02, 0.0);
       hipKit.add(beltMesh);
 
-      // Canvas Satchel resting snugly at left hip
-      const satchelGeo = new THREE.BoxGeometry(0.055, 0.14, 0.16);
+      const buckleMesh = new THREE.Mesh(buckleGeo, pbr.metalBronze);
+      buckleMesh.position.set(0, 0.02, 0.092);
+      hipKit.add(buckleMesh);
+
+      // Canvas Satchel resting snugly at left hip (tucked back to clear arm stride swing)
+      const satchelGeo = new THREE.BoxGeometry(0.052, 0.13, 0.15);
       this.geometries.push(satchelGeo);
       const satchelMesh = new THREE.Mesh(satchelGeo, pbr.clothTrousers);
-      satchelMesh.position.set(0.125, -0.05, -0.01);
-      satchelMesh.rotation.z = -0.06;
+      satchelMesh.position.set(0.10, -0.06, -0.05);
+      satchelMesh.rotation.set(0.08, -0.18, -0.08);
       satchelMesh.castShadow = true;
       hipKit.add(satchelMesh);
 
-      // Sheathed belt knife at right hip + leather water skin
+      // Sheathed belt knife at right hip + leather water skin (clearing arm swing)
       const sheathGeo = new THREE.CylinderGeometry(0.012, 0.009, 0.14, 6);
       const flaskGeo = new THREE.SphereGeometry(0.045, 8, 6);
       flaskGeo.scale(0.65, 1.15, 0.85);
       this.geometries.push(sheathGeo, flaskGeo);
 
       const sheathMesh = new THREE.Mesh(sheathGeo, pbr.leather);
-      sheathMesh.position.set(-0.12, -0.04, 0.03);
-      sheathMesh.rotation.x = 0.25;
+      sheathMesh.position.set(-0.10, -0.05, -0.04);
+      sheathMesh.rotation.set(0.20, 0.15, 0.05);
       hipKit.add(sheathMesh);
 
       const flaskMesh = new THREE.Mesh(flaskGeo, pbr.leather);
-      flaskMesh.position.set(-0.1, -0.05, -0.08);
+      flaskMesh.position.set(-0.08, -0.06, -0.09);
       hipKit.add(flaskMesh);
 
       this.hipsBone.add(hipKit);
@@ -1347,16 +1401,14 @@ export class NairaController {
 
         const desiredYaw = nextMode === 'aim' ? cameraYaw : Math.atan2(_moveVec.x, _moveVec.z);
         let angleDiff = desiredYaw - this.yaw;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        const turnRate = this.isGrounded ? 12.5 : 6.0;
+        angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+        const turnRate = this.isGrounded ? 12.0 : 6.0;
         this.yaw += angleDiff * Math.min(1.0, dt * turnRate);
         _targetQuat.setFromAxisAngle(_upAxis, this.yaw);
         this.root.quaternion.copy(_targetQuat);
       } else if (nextMode === 'aim') {
         let angleDiff = cameraYaw - this.yaw;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
         this.yaw += angleDiff * Math.min(1.0, dt * 14.0);
         _targetQuat.setFromAxisAngle(_upAxis, this.yaw);
         this.root.quaternion.copy(_targetQuat);
@@ -1528,13 +1580,21 @@ export class NairaController {
       }
     } else {
       this.fallApexY = groundY;
-      if (this.contactShadowMesh) this.contactShadowMesh.visible = true;
-      this.position.y = groundY;
+      // Juzu smooth ground elevation tracking: never pop, follow gentle slopes and steps smoothly
+      if (this.isGrounded && groundY > this.position.y - 0.75 && groundY < this.position.y + 0.85) {
+        this.position.y += (groundY - this.position.y) * Math.min(1.0, dt * 14.0);
+      } else {
+        this.position.y = groundY;
+      }
+      if (groundY > this.position.y) {
+        this.position.y = groundY; // Never sink into ground or rising terrain
+      }
+
       // Subtle grounded stride vertical bounce on modelRoot so feet stay planted at root.y while hips bob naturally
       if (this.modelRoot) {
         if (this.speed > 0.25 && (nextMode === 'walk' || nextMode === 'jog' || nextMode === 'sprint')) {
           const freq = nextMode === 'sprint' ? 11.5 : nextMode === 'jog' ? 8.8 : 6.2;
-          const amp = nextMode === 'sprint' ? 0.032 : nextMode === 'jog' ? 0.022 : 0.012;
+          const amp = nextMode === 'sprint' ? 0.028 : nextMode === 'jog' ? 0.018 : 0.010;
           this.modelRoot.position.y = Math.abs(Math.sin(this.elapsedSec * freq)) * amp;
         } else {
           this.modelRoot.position.y = THREE.MathUtils.lerp(this.modelRoot.position.y, 0, Math.min(1.0, dt * 12.0));
@@ -1543,6 +1603,22 @@ export class NairaController {
     }
 
     this.root.position.copy(this.position);
+
+    // Juzu soft contact shadow: stays pinned on the terrain/bridge surface under feet
+    if (this.contactShadowMesh) {
+      if (nextMode === 'climb' || this.ziplineActive) {
+        this.contactShadowMesh.visible = false;
+      } else {
+        const heightAboveGround = Math.max(0, this.position.y - groundY);
+        const shadowFade = Math.max(0, 1.0 - THREE.MathUtils.smoothstep(heightAboveGround, 0.1, 2.8));
+        this.contactShadowMesh.position.y = (groundY - this.position.y) + 0.015;
+        this.contactShadowMesh.scale.setScalar(1.0 + heightAboveGround * 0.42);
+        if (this.contactShadowMat) {
+          this.contactShadowMat.opacity = 0.75 * shadowFade;
+        }
+        this.contactShadowMesh.visible = shadowFade > 0.02;
+      }
+    }
 
     this.updateBraidPhysics(dt);
     if (this.mixer && this.activeAction) {

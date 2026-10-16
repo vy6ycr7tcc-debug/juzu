@@ -586,18 +586,18 @@ export class TerrainSystem {
       // Majestic mountain slope cross-section with broad shoulders
       const ridgeShape = Math.exp(-Math.pow(distToRidge * 1.85, 1.35));
 
-      // 2. Multi-summit jagged crest profile (multiple horns + sharp cols, zero smooth cones)
-      const p1X = -0.20 + Math.sin(seed * 1.7) * 0.08;
-      const p2X = 0.28 + Math.cos(seed * 2.1) * 0.08;
-      const p3X = -0.62;
-      const p4X = 0.65;
-      const horn1 = Math.exp(-Math.pow((nx - p1X) * 2.6, 2)) * 1.0;
-      const horn2 = Math.exp(-Math.pow((nx - p2X) * 3.0, 2)) * 0.88;
-      const shoulder1 = Math.exp(-Math.pow((nx - p3X) * 3.4, 2)) * 0.72;
-      const shoulder2 = Math.exp(-Math.pow((nx - p4X) * 3.6, 2)) * 0.65;
+      // 2. Multi-summit jagged crest profile (sweeping Andean arête with broad shoulders)
+      const p1X = -0.25 + Math.sin(seed * 1.7) * 0.12;
+      const p2X = 0.22 + Math.cos(seed * 2.1) * 0.12;
+      const p3X = -0.58;
+      const p4X = 0.58;
+      const horn1 = Math.exp(-Math.pow((nx - p1X) * 1.8, 2)) * 1.0;
+      const horn2 = Math.exp(-Math.pow((nx - p2X) * 2.0, 2)) * 0.88;
+      const shoulder1 = Math.exp(-Math.pow((nx - p3X) * 2.2, 2)) * 0.76;
+      const shoulder2 = Math.exp(-Math.pow((nx - p4X) * 2.4, 2)) * 0.72;
       const crestSpine =
         Math.max(horn1, Math.max(horn2, Math.max(shoulder1, shoulder2))) *
-        (1.0 - Math.pow(Math.abs(nx), 1.4) * 0.38);
+        (1.0 - Math.pow(Math.abs(nx), 1.2) * 0.28);
 
       // 3. Glacial cirque erosion: deep concave scoop carved into one face
       const cirqueX = 0.08 + Math.sin(seed * 3.1) * 0.1;
@@ -625,7 +625,7 @@ export class TerrainSystem {
 
       const falloff = Math.cos(Math.min(1.0, dist) * Math.PI * 0.5);
       const rawRidge = ridgeShape * crestSpine * asym - cirqueHollow;
-      const h = Math.max(0, (rawRidge + strata + couloirs + fbm) * Math.pow(falloff, 1.15));
+      const h = Math.max(0, (rawRidge + strata + couloirs + fbm) * Math.pow(falloff, 0.78));
       rawH[i] = h;
       if (h > maxRaw) maxRaw = h;
     }
@@ -658,10 +658,10 @@ export class TerrainSystem {
     const meta = geo as unknown as { _normHeights?: Float32Array };
     if (!colAttr || !meta._normHeights || !normAttr) return;
 
-    // Physically accurate PBR Andean rock and snow albedos (compensated for dark albedo texture)
-    const cRock = new THREE.Color(2.2, 2.3, 2.5);
-    const cSnow = new THREE.Color(5.2, 5.4, 5.8);
-    const cIce = new THREE.Color(3.6, 4.4, 5.2);
+    // Physically accurate PBR Andean rock and snow albedos with Rayleigh aerial depth
+    const cRock = new THREE.Color(0.24, 0.27, 0.32);
+    const cSnow = new THREE.Color(0.86, 0.90, 0.96);
+    const cIce = new THREE.Color(0.48, 0.60, 0.72);
     const cScratch = new THREE.Color();
 
     for (let i = 0; i < meta._normHeights.length; i++) {

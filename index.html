@@ -21,6 +21,9 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Juzu — The Search for Paititi" />
     <meta name="twitter:description" content="Realistic third-person action-adventure in the Inca Andes. Three.js WebGPU + WebGL2." />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Juzu — The Search for Paititi</title>
     <style>
       body, #app canvas {
@@ -89,10 +92,41 @@
           <div id="juzu-loading-bar" style="width:15%;height:100%;background:linear-gradient(90deg, #caa05b, #ffd988);transition:width 0.2s ease;"></div>
         </div>
         <div id="juzu-loading-status" style="font-size:11px;letter-spacing:0.08em;color:#9b9487;">Loading Andean Terrain · 15%</div>
+        <!-- Load Latest Version & Clear Cache Button -->
+        <button id="juzu-btn-reload-latest" onclick="window.__forceReloadLatest()" style="margin-top:22px;padding:8px 16px;background:rgba(212,184,136,0.12);border:1px solid rgba(212,184,136,0.45);border-radius:4px;color:#f2ede4;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.2s ease;">
+          <span style="font-size:13px;">🔄</span>
+          <span>Load Latest Version (Clear Cache)</span>
+        </button>
       </div>
     </div>
 
     <script>
+      window.__forceReloadLatest = async function() {
+        var btn = document.getElementById('juzu-btn-reload-latest');
+        if (btn) btn.innerHTML = '<span>⏳</span><span>Clearing cache & reloading...</span>';
+        try {
+          if ('serviceWorker' in navigator) {
+            var regs = await navigator.serviceWorker.getRegistrations();
+            for (var i = 0; i < regs.length; i++) {
+              await regs[i].unregister();
+            }
+          }
+          if ('caches' in window) {
+            var keys = await caches.keys();
+            for (var j = 0; j < keys.length; j++) {
+              await caches.delete(keys[j]);
+            }
+          }
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch (err) {
+          console.warn('Cache clearing error:', err);
+        }
+        var u = new URL(window.location.href);
+        u.searchParams.set('v', String(Date.now()));
+        window.location.href = u.toString();
+      };
+
       window.__setLoadingProgress = function(pct, text) {
         var bar = document.getElementById('juzu-loading-bar');
         var txt = document.getElementById('juzu-loading-status');
