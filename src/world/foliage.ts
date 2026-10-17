@@ -145,9 +145,19 @@ export class Foliage {
 
     this.populateFoliage();
 
-    // Ingest photorealistic scanned granite boulder (Poly Haven CC0 photogrammetry)
+    // Ingest photorealistic scanned assets (Poly Haven CC0 photogrammetry)
+    let pendingAssets = 2;
+    const onAssetLoaded = () => {
+      pendingAssets--;
+      if (pendingAssets <= 0) {
+        this.isLoaded = true;
+      }
+    };
+
     const gltfLoader = new GLTFLoader();
     gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+    // 1. Photorealistic Scanned Granite Boulder (boulder_01)
     gltfLoader.load(
       '/juzu/models/scans/boulder_01.glb',
       (gltf) => {
@@ -180,12 +190,56 @@ export class Foliage {
           this.rockInstances.material = scannedMat;
           this.rockInstances.instanceMatrix.needsUpdate = true;
         }
-        this.isLoaded = true;
+        onAssetLoaded();
       },
       undefined,
       (err) => {
         console.warn('[Foliage] Could not load scanned boulder, using fallback:', err);
-        this.isLoaded = true;
+        onAssetLoaded();
+      }
+    );
+
+    // 2. Photorealistic Scanned Cloud-Forest Broad-Leaf Foliage (calathea_orbifolia_01)
+    gltfLoader.load(
+      '/juzu/models/scans/calathea_orbifolia_01.glb',
+      (gltf) => {
+        let scannedGeom: THREE.BufferGeometry | null = null;
+        let scannedMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
+            const mesh = child as THREE.Mesh;
+            scannedGeom = mesh.geometry.clone();
+            scannedMat = mesh.material as THREE.Material;
+            if (scannedMat instanceof THREE.MeshStandardMaterial) {
+              scannedMat.roughness = 0.68;
+              scannedMat.metalness = 0.02;
+              scannedMat.alphaTest = 0.35;
+              scannedMat.side = THREE.DoubleSide;
+              if (scannedMat.map) {
+                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
+                scannedMat.map.anisotropy = 8;
+              }
+              if (scannedMat.normalMap) {
+                scannedMat.normalMap.anisotropy = 8;
+                scannedMat.normalScale = new THREE.Vector2(1.15, 1.15);
+              }
+            }
+          }
+        });
+
+        if (scannedGeom && scannedMat) {
+          this.grassInstances.geometry.dispose();
+          this.grassInstances.geometry = scannedGeom;
+          this.grassInstances.material = scannedMat;
+          this.grassInstances.instanceMatrix.needsUpdate = true;
+        }
+        onAssetLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[Foliage] Could not load scanned calathea foliage, using fallback:', err);
+        onAssetLoaded();
       }
     );
 
@@ -486,10 +540,14 @@ export class Foliage {
       const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
       if (dy > 1.05) continue;
 
-      dummy.position.set(x, y - 0.08, z);
-      dummy.rotation.set(0, (j * 1.618) % (Math.PI * 2), 0);
-      const s = 0.72 + ((j * 23) % 45) * 0.018;
-      dummy.scale.set(s, s, s);
+      dummy.position.set(x, y - 0.03, z);
+      dummy.rotation.set(
+        Math.sin(j * 0.7) * 0.08,
+        (j * 1.618) % (Math.PI * 2),
+        Math.cos(j * 0.9) * 0.08
+      );
+      const s = 1.35 + ((j * 23) % 45) * 0.024;
+      dummy.scale.set(s, s * (0.95 + ((j * 17) % 20) * 0.01), s);
       dummy.updateMatrix();
 
       this.grassInstances.setMatrixAt(grassIdx++, dummy.matrix);
