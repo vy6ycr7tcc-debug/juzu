@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { standAt } from '../terrain';
-import { solid } from '../solidity';
+import { passable, solid } from '../solidity';
 import { createIncaBlock, buildTrapezoidalGateway } from '../masonry';
 
 export class PaititiRegion {
@@ -9,6 +11,8 @@ export class PaititiRegion {
   private texLoader = new THREE.TextureLoader();
   private sunGoldMat?: THREE.MeshStandardMaterial;
   private canalWaterMesh?: THREE.Mesh;
+  private sunLight?: THREE.PointLight;
+  private awakened = false;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Region_Paititi';
@@ -97,15 +101,26 @@ export class PaititiRegion {
     this.buildPlazaOfTheSun(redPlazaPavingMat, precisionAshlarMat);
     this.buildSunTempleRotunda(precisionAshlarMat);
     this.buildAqueductChannels(precisionAshlarMat, canalWaterMat);
+    this.loadPhotogrammetricScans();
   }
 
   public awakenSunPlaza(): void {
+    this.awakened = true;
     if (this.sunGoldMat) {
-      this.sunGoldMat.emissive.setHex(0xd4a017);
-      this.sunGoldMat.emissiveIntensity = 0.55;
+      this.sunGoldMat.emissive.setHex(0xeaa81c);
+      this.sunGoldMat.emissiveIntensity = 0.88;
     }
     if (this.canalWaterMesh) {
-      this.canalWaterMesh.position.y += 0.18;
+      this.canalWaterMesh.position.y += 0.22;
+    }
+    if (this.sunLight) {
+      this.sunLight.intensity = 4.8;
+    }
+  }
+
+  public update(time: number): void {
+    if (this.awakened && this.sunLight) {
+      this.sunLight.intensity = 4.8 + Math.sin(time * 6.5) * 0.55;
     }
   }
 
@@ -122,36 +137,44 @@ export class PaititiRegion {
     plazaFloor.receiveShadow = true;
     plazaGroup.add(plazaFloor);
 
-    // Stepped Battered Inca Ashlar Dais Plinths
-    const daisTier1 = new THREE.Mesh(createIncaBlock(10.6, 0.42, 10.6, 0.08, 2.0), plinthMat);
-    daisTier1.position.y = 0.92;
+    // Stepped Battered Inca Ashlar Dais Plinths (risers <= 0.36m for seamless step climbing)
+    const daisTier1 = new THREE.Mesh(createIncaBlock(10.6, 0.36, 10.6, 0.08, 2.0), plinthMat);
+    daisTier1.position.y = 0.98;
     daisTier1.castShadow = true;
     daisTier1.receiveShadow = true;
     plazaGroup.add(daisTier1);
 
-    const daisTier2 = new THREE.Mesh(createIncaBlock(8.2, 0.38, 8.2, 0.08, 1.8), plinthMat);
-    daisTier2.position.y = 1.28;
+    const daisTier2 = new THREE.Mesh(createIncaBlock(8.2, 0.36, 8.2, 0.08, 1.8), plinthMat);
+    daisTier2.position.y = 1.34;
     daisTier2.castShadow = true;
     daisTier2.receiveShadow = true;
     plazaGroup.add(daisTier2);
 
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xd4a017,
-      metalness: 0.95,
-      roughness: 0.28,
-    });
+    const goldMat = solid(
+      new THREE.MeshStandardMaterial({
+        color: 0xd4a017,
+        metalness: 0.95,
+        roughness: 0.28,
+      })
+    );
     this.sunGoldMat = goldMat;
 
-    const sunDais = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.9, 0.26, 24), goldMat);
-    sunDais.position.y = 1.56;
+    const sunDais = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.9, 0.22, 24), goldMat);
+    sunDais.position.y = 1.63;
     sunDais.castShadow = true;
     sunDais.receiveShadow = true;
     plazaGroup.add(sunDais);
     this.interactables.push(sunDais);
 
-    // Upright Golden Inti Sun Totem at the center of the Dais
-    const totemPillar = new THREE.Mesh(createIncaBlock(1.3, 1.5, 0.72, 0.12, 1.5), plinthMat);
-    totemPillar.position.set(0, 2.15, 0);
+    // Radiant Sun Light
+    const sunLight = new THREE.PointLight(0xffc542, 0.0, 36, 1.3);
+    sunLight.position.set(0, 3.4, 0);
+    plazaGroup.add(sunLight);
+    this.sunLight = sunLight;
+
+    // Upright Imperial Sun Totem Column
+    const totemPillar = new THREE.Mesh(createIncaBlock(1.2, 2.4, 0.85, 0.1, 1.6), plinthMat);
+    totemPillar.position.set(0, 2.65, 0);
     totemPillar.castShadow = true;
     totemPillar.receiveShadow = true;
     plazaGroup.add(totemPillar);
@@ -163,7 +186,7 @@ export class PaititiRegion {
     plazaGroup.add(sunTotem);
     this.interactables.push(sunTotem);
 
-    // 16-ray engraved Inti solar relief + central embossed Sun-God face medallion on both faces of the Sun Totem
+    // 16-ray engraved Inti solar relief + central embossed Sun-God face medallion on both faces
     for (const fz of [-0.125, 0.125]) {
       const innerRing = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.04, 8, 24), goldMat);
       innerRing.position.set(0, 3.15, fz);
@@ -191,13 +214,13 @@ export class PaititiRegion {
     plazaGroup.add(sunHalo);
 
     for (let r = 0; r < 4; r++) {
-      const ray = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 7.2), goldMat);
+      const ray = passable(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.04, 7.2), goldMat));
       ray.rotation.y = (r * Math.PI) / 4;
-      ray.position.y = 1.68;
+      ray.position.y = 1.74;
       plazaGroup.add(ray);
     }
 
-    // Flanking Ceremonial Fire Braziers on Stepped Stone Pedestals (organic multi-lobed ovoid flames, no sharp pyramid cones)
+    // Flanking Ceremonial Fire Braziers on Stepped Stone Pedestals
     const emberMat = new THREE.MeshBasicMaterial({ color: 0xff5214 });
     const outerFlameMat = new THREE.MeshBasicMaterial({
       color: 0xff7a18,
@@ -308,6 +331,9 @@ export class PaititiRegion {
     const gateY = standAt(200, 158);
     const gate = buildTrapezoidalGateway(4.8, 1.8, 5.8, 1.8, ashlarWallMat);
     gate.position.set(200, gateY - 0.1, 158);
+    gate.traverse((c) => {
+      if ((c as THREE.Mesh).isMesh && c.position.y < 0.25) passable(c as THREE.Mesh);
+    });
     templeGroup.add(gate);
 
     this.group.add(templeGroup);
@@ -333,5 +359,186 @@ export class PaititiRegion {
     canalGroup.add(canalWater);
 
     this.group.add(canalGroup);
+  }
+
+  private loadPhotogrammetricScans(): void {
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+    // 1. Towering Sacred Mountain Cirque enclosing Paititi (namaqualand_cliff_01)
+    gltfLoader.load('/juzu/models/scans/namaqualand_cliff_01.glb', (gltf) => {
+      let cliffGeom: THREE.BufferGeometry | null = null;
+      let cliffMat: THREE.Material | null = null;
+
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && !cliffGeom) {
+          const mesh = child as THREE.Mesh;
+          cliffGeom = mesh.geometry.clone();
+          cliffMat = mesh.material as THREE.Material;
+          if (cliffMat instanceof THREE.MeshStandardMaterial) {
+            cliffMat.roughness = 0.90;
+            cliffMat.metalness = 0.02;
+            if (cliffMat.map) {
+              cliffMat.map.colorSpace = THREE.SRGBColorSpace;
+              cliffMat.map.anisotropy = 8;
+            }
+            if (cliffMat.normalMap) {
+              cliffMat.normalMap.anisotropy = 8;
+              cliffMat.normalScale = new THREE.Vector2(1.3, 1.3);
+            }
+          }
+        }
+      });
+
+      if (cliffGeom && cliffMat) {
+        const cliffPlacements = [
+          // Rear mountain caldera massifs behind the curved Sun Temple Rotunda
+          { x: 175, y: standAt(175, 218) - 1.5, z: 218, sx: 2.6, sy: 3.2, sz: 2.2, ry: 0.35 },
+          { x: 200, y: standAt(200, 224) - 2.0, z: 224, sx: 3.0, sy: 3.5, sz: 2.4, ry: 3.14 },
+          { x: 225, y: standAt(225, 218) - 1.5, z: 218, sx: 2.6, sy: 3.2, sz: 2.2, ry: -0.35 },
+          // West flank mountain ridge enclosing the plaza
+          { x: 165, y: standAt(165, 185) - 1.0, z: 185, sx: 2.4, sy: 2.8, sz: 2.0, ry: 1.57 },
+          { x: 170, y: standAt(170, 160) - 1.0, z: 160, sx: 2.2, sy: 2.6, sz: 1.9, ry: 1.25 },
+          // East flank mountain ridge enclosing the plaza
+          { x: 235, y: standAt(235, 185) - 1.0, z: 185, sx: 2.4, sy: 2.8, sz: 2.0, ry: -1.57 },
+          { x: 230, y: standAt(230, 160) - 1.0, z: 160, sx: 2.2, sy: 2.6, sz: 1.9, ry: -1.25 },
+        ];
+
+        const cliffInstMesh = new THREE.InstancedMesh(cliffGeom, cliffMat, cliffPlacements.length);
+        cliffInstMesh.name = 'Paititi_Mountain_Cirque';
+        cliffInstMesh.castShadow = true;
+        cliffInstMesh.receiveShadow = true;
+
+        const dummy = new THREE.Object3D();
+        cliffPlacements.forEach((p, idx) => {
+          dummy.position.set(p.x, p.y, p.z);
+          dummy.scale.set(p.sx, p.sy, p.sz);
+          dummy.rotation.set(0, p.ry, 0);
+          dummy.updateMatrix();
+          cliffInstMesh.setMatrixAt(idx, dummy.matrix);
+        });
+        cliffInstMesh.instanceMatrix.needsUpdate = true;
+        this.group.add(cliffInstMesh);
+      }
+    });
+
+    // 2. Granite Bedrock Ledges flanking the Ushnu Wings and Gateway (namaqualand_cliff_02)
+    gltfLoader.load('/juzu/models/scans/namaqualand_cliff_02.glb', (gltf) => {
+      let ledgeGeom: THREE.BufferGeometry | null = null;
+      let ledgeMat: THREE.Material | null = null;
+
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && !ledgeGeom) {
+          const mesh = child as THREE.Mesh;
+          ledgeGeom = mesh.geometry.clone();
+          ledgeMat = mesh.material as THREE.Material;
+          if (ledgeMat instanceof THREE.MeshStandardMaterial) {
+            ledgeMat.roughness = 0.88;
+            ledgeMat.metalness = 0.02;
+            if (ledgeMat.map) {
+              ledgeMat.map.colorSpace = THREE.SRGBColorSpace;
+              ledgeMat.map.anisotropy = 8;
+            }
+            if (ledgeMat.normalMap) {
+              ledgeMat.normalMap.anisotropy = 8;
+              ledgeMat.normalScale = new THREE.Vector2(1.3, 1.3);
+            }
+          }
+        }
+      });
+
+      if (ledgeGeom && ledgeMat) {
+        const ledgePlacements = [
+          // Flanking the entrance gateway
+          { x: 186, y: standAt(186, 156) - 0.25, z: 156, sx: 1.25, sy: 1.3, sz: 1.2, ry: 0.8 },
+          { x: 214, y: standAt(214, 156) - 0.25, z: 156, sx: 1.25, sy: 1.3, sz: 1.2, ry: -0.8 },
+          // Flanking the outer ushnu pyramid wings
+          { x: 174, y: standAt(174, 182) - 0.3, z: 182, sx: 1.35, sy: 1.4, sz: 1.25, ry: 1.1 },
+          { x: 226, y: standAt(226, 182) - 0.3, z: 182, sx: 1.35, sy: 1.4, sz: 1.25, ry: -1.1 },
+        ];
+
+        const ledgeInst = new THREE.InstancedMesh(ledgeGeom, ledgeMat, ledgePlacements.length);
+        ledgeInst.name = 'Paititi_Granite_Ledges';
+        ledgeInst.castShadow = true;
+        ledgeInst.receiveShadow = true;
+
+        const dummy = new THREE.Object3D();
+        ledgePlacements.forEach((p, idx) => {
+          dummy.position.set(p.x, p.y, p.z);
+          dummy.scale.set(p.sx, p.sy, p.sz);
+          dummy.rotation.set(0, p.ry, 0);
+          dummy.updateMatrix();
+          ledgeInst.setMatrixAt(idx, dummy.matrix);
+        });
+        ledgeInst.instanceMatrix.needsUpdate = true;
+        this.group.add(ledgeInst);
+      }
+    });
+
+    // 3. Imperial Citadel Kit: Watchtowers and Bastion Curtain Walls (modular_fort_01)
+    gltfLoader.load('/juzu/models/scans/modular_fort_01.glb', (gltf) => {
+      const fortGroup = new THREE.Group();
+      fortGroup.name = 'Paititi_Imperial_Citadel_Kit';
+      this.group.add(fortGroup);
+
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          if (mesh.material instanceof THREE.MeshStandardMaterial) {
+            mesh.material.roughness = 0.86;
+            mesh.material.metalness = 0.02;
+            if (mesh.material.map) {
+              mesh.material.map.colorSpace = THREE.SRGBColorSpace;
+              mesh.material.map.anisotropy = 8;
+            }
+            if (mesh.material.normalMap) {
+              mesh.material.normalMap.anisotropy = 8;
+              mesh.material.normalScale = new THREE.Vector2(1.35, 1.35);
+            }
+          }
+        }
+      });
+
+      let towerNode: THREE.Object3D | null = null;
+      let wallStraightNode: THREE.Object3D | null = null;
+
+      gltf.scene.traverse((child) => {
+        if (child.name === 'modular_fort_01_tower_round' && !towerNode) {
+          towerNode = child;
+        } else if (child.name === 'modular_fort_01_wall_thick_straight_01' && !wallStraightNode) {
+          wallStraightNode = child;
+        }
+      });
+
+      if (towerNode && wallStraightNode) {
+        // Twin imperial bastion towers flanking Paititi entrance portal
+        const towerL = (towerNode as THREE.Object3D).clone(true);
+        const tyL = standAt(192.5, 158);
+        towerL.position.set(192.5, tyL, 158);
+        towerL.scale.set(0.65, 0.75, 0.65);
+        fortGroup.add(towerL);
+
+        const towerR = (towerNode as THREE.Object3D).clone(true);
+        const tyR = standAt(207.5, 158);
+        towerR.position.set(207.5, tyR, 158);
+        towerR.scale.set(0.65, 0.75, 0.65);
+        fortGroup.add(towerR);
+
+        // Flanking curtain walls connecting to the mountain amphitheater
+        const wallL = (wallStraightNode as THREE.Object3D).clone(true);
+        const wyL = standAt(185.5, 158);
+        wallL.position.set(185.5, wyL, 158);
+        wallL.scale.set(0.75, 0.72, 0.75);
+        fortGroup.add(wallL);
+
+        const wallR = (wallStraightNode as THREE.Object3D).clone(true);
+        const wyR = standAt(214.5, 158);
+        wallR.position.set(214.5, wyR, 158);
+        wallR.scale.set(0.75, 0.72, 0.75);
+        fortGroup.add(wallR);
+      }
+    });
   }
 }

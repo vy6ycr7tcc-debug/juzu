@@ -501,11 +501,13 @@ async function bootJuzu() {
     sky.update(controller.pos, activeToD);
     foliage.update(totalTime);
     cloudForest.update(totalTime);
+    paititi.update(totalTime);
     lightRig.update(controller.pos, camera.position);
 
     // Interactive Archaeological Mechanisms & Stelae across the 4 Regions
-    const eTriggered = input.interact && !lastInteractKey;
-    lastInteractKey = input.interact;
+    const isInteract = input.interact;
+    const eTriggered = isInteract && !lastInteractKey;
+    lastInteractKey = isInteract;
 
     const distMirror = Math.hypot(controller.pos.x - (-4.2), controller.pos.z - 3.8);
     const distStele = Math.hypot(controller.pos.x - 0, controller.pos.z - (-44));
@@ -657,6 +659,9 @@ async function bootJuzu() {
     routes,
     hud,
     input,
+    get puzzleState() {
+      return { mirrorSolved, steleSolved, gnomonSolved, sluiceSolved, paititiSolved };
+    },
   };
   window.__juzuOffline = offlineManager;
   offlineManager.register();

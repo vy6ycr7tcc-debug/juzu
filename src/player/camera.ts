@@ -5,14 +5,14 @@ import { solidity } from '../world/solidity';
 export class FollowCamera {
   yaw = 0;
   pitch = 0.16;
-  baseDist = 5.8;
-  dist = 5.8;
-  shoulderOffset = 0.46;
+  baseDist = 7.4;
+  dist = 7.4;
+  shoulderOffset = 0.52;
 
   private target = new THREE.Vector3();
   private currentPos = new THREE.Vector3();
   private leadOffset = new THREE.Vector3();
-  private effDist = 5.8;
+  private effDist = 7.4;
   private landingDip = 0;
   private landingDipVel = 0;
   private stridePhase = 0;
@@ -20,11 +20,11 @@ export class FollowCamera {
   public invertY = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
-    this.currentPos.set(0, 5.8, 15.8);
+    this.currentPos.set(0, 7.4, 17.4);
   }
 
   public adjustDistance(delta: number): void {
-    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 3.2, 9.5);
+    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 4.2, 14.0);
   }
 
   public triggerLandingDip(impactSpeed: number): void {
@@ -53,9 +53,9 @@ export class FollowCamera {
 
     // 3. Dynamic Distance & FOV Kick
     const targetDist = isSprinting
-      ? this.baseDist + 1.1
+      ? this.baseDist + 1.25
       : isCrouching
-        ? Math.max(3.8, this.baseDist - 0.75)
+        ? Math.max(4.2, this.baseDist - 0.95)
         : this.baseDist;
     this.dist = THREE.MathUtils.lerp(this.dist, targetDist, Math.min(1, dt * 5));
 
@@ -88,7 +88,7 @@ export class FollowCamera {
 
     // Reduce shoulder offset if zoomed in close or in wide vista mode
     const activeShoulder =
-      this.dist < 2.2 ? 0.0 : this.dist > 7.2 ? this.shoulderOffset * 0.4 : this.shoulderOffset;
+      this.dist < 2.5 ? 0.0 : this.dist > 9.0 ? this.shoulderOffset * 0.35 : this.shoulderOffset;
     const eyeHeight = (isCrouching ? 1.18 : 1.54) + this.landingDip + cadenceBobY;
 
     const targetGoal = new THREE.Vector3(
