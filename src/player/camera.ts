@@ -4,14 +4,15 @@ import { solidity } from '../world/solidity';
 
 export class FollowCamera {
   yaw = 0;
-  pitch = 0.20;
-  dist = 3.1;
-  shoulderOffset = 0.34;
+  pitch = 0.18;
+  baseDist = 5.4;
+  dist = 5.4;
+  shoulderOffset = 0.46;
 
   private target = new THREE.Vector3();
   private currentPos = new THREE.Vector3();
   private leadOffset = new THREE.Vector3();
-  private effDist = 3.1;
+  private effDist = 5.4;
   private landingDip = 0;
   private landingDipVel = 0;
   private stridePhase = 0;
@@ -19,7 +20,11 @@ export class FollowCamera {
   public invertY = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
-    this.currentPos.set(0, 5.8, 13.1);
+    this.currentPos.set(0, 5.8, 15.4);
+  }
+
+  public adjustDistance(delta: number): void {
+    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 2.6, 8.5);
   }
 
   public triggerLandingDip(impactSpeed: number): void {
@@ -46,8 +51,15 @@ export class FollowCamera {
     this.landingDipVel += (-this.landingDip * 42 - this.landingDipVel * 9.5) * dt;
     this.landingDip += this.landingDipVel * dt;
 
-    // 3. Dynamic FOV Kick (52° normal -> 59° sprinting -> 46° Survival Instinct / Crouch)
-    const targetFov = isInstinct ? 46 : isSprinting ? 59 : isCrouching ? 48 : 52;
+    // 3. Dynamic Distance & FOV Kick
+    const targetDist = isSprinting
+      ? this.baseDist + 0.85
+      : isCrouching
+        ? Math.max(3.2, this.baseDist - 0.75)
+        : this.baseDist;
+    this.dist = THREE.MathUtils.lerp(this.dist, targetDist, Math.min(1, dt * 5));
+
+    const targetFov = isInstinct ? 46 : isSprinting ? 58 : isCrouching ? 48 : 52;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1, dt * 8));
       this.camera.updateProjectionMatrix();
@@ -55,9 +67,9 @@ export class FollowCamera {
 
     // 4. Velocity Lead-Ahead & Grounded Footstep Cadence Micro-Bob
     const speedHoriz = playerVel ? Math.hypot(playerVel.x, playerVel.z) : 0;
-    const leadScale = this.dist < 2.2 ? 0.0 : 0.065;
-    const goalLeadX = playerVel ? THREE.MathUtils.clamp(playerVel.x * leadScale, -0.38, 0.38) : 0;
-    const goalLeadZ = playerVel ? THREE.MathUtils.clamp(playerVel.z * leadScale, -0.38, 0.38) : 0;
+    const leadScale = this.dist < 2.5 ? 0.0 : 0.07;
+    const goalLeadX = playerVel ? THREE.MathUtils.clamp(playerVel.x * leadScale, -0.45, 0.45) : 0;
+    const goalLeadZ = playerVel ? THREE.MathUtils.clamp(playerVel.z * leadScale, -0.45, 0.45) : 0;
     this.leadOffset.x = THREE.MathUtils.lerp(this.leadOffset.x, goalLeadX, Math.min(1, dt * 6));
     this.leadOffset.z = THREE.MathUtils.lerp(this.leadOffset.z, goalLeadZ, Math.min(1, dt * 6));
 
@@ -75,8 +87,9 @@ export class FollowCamera {
     const rightZ = -sinYaw;
 
     // Reduce shoulder offset if zoomed in close or in wide vista mode
-    const activeShoulder = this.dist < 1.8 || this.dist > 6.0 ? 0.0 : this.shoulderOffset;
-    const eyeHeight = (isCrouching ? 1.12 : 1.50) + this.landingDip + cadenceBobY;
+    const activeShoulder =
+      this.dist < 2.2 ? 0.0 : this.dist > 7.2 ? this.shoulderOffset * 0.4 : this.shoulderOffset;
+    const eyeHeight = (isCrouching ? 1.18 : 1.54) + this.landingDip + cadenceBobY;
 
     const targetGoal = new THREE.Vector3(
       playerPos.x + rightX * activeShoulder + this.leadOffset.x,
@@ -99,16 +112,16 @@ export class FollowCamera {
     let safeDist = this.dist;
     const hitDist = solidity.ray(this.target, dir, this.dist);
     if (hitDist < safeDist) {
-      safeDist = Math.max(1.1, hitDist - 0.28);
+      safeDist = Math.max(1.3, hitDist - 0.32);
     }
 
-    const testSteps = 12;
+    const testSteps = 14;
     for (let i = 1; i <= testSteps; i++) {
       const stepDist = (safeDist * i) / testSteps;
       const testPoint = this.target.clone().addScaledVector(dir, stepDist);
       const groundH = standAt(testPoint.x, testPoint.z);
-      if (testPoint.y < groundH + 0.35) {
-        safeDist = Math.max(1.1, stepDist - 0.35);
+      if (testPoint.y < groundH + 0.4) {
+        safeDist = Math.max(1.3, stepDist - 0.4);
         break;
       }
     }
@@ -131,11 +144,12 @@ export class FollowCamera {
   public teleport(pos: THREE.Vector3): void {
     const rightX = Math.cos(this.yaw);
     const rightZ = -Math.sin(this.yaw);
-    const activeShoulder = this.dist < 1.8 || this.dist > 6.0 ? 0.0 : this.shoulderOffset;
+    const activeShoulder =
+      this.dist < 2.2 ? 0.0 : this.dist > 7.2 ? this.shoulderOffset * 0.4 : this.shoulderOffset;
     this.leadOffset.set(0, 0, 0);
     this.target.set(
       pos.x + rightX * activeShoulder,
-      pos.y + 1.50,
+      pos.y + 1.54,
       pos.z + rightZ * activeShoulder
     );
     const dir = new THREE.Vector3(

@@ -443,6 +443,10 @@ async function bootJuzu() {
     naira.update(controller, dt, followCamera.yaw);
 
     // Input & Over-the-Shoulder Camera
+    const wheel = input.getAndResetWheel();
+    if (wheel !== 0) {
+      followCamera.adjustDistance(wheel * 0.0035);
+    }
     const look = input.resetLook();
     followCamera.update(
       controller.pos,

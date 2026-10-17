@@ -3,6 +3,13 @@ export class Input {
   lookX = 0;
   lookY = 0;
   zoom = 1;
+  wheelDeltaY = 0;
+
+  getAndResetWheel(): number {
+    const val = this.wheelDeltaY;
+    this.wheelDeltaY = 0;
+    return val;
+  }
 
   get boost(): boolean {
     return this.enabled && (this.keys.has('shift') || this.joyRun > 0.5);
@@ -155,6 +162,14 @@ export class Input {
         this.lookY += dy;
       }
     });
+
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        this.wheelDeltaY += e.deltaY;
+      },
+      { passive: true }
+    );
 
     // Touch events for mobile
     this.surface.addEventListener('pointerdown', (e) => {
