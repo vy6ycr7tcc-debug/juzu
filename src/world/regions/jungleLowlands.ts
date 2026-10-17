@@ -82,38 +82,52 @@ export class JungleLowlandsRegion {
 
   private buildExpeditionQuay(quayMat: THREE.MeshStandardMaterial): void {
     const quayGroup = new THREE.Group();
-    const qH = standAt(-180, 124);
+    const qH = standAt(-180, 126);
 
-    // Battered stone landing quay platform
-    const platform = new THREE.Mesh(createIncaBlock(12, 2.2, 12, 0.08, 2.2), quayMat);
-    platform.position.set(-180, qH + 0.35, 124);
+    // Broad flush stone landing quay terrace
+    const platform = new THREE.Mesh(createIncaBlock(14, 0.55, 12, 0.08, 2.2), quayMat);
+    platform.position.set(-180, qH + 0.18, 126);
     platform.castShadow = true;
     platform.receiveShadow = true;
     quayGroup.add(platform);
 
-    // Flanking carved serpent totem stelae
-    for (const side of [-5.0, 5.0]) {
-      const totem = new THREE.Mesh(createIncaBlock(1.3, 4.0, 1.3, 0.12, 1.8), quayMat);
-      totem.position.set(-180 + side, qH + 3.1, 120);
+    // Flanking carved serpent totem stelae framing the avenue
+    for (const side of [-5.2, 5.2]) {
+      const totem = new THREE.Mesh(createIncaBlock(1.3, 4.2, 1.3, 0.12, 1.8), quayMat);
+      totem.position.set(-180 + side, qH + 2.1, 128);
       totem.castShadow = true;
       totem.receiveShadow = true;
       quayGroup.add(totem);
       this.interactables.push(totem);
     }
 
-    // Ancient Bronze & Stone Sluice Capstan Wheel on the Quay
+    // Ancient Bronze & Stone Sluice Capstan Wheel offset to the right of the central avenue so the Serpent Arches vista is wide open
     const bronzeMat = new THREE.MeshStandardMaterial({
-      color: 0x9c7238,
+      color: 0xb88636,
       metalness: 0.88,
-      roughness: 0.32,
+      roughness: 0.3,
     });
-    const capstanPedestal = new THREE.Mesh(createIncaBlock(1.1, 1.2, 1.1, 0.1, 1.5), quayMat);
-    capstanPedestal.position.set(-180, qH + 1.85, 124);
+    const capstanPedestal = new THREE.Mesh(createIncaBlock(1.15, 1.25, 1.15, 0.1, 1.5), quayMat);
+    capstanPedestal.position.set(-182.6, qH + 0.95, 129.2);
+    capstanPedestal.castShadow = true;
+    capstanPedestal.receiveShadow = true;
     quayGroup.add(capstanPedestal);
 
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.08, 8, 16), bronzeMat);
-    wheel.position.set(-180, qH + 2.55, 124.6);
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.065, 8, 20), bronzeMat);
+    wheel.position.set(-182.6, qH + 1.55, 128.55);
     wheel.castShadow = true;
+
+    // Crossed bronze capstan spokes & central hub so the wheel is mounted to the pedestal
+    for (let s = 0; s < 4; s++) {
+      const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 1.15, 8), bronzeMat);
+      spoke.rotation.z = (s * Math.PI) / 4;
+      wheel.add(spoke);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.36, 12), bronzeMat);
+    hub.rotation.x = Math.PI / 2;
+    hub.position.z = 0.12;
+    wheel.add(hub);
+
     quayGroup.add(wheel);
     this.sluiceWheel = wheel;
     this.interactables.push(wheel);
@@ -124,12 +138,34 @@ export class JungleLowlandsRegion {
   private buildSerpentArches(jungleStoneMat: THREE.MeshStandardMaterial): void {
     const archGroup = new THREE.Group();
 
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xc89628,
+      metalness: 0.9,
+      roughness: 0.32,
+    });
+
     for (let i = 0; i < 3; i++) {
-      const z = 134 + i * 14;
+      const z = 135 + i * 13;
       const h = standAt(-180, z);
-      const gate = buildTrapezoidalGateway(6.5, 1.7, 5.8, 1.8, jungleStoneMat);
+      const gate = buildTrapezoidalGateway(6.2, 1.7, 5.8, 1.8, jungleStoneMat);
       gate.position.set(-180, h - 0.1, z);
+
+      // Carved golden serpent lintel crest on each arch
+      const crest = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.36, 1.92), goldMat);
+      crest.position.set(0, 6.2, 0);
+      gate.add(crest);
+
       archGroup.add(gate);
+    }
+
+    // Mossy stone processional causeway slabs leading through the Serpent Arches to the Cenote
+    for (let s = 0; s < 7; s++) {
+      const sz = 133 + s * 5.5;
+      const sh = standAt(-180, sz);
+      const slab = new THREE.Mesh(createIncaBlock(4.8, 0.28, 4.2, 0.05, 2.0), jungleStoneMat);
+      slab.position.set(-180, sh + 0.06, sz);
+      slab.receiveShadow = true;
+      archGroup.add(slab);
     }
 
     this.group.add(archGroup);
@@ -143,25 +179,39 @@ export class JungleLowlandsRegion {
     const cenoteGroup = new THREE.Group();
     const gH = standAt(-180, 175);
 
-    const basinRim = new THREE.Mesh(
-      new THREE.CylinderGeometry(8.5, 9.5, 2.4, 20, 1, true),
-      wetStoneMat
-    );
-    basinRim.position.set(-180, gH + 1.1, 175);
-    basinRim.castShadow = true;
-    basinRim.receiveShadow = true;
-    cenoteGroup.add(basinRim);
+    // Octagonal ring of 8 battered Inca stone retaining walls framing the Emerald Cenote
+    const numSides = 8;
+    const radius = 8.8;
+    for (let i = 0; i < numSides; i++) {
+      const ang = (i / numSides) * Math.PI * 2 + Math.PI / 8;
+      // Leave an entrance gap on the North (-Z) side facing the Serpent Arches
+      if (Math.sin(ang) < -0.85) continue;
+      const wx = -180 + Math.cos(ang) * radius;
+      const wz = 175 + Math.sin(ang) * radius;
+      const wall = new THREE.Mesh(createIncaBlock(6.6, 1.65, 1.35, 0.12, 1.8), wetStoneMat);
+      wall.position.set(wx, gH + 0.72, wz);
+      wall.rotation.y = -ang + Math.PI / 2;
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      cenoteGroup.add(wall);
+    }
 
     // Central Serpent Altar rising inside the cenote
-    const altar = new THREE.Mesh(createIncaBlock(2.4, 2.8, 2.4, 0.14, 1.8), jungleStoneMat);
-    altar.position.set(-180, gH + 1.1, 175);
+    const altarBase = new THREE.Mesh(createIncaBlock(3.8, 1.2, 3.8, 0.12, 1.8), wetStoneMat);
+    altarBase.position.set(-180, gH + 0.55, 175);
+    altarBase.castShadow = true;
+    altarBase.receiveShadow = true;
+    cenoteGroup.add(altarBase);
+
+    const altar = new THREE.Mesh(createIncaBlock(2.2, 3.4, 2.2, 0.14, 1.8), jungleStoneMat);
+    altar.position.set(-180, gH + 2.1, 175);
     altar.castShadow = true;
     altar.receiveShadow = true;
     cenoteGroup.add(altar);
     this.interactables.push(altar);
 
-    const pool = new THREE.Mesh(new THREE.CylinderGeometry(8.3, 8.3, 0.1, 20), cenoteWaterMat);
-    pool.position.set(-180, gH + 1.15, 175);
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(8.4, 8.4, 0.14, 24), cenoteWaterMat);
+    pool.position.set(-180, gH + 0.65, 175);
     pool.receiveShadow = true;
     this.cenotePool = pool;
     cenoteGroup.add(pool);

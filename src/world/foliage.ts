@@ -270,12 +270,12 @@ export class Foliage {
     if (Math.abs(x) < 7.5 && z > -52 && z < 16) return true;
     // South Spawn Camp clearing
     if (Math.hypot(x, z - 10) < 9.5) return true;
-    // High Sierra Intihuatana & Chakana Gate courtyard
-    if (Math.hypot(x - 120, z - (-175)) < 16) return true;
+    // High Sierra Intihuatana & Chakana Gate courtyard + approach
+    if (Math.hypot(x - 120, z - (-172)) < 25) return true;
     // Jungle Lowlands Quay, Arches & Cenote spine
-    if (Math.abs(x - (-180)) < 11 && z > 116 && z < 188) return true;
+    if (Math.abs(x - (-180)) < 13 && z > 114 && z < 190) return true;
     // Paititi Plaza of the Sun
-    if (Math.hypot(x - 200, z - 182) < 28) return true;
+    if (Math.hypot(x - 200, z - 180) < 30) return true;
     return false;
   }
 

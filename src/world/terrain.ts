@@ -53,18 +53,18 @@ const PEAKS = [
   { x: -5, z: -118, r: 62, h: 86, sharp: 1.35 },
   { x: -95, z: 45, r: 65, h: 68, sharp: 1.4 },
   { x: 98, z: 52, r: 65, h: 72, sharp: 1.4 },
-  // High Sierra Cordillera (around 120, -180)
-  { x: 52, z: -235, r: 70, h: 112, sharp: 1.25 },
-  { x: 188, z: -238, r: 74, h: 118, sharp: 1.25 },
-  { x: 120, z: -265, r: 68, h: 105, sharp: 1.3 },
-  // Jungle Lowlands Karst Cliffs (around -180, 140)
-  { x: -245, z: 155, r: 62, h: 74, sharp: 1.35 },
-  { x: -115, z: 168, r: 58, h: 68, sharp: 1.35 },
-  { x: -182, z: 235, r: 66, h: 82, sharp: 1.3 },
+  // High Sierra Cordillera (framing the Intihuatana Sanctuary at 120, -180)
+  { x: 42, z: -248, r: 66, h: 112, sharp: 1.25 },
+  { x: 198, z: -248, r: 68, h: 118, sharp: 1.25 },
+  { x: 120, z: -278, r: 64, h: 108, sharp: 1.3 },
+  // Jungle Lowlands Karst Cliffs (around -180, 148)
+  { x: -255, z: 165, r: 62, h: 74, sharp: 1.35 },
+  { x: -105, z: 168, r: 58, h: 68, sharp: 1.35 },
+  { x: -180, z: 248, r: 66, h: 82, sharp: 1.3 },
   // Paititi Sacred Mountain Amphitheater (around 200, 180)
-  { x: 135, z: 235, r: 64, h: 92, sharp: 1.3 },
-  { x: 265, z: 232, r: 66, h: 96, sharp: 1.3 },
-  { x: 202, z: 262, r: 70, h: 108, sharp: 1.25 },
+  { x: 128, z: 245, r: 64, h: 92, sharp: 1.3 },
+  { x: 272, z: 245, r: 66, h: 96, sharp: 1.3 },
+  { x: 200, z: 272, r: 70, h: 112, sharp: 1.25 },
   // Distant Horizon Massifs
   { x: 420, z: -380, r: 240, h: 210, sharp: 1.3 },
   { x: -420, z: -360, r: 240, h: 195, sharp: 1.3 },
@@ -73,57 +73,12 @@ const PEAKS = [
 ];
 
 export function rawHeight(x: number, z: number): number {
-  // 1. Base high-altitude Andean landmass (always above sea level except in carved river gorges)
+  // 1. Base high-altitude Andean landmass
   const n1 = fbm(x, z);
   const crag = ridgedFbm(x, z);
   let h = 6.5 + (n1 - 0.45) * 18.0 + Math.pow(crag, 1.5) * 16.0;
 
-  // 2. Urubamba River Gorge (runs East-West centered around z = -17, spanned by the bridge at x = 0, z = 2..-36)
-  const riverCurveZ = -17.0 + Math.sin(x * 0.018) * 6.5 * smooth(8, 35, Math.abs(x));
-  const distToRiver = Math.abs(z - riverCurveZ);
-  if (distToRiver < 22) {
-    // Plunge into deep river canyon (-4.8m water channel, steep stratified canyon walls at dist 11..19m)
-    const gorgeT = smooth(19, 9, distToRiver);
-    h = THREE.MathUtils.lerp(h, -4.8, gorgeT);
-  }
-
-  // 3. Cloud Forest South Camp Plateau (z = 2..24, x = -22..22) & North Sanctuary Plateau (z = -36..-56, x = -22..22)
-  const southCampDist = Math.hypot((x - 0) * 0.85, z - 12);
-  if (z > -1 && southCampDist < 26) {
-    const flatT = smooth(24, 8, southCampDist);
-    h = THREE.MathUtils.lerp(h, 4.2, flatT);
-  }
-  const northSanctuaryDist = Math.hypot((x - 0) * 0.85, z - (-46));
-  if (z < -33 && northSanctuaryDist < 26) {
-    const flatT = smooth(24, 9, northSanctuaryDist);
-    h = THREE.MathUtils.lerp(h, 4.5, flatT);
-  }
-
-  // 4. High Sierra terraced ridge at (120, -180)
-  const hsDist = Math.hypot(x - 120, z - (-180));
-  if (hsDist < 120) {
-    const plateau = 28.0 + Math.max(0, (-160 - z) * 0.22);
-    h = THREE.MathUtils.lerp(h, plateau, smooth(95, 28, hsDist));
-  }
-
-  // 5. Antisuyu Jungle Lowlands Cenote & River Basin at (-180, 140)
-  const jlDist = Math.hypot(x - (-180), z - 148);
-  if (jlDist < 95) {
-    h = THREE.MathUtils.lerp(h, 2.2, smooth(85, 24, jlDist));
-    // River harbor in front of Expedition Quay (z = 100..122)
-    const quayRiverDist = Math.hypot((x - (-180)) * 0.6, z - 110);
-    if (quayRiverDist < 24) {
-      h = THREE.MathUtils.lerp(h, -2.6, smooth(22, 8, quayRiverDist));
-    }
-  }
-
-  // 6. Paititi Imperial Acropolis Plateau at (200, 180)
-  const ptDist = Math.hypot(x - 200, z - 185);
-  if (ptDist < 110) {
-    h = THREE.MathUtils.lerp(h, 24.0, smooth(95, 32, ptDist));
-  }
-
-  // 7. Dramatic Huayna-Picchu Monoliths & Cordillera Peaks with Ridged Crags
+  // 2. Dramatic Huayna-Picchu Monoliths & Cordillera Peaks with Ridged Crags
   for (const p of PEAKS) {
     const d = Math.hypot(x - p.x, z - p.z) / p.r;
     if (d < 1) {
@@ -133,11 +88,54 @@ export function rawHeight(x: number, z: number): number {
     }
   }
 
-  // 8. Natural Inca Geological Strata Steps on steep slopes (h > 6m)
+  // 3. Natural Inca Geological Strata Steps on steep slopes (h > 6.5m)
   if (h > 6.5) {
     const strataMask = smooth(6.5, 18.0, h);
     const strataWave = Math.sin(h * 1.35 + vnoise(x * 0.08, z * 0.08) * 1.8);
     h += strataWave * 0.42 * strataMask;
+  }
+
+  // 4. Urubamba River Gorge (runs East-West centered around z = -17, spanned by the bridge at x = 0, z = 2..-36)
+  const riverCurveZ = -17.0 + Math.sin(x * 0.018) * 6.5 * smooth(8, 35, Math.abs(x));
+  const distToRiver = Math.abs(z - riverCurveZ);
+  if (distToRiver < 22) {
+    const gorgeT = smooth(19, 9, distToRiver);
+    h = THREE.MathUtils.lerp(h, -4.8, gorgeT);
+  }
+
+  // 5. Cloud Forest South Camp Plateau (z = 2..24, x = -22..22) & North Sanctuary Plateau (z = -36..-56, x = -22..22)
+  const southCampDist = Math.hypot((x - 0) * 0.85, z - 12);
+  if (z > -1 && southCampDist < 26) {
+    const flatT = smooth(24, 9, southCampDist);
+    h = THREE.MathUtils.lerp(h, 4.2, flatT);
+  }
+  const northSanctuaryDist = Math.hypot((x - 0) * 0.85, z - (-46));
+  if (z < -33 && northSanctuaryDist < 26) {
+    const flatT = smooth(24, 9, northSanctuaryDist);
+    h = THREE.MathUtils.lerp(h, 4.5, flatT);
+  }
+
+  // 6. High Sierra Intihuatana Sanctuary Plateau at (120, -180)
+  const hsDist = Math.hypot(x - 120, z - (-178));
+  if (hsDist < 95) {
+    h = THREE.MathUtils.lerp(h, 28.0, smooth(82, 34, hsDist));
+  }
+
+  // 7. Antisuyu Jungle Lowlands Cenote & River Basin at (-180, 148)
+  const jlDist = Math.hypot(x - (-180), z - 148);
+  if (jlDist < 95) {
+    h = THREE.MathUtils.lerp(h, 2.2, smooth(85, 32, jlDist));
+    // River harbor in front of Expedition Quay (z = 98..120)
+    const quayRiverDist = Math.hypot((x - (-180)) * 0.6, z - 108);
+    if (quayRiverDist < 24) {
+      h = THREE.MathUtils.lerp(h, -2.6, smooth(22, 8, quayRiverDist));
+    }
+  }
+
+  // 8. Paititi Imperial Acropolis Plateau at (200, 185)
+  const ptDist = Math.hypot(x - 200, z - 185);
+  if (ptDist < 105) {
+    h = THREE.MathUtils.lerp(h, 24.0, smooth(90, 38, ptDist));
   }
 
   return h;

@@ -87,12 +87,24 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
     const y = pos.getY(i);
     const z = pos.getZ(i);
 
-    // Slightly inflate interior joint spheres so recessed mannequin socket seams vanish
-    if (isJointMesh && nrmAttr) {
-      const nx = nrmAttr.getX(i);
-      const ny = nrmAttr.getY(i);
-      const nz = nrmAttr.getZ(i);
-      pos.setXYZ(i, x + nx * 0.0045, y + ny * 0.0045, z + nz * 0.0045);
+    // Inflate interior joint spheres flush with outer shell and smooth 90-degree mannequin socket rim normals
+    if (nrmAttr) {
+      let nx = nrmAttr.getX(i);
+      let ny = nrmAttr.getY(i);
+      let nz = nrmAttr.getZ(i);
+      if (isJointMesh) {
+        pos.setXYZ(i, x + nx * 0.0085, y + ny * 0.0085, z + nz * 0.0085);
+      }
+      // Dampen steep vertical crease normals on torso/limb socket rims so plate seams vanish
+      const normH = (y - minY) / rangeY;
+      if (normH > 0.12 && normH < 0.88) {
+        const horizLen = Math.hypot(nx, nz);
+        if (horizLen > 0.05 && Math.abs(ny) > 0.35) {
+          ny *= 0.28;
+          const invL = 1.0 / Math.hypot(nx, ny, nz);
+          nrmAttr.setXYZ(i, nx * invL, ny * invL, nz * invL);
+        }
+      }
     }
 
     const angle = Math.atan2(z, x);
@@ -143,6 +155,7 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
   }
 
   pos.needsUpdate = true;
+  if (nrmAttr) nrmAttr.needsUpdate = true;
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 }
@@ -279,37 +292,40 @@ export class Naira {
       // Subtle nose bridge and lips blended onto the front of the face
       const nose = new THREE.Mesh(new THREE.ConeGeometry(0.011, 0.028, 6), skinMat);
       nose.rotation.x = Math.PI * 0.44;
-      nose.position.set(0, 0.094, 0.110);
+      nose.position.set(0, 0.094, 0.111);
       headGroup.add(nose);
 
       const lipMat = new THREE.MeshStandardMaterial({ color: 0x965044, roughness: 0.55 });
       const lips = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.008, 0.01), lipMat);
-      lips.position.set(0, 0.065, 0.103);
+      lips.position.set(0, 0.066, 0.104);
       headGroup.add(lips);
 
-      const scleraMat = new THREE.MeshStandardMaterial({ color: 0xf2ece2, roughness: 0.35 });
-      const irisMat = new THREE.MeshStandardMaterial({ color: 0x24160e, roughness: 0.25 });
+      const scleraMat = new THREE.MeshStandardMaterial({ color: 0xf4eee6, roughness: 0.3 });
+      const irisMat = new THREE.MeshStandardMaterial({ color: 0x24160e, roughness: 0.2 });
+      const catchlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       for (const side of [-1, 1]) {
         const eyeGroup = new THREE.Group();
-        eyeGroup.position.set(side * 0.034, 0.110, 0.104);
-        eyeGroup.rotation.y = side * 0.22;
+        eyeGroup.position.set(side * 0.032, 0.114, 0.108);
+        eyeGroup.rotation.y = side * 0.20;
 
-        const sclera = new THREE.Mesh(new THREE.BoxGeometry(0.021, 0.009, 0.006), scleraMat);
-        const iris = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.009, 0.007), irisMat);
+        const sclera = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.010, 0.006), scleraMat);
+        const iris = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.010, 0.007), irisMat);
         iris.position.set(0, 0, 0.001);
-        const lash = new THREE.Mesh(new THREE.BoxGeometry(0.023, 0.003, 0.008), darkHairMat);
-        lash.position.set(0, 0.005, 0.001);
-        const brow = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.005, 0.008), darkHairMat);
-        brow.position.set(0, 0.014, 0.001);
-        brow.rotation.z = -side * 0.1;
+        const catchlight = new THREE.Mesh(new THREE.BoxGeometry(0.0035, 0.0035, 0.008), catchlightMat);
+        catchlight.position.set(0.0025, 0.002, 0.0015);
+        const lash = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.003, 0.008), darkHairMat);
+        lash.position.set(0, 0.0055, 0.001);
+        const brow = new THREE.Mesh(new THREE.BoxGeometry(0.027, 0.0045, 0.008), darkHairMat);
+        brow.position.set(0, 0.0145, 0.001);
+        brow.rotation.z = -side * 0.08;
 
-        eyeGroup.add(sclera, iris, lash, brow);
+        eyeGroup.add(sclera, iris, catchlight, lash, brow);
         headGroup.add(eyeGroup);
 
         // Side-swept temple hair locks framing Naira's cheekbones without covering eyes
         const sideLock = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.11, 6, 8), darkHairMat);
-        sideLock.position.set(side * 0.088, 0.088, 0.018);
-        sideLock.rotation.z = side * 0.12;
+        sideLock.position.set(side * 0.082, 0.088, 0.018);
+        sideLock.rotation.z = side * 0.10;
         sideLock.rotation.x = 0.16;
         headGroup.add(sideLock);
       }
@@ -319,7 +335,7 @@ export class Naira {
         new THREE.SphereGeometry(0.114, 18, 16),
         darkHairMat
       );
-      hairCap.scale.set(0.96, 1.02, 1.04);
+      hairCap.scale.set(0.92, 1.02, 1.04);
       hairCap.position.set(0, 0.146, -0.026);
       headGroup.add(hairCap);
 
@@ -362,12 +378,13 @@ export class Naira {
         parentPivot = pivot;
       }
 
-      // Quechua woven headband
+      // Quechua woven headband fitted snugly to oval skull width (0.76 X scale)
       const bandMesh = new THREE.Mesh(
-        new THREE.TorusGeometry(0.118, 0.014, 8, 24),
+        new THREE.TorusGeometry(0.116, 0.013, 8, 24),
         new THREE.MeshStandardMaterial({ map: weaveTex, color: 0xd47a38, roughness: 0.7 })
       );
       bandMesh.rotation.x = Math.PI / 2 - 0.15;
+      bandMesh.scale.set(0.76, 0.96, 1.0);
       bandMesh.position.set(0, 0.155, 0.002);
       headGroup.add(bandMesh);
 

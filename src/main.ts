@@ -111,13 +111,14 @@ async function bootJuzu() {
     ...paititi.interactables,
   ];
 
-  // Survival Instinct Objective Beacon Column
-  const beaconGeom = new THREE.CylinderGeometry(0.15, 0.45, 38, 12, 1, true);
+  // Survival Instinct Objective Beacon Column (Additive volumetric light shaft)
+  const beaconGeom = new THREE.CylinderGeometry(0.12, 0.55, 38, 16, 1, true);
   beaconGeom.translate(0, 19, 0);
   const beaconMat = new THREE.MeshBasicMaterial({
     color: 0xffd25a,
     transparent: true,
     opacity: 0.0,
+    blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -127,13 +128,27 @@ async function bootJuzu() {
 
   // 8. Player: Controller, Naira Model, FollowCamera
   let startPos = SPAWN.clone();
-  if (regionParam === 'highSierra') startPos.set(120, standAt(120, -156), -156);
-  else if (regionParam === 'jungleLowlands') startPos.set(-180, standAt(-180, 118) + 2.2, 118);
-  else if (regionParam === 'paititi') startPos.set(200, standAt(200, 168) + 0.9, 168);
+  let startHeading = Math.PI;
+  let startCamYaw = 0;
+  if (regionParam === 'highSierra') {
+    startPos.set(120, standAt(120, -154), -154);
+    startHeading = Math.PI;
+    startCamYaw = 0;
+  } else if (regionParam === 'jungleLowlands') {
+    startPos.set(-180, standAt(-180, 126.5) + 0.5, 126.5);
+    startHeading = 0;
+    startCamYaw = Math.PI;
+  } else if (regionParam === 'paititi') {
+    startPos.set(200, standAt(200, 166) + 0.8, 166);
+    startHeading = 0;
+    startCamYaw = Math.PI;
+  }
 
   const controller = new Controller(startPos);
+  controller.heading = startHeading;
   const naira = new Naira(scene);
   const followCamera = new FollowCamera(camera);
+  followCamera.yaw = startCamYaw;
   followCamera.teleport(startPos);
 
   // 9. Input & Audio
@@ -156,15 +171,23 @@ async function bootJuzu() {
     onSelectRegion: (r) => {
       let target = SPAWN.clone();
       if (r === 'highSierra') {
-        target.set(120, standAt(120, -156), -156);
+        target.set(120, standAt(120, -154), -154);
+        controller.heading = Math.PI;
+        followCamera.yaw = 0;
         hud.setObjective('Align the Intihuatana Gnomon Dial [E] with the Chakana Gate.');
       } else if (r === 'jungleLowlands') {
-        target.set(-180, standAt(-180, 118) + 2.2, 118);
+        target.set(-180, standAt(-180, 126.5) + 0.5, 126.5);
+        controller.heading = 0;
+        followCamera.yaw = Math.PI;
         hud.setObjective('Turn the Ancient Bronze Sluice Wheel on the Quay [E] to lower the Cenote.');
       } else if (r === 'paititi') {
-        target.set(200, standAt(200, 168) + 0.9, 168);
+        target.set(200, standAt(200, 166) + 0.8, 166);
+        controller.heading = 0;
+        followCamera.yaw = Math.PI;
         hud.setObjective('Approach the Golden Sun Disk Dais [E] to awaken the Plaza of the Sun.');
       } else {
+        controller.heading = Math.PI;
+        followCamera.yaw = 0;
         hud.setObjective('Align the bronze Inti sun-mirror on the south cliff [E] or cross the hanging bridge to the North Sanctuary.');
       }
 
@@ -183,6 +206,14 @@ async function bootJuzu() {
       lightRig.applyToD(tod);
     },
   });
+
+  if (regionParam === 'highSierra') {
+    hud.setObjective('Align the Intihuatana Gnomon Dial [E] with the Chakana Gate.');
+  } else if (regionParam === 'jungleLowlands') {
+    hud.setObjective('Turn the Ancient Bronze Sluice Wheel on the Quay [E] to lower the Cenote.');
+  } else if (regionParam === 'paititi') {
+    hud.setObjective('Approach the Golden Sun Disk Dais [E] to awaken the Plaza of the Sun.');
+  }
 
   // Dismiss legacy HTML boot splash so only the interactive HUD title screen is shown
   const bootSplash = document.getElementById('title');

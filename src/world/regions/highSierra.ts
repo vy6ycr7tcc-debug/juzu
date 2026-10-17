@@ -101,22 +101,38 @@ export class HighSierraRegion {
     tier1.receiveShadow = true;
     gnomonGroup.add(tier1);
 
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.1, 0.9, 12), bedrockMat);
-    base.position.set(120, gH + 0.95, -165);
-    base.castShadow = true;
-    base.receiveShadow = true;
-    gnomonGroup.add(base);
-    this.interactables.push(base);
+    const tier2 = new THREE.Mesh(createIncaBlock(4.4, 0.65, 4.4, 0.12, 1.8), ashlarMat);
+    tier2.position.set(120, gH + 0.82, -165);
+    tier2.castShadow = true;
+    tier2.receiveShadow = true;
+    gnomonGroup.add(tier2);
+    this.interactables.push(tier2);
+
+    const tier3 = new THREE.Mesh(createIncaBlock(2.6, 0.55, 2.6, 0.14, 1.6), bedrockMat);
+    tier3.position.set(120, gH + 1.38, -165);
+    tier3.castShadow = true;
+    tier3.receiveShadow = true;
+    gnomonGroup.add(tier3);
 
     // Upright carved gnomon prism with bronze solstice ring
-    const column = new THREE.Mesh(createIncaBlock(0.85, 2.4, 0.85, 0.14, 1.4), bedrockMat);
-    column.position.set(120, gH + 2.35, -165);
+    const column = new THREE.Mesh(createIncaBlock(0.92, 2.2, 0.92, 0.14, 1.4), bedrockMat);
+    column.position.set(120, gH + 2.55, -165);
     column.rotation.y = 0.68;
     column.castShadow = true;
     column.receiveShadow = true;
     gnomonGroup.add(column);
     this.gnomonColumn = column;
     this.interactables.push(column);
+
+    const bronzeMat = new THREE.MeshStandardMaterial({
+      color: 0xc8963e,
+      metalness: 0.9,
+      roughness: 0.28,
+    });
+    const solsticeRing = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.055, 8, 20), bronzeMat);
+    solsticeRing.position.set(120, gH + 3.15, -165);
+    solsticeRing.castShadow = true;
+    gnomonGroup.add(solsticeRing);
 
     this.group.add(gnomonGroup);
   }
