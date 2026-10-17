@@ -33,6 +33,18 @@ export class Input {
     this.virtualJump = active;
   }
 
+  public triggerVirtualInteract(): void {
+    this.interactLatched = true;
+  }
+
+  public triggerVirtualInstinct(): void {
+    this.instinctLatched = true;
+  }
+
+  public triggerVirtualJournal(): void {
+    this.journalLatched = true;
+  }
+
   get boost(): boolean {
     return this.enabled && (this.keys.has('shift') || this.joyRun > 0.5 || this.virtualBoost);
   }

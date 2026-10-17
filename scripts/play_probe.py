@@ -26,7 +26,7 @@ def main():
 
         print("1. Booting game at South Camp...")
         page.goto("http://127.0.0.1:5173/juzu/?play=true", wait_until="load", timeout=30000)
-        page.wait_for_function("() => window.__shotReady === true || (window.__juzuEngine && window.__juzuEngine.foliage && window.__juzuEngine.foliage.isLoaded)", timeout=45000)
+        page.wait_for_function("() => window.__juzuReady === true", timeout=45000)
         time.sleep(1.0)
 
         # Milestone 1: South Camp starting vista

@@ -13,6 +13,7 @@ export class CloudForestRegion {
   private mirrorHead?: THREE.Group;
   private sunBeamGroup?: THREE.Group;
   private steleChakanaMat?: THREE.MeshStandardMaterial;
+  private steleLight?: THREE.PointLight;
   private fireLight?: THREE.PointLight;
   private flameMeshes: THREE.Mesh[] = [];
   private sparkMeshes: THREE.Mesh[] = [];
@@ -138,9 +139,15 @@ export class CloudForestRegion {
       this.steleChakanaMat.emissive.setHex(0xd49b24);
       this.steleChakanaMat.emissiveIntensity = 0.65;
     }
+    if (this.steleLight) {
+      this.steleLight.intensity = 3.8;
+    }
   }
 
   public update(time: number): void {
+    if (this.mirrorAligned && this.steleLight) {
+      this.steleLight.intensity = 3.8 + Math.sin(time * 7.5) * 0.45;
+    }
     if (this.fireLight) {
       this.fireLight.intensity = 2.6 + Math.sin(time * 11.3) * 0.42 + Math.cos(time * 17.7) * 0.22;
     }
@@ -550,6 +557,11 @@ export class CloudForestRegion {
 
     crossGroup.add(barH, barV, midStep, centerHole);
     steleGroup.add(crossGroup);
+
+    const steleLight = new THREE.PointLight(0xffd566, 0.0, 16, 1.4);
+    steleLight.position.set(0, 2.55, 0.65);
+    steleGroup.add(steleLight);
+    this.steleLight = steleLight;
 
     // Flanking stone altar columns
     for (const sx of [-2.3, 2.3]) {
