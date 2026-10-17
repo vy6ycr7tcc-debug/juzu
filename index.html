@@ -35,48 +35,11 @@
       #surface {
         z-index: 10;
       }
-      /* Virtual Joystick for Mobile */
-      #joy {
-        display: none;
+      #juzu-touch-layer {
         position: fixed;
-        width: 112px;
-        height: 112px;
-        border-radius: 50%;
-        border: 2px solid rgba(212, 184, 136, 0.45);
+        inset: 0;
         pointer-events: none;
-        z-index: 25;
-      }
-      #knob {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 44px;
-        height: 44px;
-        margin: -22px 0 0 -22px;
-        border-radius: 50%;
-        background: rgba(212, 184, 136, 0.65);
-        border: 1px solid #ffd700;
-        box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
-      }
-      #act {
-        display: none;
-        position: fixed;
-        right: 28px;
-        bottom: 28px;
-        width: 68px;
-        height: 68px;
-        border-radius: 50%;
-        background: rgba(18, 24, 20, 0.85);
-        border: 2px solid #c9a468;
-        color: #f2ede4;
-        font-family: Georgia, serif;
-        font-size: 13px;
-        letter-spacing: 0.08em;
-        cursor: pointer;
-        z-index: 25;
-      }
-      @media (pointer: coarse) {
-        #act { display: flex; align-items: center; justify-content: center; }
+        z-index: 35;
       }
       @keyframes juzuChakanaGlow {
         0%, 100% { filter: drop-shadow(0 0 10px rgba(220, 185, 130, 0.45)); transform: scale(1.0); }
@@ -105,11 +68,27 @@
 
     <canvas id="gl"></canvas>
     <div id="surface"></div>
-    <div id="joy"><div id="knob"></div></div>
-    <button id="act" type="button">JUMP</button>
+    <div id="juzu-touch-layer"></div>
 
     <script>
-      // Dismiss loading screen when ready
+      window.__juzuDismissLoading = function() {
+        var el = document.getElementById('juzu-loading-screen');
+        if (el) {
+          el.style.pointerEvents = 'none';
+          el.style.opacity = '0';
+          setTimeout(function() { el.style.display = 'none'; }, 400);
+        }
+      };
+
+      // Tap-to-dismiss safety: tapping screen after ready dismisses immediately
+      var loadingEl = document.getElementById('juzu-loading-screen');
+      if (loadingEl) {
+        loadingEl.addEventListener('click', function() {
+          if (window.__juzuReady) window.__juzuDismissLoading();
+        });
+      }
+
+      // Dismiss loading screen as soon as ready
       var checkReady = setInterval(function() {
         if (window.__juzuReady) {
           clearInterval(checkReady);
@@ -118,14 +97,10 @@
           if (bar) bar.style.width = '100%';
           if (status) status.textContent = 'Expedition Ready';
           setTimeout(function() {
-            var el = document.getElementById('juzu-loading-screen');
-            if (el) {
-              el.style.opacity = '0';
-              setTimeout(function() { el.style.display = 'none'; }, 750);
-            }
-          }, 300);
+            window.__juzuDismissLoading();
+          }, 150);
         }
-      }, 50);
+      }, 40);
     </script>
     <script type="module" src="/src/main.ts"></script>
   </body>

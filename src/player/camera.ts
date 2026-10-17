@@ -39,7 +39,8 @@ export class FollowCamera {
     isCrouching: boolean = false,
     isInstinct: boolean = false,
     playerVel?: THREE.Vector3,
-    isGrounded: boolean = true
+    isGrounded: boolean = true,
+    isAiming: boolean = false
   ): void {
     // 1. Process look inputs
     const sens = 0.0022 * this.sensitivity;
@@ -51,17 +52,34 @@ export class FollowCamera {
     this.landingDipVel += (-this.landingDip * 42 - this.landingDipVel * 9.5) * dt;
     this.landingDip += this.landingDipVel * dt;
 
-    // 3. Dynamic Distance & FOV Kick
-    const targetDist = isSprinting
-      ? this.baseDist + 1.25
-      : isCrouching
-        ? Math.max(4.2, this.baseDist - 0.95)
-        : this.baseDist;
-    this.dist = THREE.MathUtils.lerp(this.dist, targetDist, Math.min(1, dt * 5));
+    // 3. Adaptive Mobile Orientation & Dynamic Distance
+    const aspect = Math.max(0.2, this.camera.aspect || window.innerWidth / window.innerHeight);
+    const isPortrait = aspect < 1.0;
 
-    const targetFov = isInstinct ? 46 : isSprinting ? 58 : isCrouching ? 48 : 52;
-    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
-      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1, dt * 8));
+    // In portrait, pull camera back slightly so character figure and grounding stay in frame
+    const portraitDistMultiplier = isPortrait ? 1.14 : 1.0;
+    const targetDist = isAiming
+      ? Math.max(2.6, this.baseDist - 3.4)
+      : isSprinting
+        ? (this.baseDist + 1.25) * portraitDistMultiplier
+        : isCrouching
+          ? Math.max(4.2, this.baseDist - 0.95) * portraitDistMultiplier
+          : this.baseDist * portraitDistMultiplier;
+    this.dist = THREE.MathUtils.lerp(this.dist, targetDist, Math.min(1, dt * 6));
+
+    // Dynamic FOV: in portrait, scale vertical FOV so horizontal field of view stays open and cinematic (~72-76 deg)
+    let baseFov = isAiming ? 38 : isInstinct ? 46 : isSprinting ? 58 : isCrouching ? 48 : 52;
+    if (isPortrait) {
+      // Horizontal FOV = 2 * atan(tan(verticalFov/2) * aspect)
+      // To keep horizontal FOV around 72 deg: verticalFov = 2 * atan(tan(36 deg) / aspect)
+      const desiredHalfHRad = Math.tan(THREE.MathUtils.degToRad(36.0));
+      const compensatedVertFov = 2.0 * Math.atan(desiredHalfHRad / aspect) * (180.0 / Math.PI);
+      baseFov = isAiming ? compensatedVertFov * 0.72 : compensatedVertFov;
+      baseFov = THREE.MathUtils.clamp(baseFov, 55, 82);
+    }
+
+    if (Math.abs(this.camera.fov - baseFov) > 0.05) {
+      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, baseFov, Math.min(1, dt * 8));
       this.camera.updateProjectionMatrix();
     }
 
@@ -80,15 +98,23 @@ export class FollowCamera {
       cadenceBobY = Math.sin(this.stridePhase) * bobAmp * Math.min(1, speedHoriz / 3.0);
     }
 
-    // 5. Over-the-Shoulder Target Framing (places Naira in left-center third of viewport)
+    // 5. Over-the-Shoulder Target Framing
     const sinYaw = Math.sin(this.yaw);
     const cosYaw = Math.cos(this.yaw);
     const rightX = cosYaw;
     const rightZ = -sinYaw;
 
-    // Reduce shoulder offset if zoomed in close or in wide vista mode
-    const activeShoulder =
-      this.dist < 2.5 ? 0.0 : this.dist > 9.0 ? this.shoulderOffset * 0.35 : this.shoulderOffset;
+    // Center the character horizontally in portrait to avoid edge clipping
+    const activeShoulder = isPortrait
+      ? (isAiming ? 0.22 : 0.0)
+      : isAiming
+        ? 0.58
+        : this.dist < 2.5
+          ? 0.0
+          : this.dist > 9.0
+            ? this.shoulderOffset * 0.35
+            : this.shoulderOffset;
+
     const eyeHeight = (isCrouching ? 1.18 : 1.54) + this.landingDip + cadenceBobY;
 
     const targetGoal = new THREE.Vector3(

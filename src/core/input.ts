@@ -14,6 +14,35 @@ export class Input {
   private virtualMove: { x: number; y: number } | null = null;
   private virtualBoost = false;
   private virtualJump = false;
+  public virtualCrouch = false;
+  private shootLatched = false;
+  private aimLatched = false;
+
+  public triggerVirtualShoot(): void {
+    this.shootLatched = true;
+  }
+
+  public triggerVirtualAim(): void {
+    this.aimLatched = true;
+  }
+
+  get shoot(): boolean {
+    if (!this.enabled) return false;
+    if (this.shootLatched) {
+      this.shootLatched = false;
+      return true;
+    }
+    return this.keys.has('r');
+  }
+
+  get aim(): boolean {
+    if (!this.enabled) return false;
+    if (this.aimLatched) {
+      this.aimLatched = false;
+      return true;
+    }
+    return this.keys.has('v');
+  }
 
   public setVirtualMove(x: number, y: number): void {
     const len = Math.hypot(x, y);
@@ -54,7 +83,7 @@ export class Input {
   }
 
   get crouch(): boolean {
-    return this.enabled && this.keys.has('c');
+    return this.enabled && (this.keys.has('c') || this.virtualCrouch);
   }
 
   get interact(): boolean {

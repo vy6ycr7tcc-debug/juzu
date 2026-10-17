@@ -169,35 +169,35 @@ export class Terrain {
     this.group.name = 'Andean_Terrain';
     scene.add(this.group);
 
-    // 2048x2048 Photorealistic Andean Cloud-Forest Floor & Organic Leaf Litter (Poly Haven CC0)
+    // 2048x2048 Photorealistic Andean High-Altitude Mountain & Rocky Trail Scans (Poly Haven CC0)
     const texLoader = new THREE.TextureLoader();
-    const groundTex = texLoader.load('/juzu/textures/scans/forest_leaves_02_diffuse_2k.webp');
+    const groundTex = texLoader.load('/juzu/textures/scans/rocky_trail_diffuse_2k.webp');
     groundTex.colorSpace = THREE.SRGBColorSpace;
     groundTex.anisotropy = 8;
     groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
 
-    const groundNor = texLoader.load('/juzu/textures/scans/forest_leaves_02_nor_gl_2k.webp');
+    const groundNor = texLoader.load('/juzu/textures/scans/rocky_trail_nor_gl_2k.webp');
     groundNor.anisotropy = 8;
     groundNor.wrapS = groundNor.wrapT = THREE.RepeatWrapping;
 
-    const groundRough = texLoader.load('/juzu/textures/scans/forest_leaves_02_rough_2k.webp');
+    const groundRough = texLoader.load('/juzu/textures/scans/rocky_trail_rough_2k.webp');
     groundRough.anisotropy = 8;
     groundRough.wrapS = groundRough.wrapT = THREE.RepeatWrapping;
 
-    const groundAO = texLoader.load('/juzu/textures/scans/forest_leaves_02_ao_2k.webp');
+    const groundAO = texLoader.load('/juzu/textures/scans/rocky_trail_ao_2k.webp');
     groundAO.wrapS = groundAO.wrapT = THREE.RepeatWrapping;
 
     this.material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+      color: 0xf6f0e6,
       vertexColors: true,
-      roughness: 0.88,
-      metalness: 0.02,
+      roughness: 0.82,
+      metalness: 0.03,
       map: groundTex,
       normalMap: groundNor,
-      normalScale: new THREE.Vector2(1.5, 1.5),
+      normalScale: new THREE.Vector2(2.4, 2.4),
       roughnessMap: groundRough,
       aoMap: groundAO,
-      aoMapIntensity: 0.85,
+      aoMapIntensity: 0.95,
       flatShading: false,
     });
   }
@@ -273,17 +273,34 @@ export class Terrain {
       const ny = normAttr.getY(i);
       const nz = normAttr.getZ(i);
 
-      // 3D arc-length UV projection so vertical cliff walls never stretch textures (~4.5m per 2K tile)
-      const tileFreq = 0.22;
-      uvAttr.setXY(
-        i,
-        (vx + Math.sign(nx || 1) * vy * 0.78) * tileFreq,
-        (vz + Math.sign(nz || 1) * vy * 0.78) * tileFreq
-      );
+      // Stochastic dual-frequency UV perturbation: completely breaks repeating tile patterns
+      const nU = vnoise(vx * 0.032 + 11.2, vz * 0.032 - 7.8) * 3.2;
+      const nV = vnoise(vx * 0.032 - 14.3, vz * 0.032 + 22.1) * 3.2;
+      const isSteepCliff = ny < 0.62;
 
-      // Micro-noise & horizontal rock strata banding
+      let uCoord: number;
+      let vCoord: number;
+
+      if (isSteepCliff) {
+        // Triplanar vertical cliff projection: maps texture horizontally along rock face & vertically with height
+        const dominantX = Math.abs(nx) > Math.abs(nz);
+        const horizDist = dominantX ? vz : vx;
+        uCoord = (horizDist + nU * 0.45) * 0.16;
+        vCoord = (vy + nV * 0.45) * 0.20;
+      } else {
+        // High-altitude alpine soil & rocky plateau with dual-angle noise warping
+        const tileScale = 0.14;
+        uCoord = (vx + nU) * tileScale;
+        vCoord = (vz + nV) * tileScale;
+      }
+
+      uvAttr.setXY(i, uCoord, vCoord);
+
+      // Micro-noise, macro-soil patches & horizontal rock strata banding
       const detailNoise = vnoise(vx * 0.14, vz * 0.14);
-      const strataBand = 0.84 + 0.16 * Math.sin(vy * 2.6 + detailNoise * 3.0);
+      const macroSoil = vnoise(vx * 0.022, vz * 0.022);
+      const microGravel = vnoise(vx * 0.38, vz * 0.38);
+      const strataBand = 0.82 + 0.18 * Math.sin(vy * 2.8 + detailNoise * 3.2);
 
       // Slope factor: 1 = flat Andean valley/terrace, 0 = sheer granite gorge wall
       const slope = THREE.MathUtils.clamp((ny - 0.58) / 0.28, 0, 1);
@@ -298,21 +315,21 @@ export class Terrain {
       const riverbank = THREE.MathUtils.clamp((vy - 0.4) / 2.2, 0, 1);
 
       // Steep granite cliff color (stratified warm-charcoal andesite) vs lush cloud-forest moss/pebble floor
-      const rockR = 0.64 * strataBand;
-      const rockG = 0.60 * strataBand + mossCrevice * 0.18;
-      const rockB = 0.56 * strataBand;
+      const rockR = (0.58 + macroSoil * 0.12) * strataBand;
+      const rockG = (0.54 + macroSoil * 0.10) * strataBand + mossCrevice * 0.18;
+      const rockB = (0.50 + macroSoil * 0.08) * strataBand;
 
-      const grassR = 0.74 + detailNoise * 0.18;
-      const grassG = 0.88 + detailNoise * 0.16;
-      const grassB = 0.66 + detailNoise * 0.12;
+      const grassR = 0.70 + detailNoise * 0.14 + (macroSoil - 0.5) * 0.12;
+      const grassG = 0.84 + detailNoise * 0.14 + (macroSoil - 0.5) * 0.10;
+      const grassB = 0.62 + detailNoise * 0.10;
 
       // Above 28m, transition vegetation into rugged high-alpine stone & scree before snowline
       const alpineRockMask = THREE.MathUtils.clamp((vy - 28) / 14, 0, 1);
       const effectiveSlope = slope * (1 - alpineRockMask * 0.78);
 
-      let r = THREE.MathUtils.lerp(rockR, grassR, effectiveSlope);
-      let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope);
-      let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope);
+      let r = THREE.MathUtils.lerp(rockR, grassR, effectiveSlope) + (microGravel - 0.5) * 0.05;
+      let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope) + (microGravel - 0.5) * 0.05;
+      let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope) + (microGravel - 0.5) * 0.04;
 
       // Worn stone-and-earth expedition footpath along the sanctuary trail & inter-region routes
       const rInf = getRouteInfluence(vx, vz);
@@ -350,7 +367,7 @@ export class Terrain {
 
     uvAttr.needsUpdate = true;
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geom.setAttribute('uv2', geom.attributes.uv);
+    geom.setAttribute('uv2', uvAttr.clone());
 
     const mesh = new THREE.Mesh(geom, this.material);
     mesh.position.set(originX, 0, originZ);

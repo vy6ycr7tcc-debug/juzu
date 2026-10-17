@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { standAt } from '../terrain';
 import { passable, solid } from '../solidity';
-import { createIncaBlock, buildTrapezoidalGateway } from '../masonry';
+import { createIncaBlock, buildTrapezoidalGateway, createIncaAshlarMaterial } from '../masonry';
 
 export class HighSierraRegion {
   public group = new THREE.Group();
@@ -16,37 +16,8 @@ export class HighSierraRegion {
     this.group.name = 'Region_HighSierra';
     scene.add(this.group);
 
-    // Authentic High Sierra Scanned PBR Ashlar Masonry & Alpine Bedrock (Poly Haven CC0)
-    const stoneDiff = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp');
-    stoneDiff.colorSpace = THREE.SRGBColorSpace;
-    stoneDiff.anisotropy = 8;
-    stoneDiff.wrapS = stoneDiff.wrapT = THREE.RepeatWrapping;
-
-    const stoneNor = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp');
-    stoneNor.anisotropy = 8;
-    stoneNor.wrapS = stoneNor.wrapT = THREE.RepeatWrapping;
-
-    const stoneRough = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_rough_2k.webp');
-    stoneRough.anisotropy = 8;
-    stoneRough.wrapS = stoneRough.wrapT = THREE.RepeatWrapping;
-
-    const stoneAO = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_ao_2k.webp');
-    stoneAO.wrapS = stoneAO.wrapT = THREE.RepeatWrapping;
-
-    const ashlarMat = solid(
-      new THREE.MeshStandardMaterial({
-        map: stoneDiff,
-        normalMap: stoneNor,
-        normalScale: new THREE.Vector2(1.35, 1.35),
-        roughnessMap: stoneRough,
-        aoMap: stoneAO,
-        aoMapIntensity: 0.85,
-        color: 0xf5eedc,
-        vertexColors: true,
-        roughness: 0.84,
-        metalness: 0.02,
-      })
-    );
+    // Authentic High Sierra Scanned PBR Ashlar Masonry (large_sandstone_blocks 2K)
+    const ashlarMat = solid(createIncaAshlarMaterial(this.texLoader));
 
     const rockDiff = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_diffuse_2k.webp');
     rockDiff.colorSpace = THREE.SRGBColorSpace;
@@ -522,6 +493,76 @@ export class HighSierraRegion {
         shrubInst.instanceMatrix.needsUpdate = true;
         this.group.add(shrubInst);
       }
+    });
+
+    // 6. High-Relief Crag Pinnacles (coast_land_rocks_04.glb - 75k tris scan)
+    gltfLoader.load('/juzu/models/scans/coast_land_rocks_04.glb', (gltf) => {
+      let rockGeom: THREE.BufferGeometry | null = null;
+      let rockMat: THREE.Material | null = null;
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && !rockGeom) {
+          const mesh = child as THREE.Mesh;
+          rockGeom = mesh.geometry.clone();
+          rockMat = mesh.material as THREE.Material;
+          if (rockMat instanceof THREE.MeshStandardMaterial && rockMat.map) {
+            rockMat.map.colorSpace = THREE.SRGBColorSpace;
+            rockMat.map.anisotropy = 8;
+          }
+        }
+      });
+      if (rockGeom && rockMat) {
+        const crags = [
+          { x: 92, z: -155, s: 1.4, ry: 0.8 },
+          { x: 148, z: -155, s: 1.5, ry: 2.1 },
+          { x: 98, z: -195, s: 1.6, ry: -1.2 },
+          { x: 142, z: -195, s: 1.4, ry: 3.0 },
+        ];
+        const cragInst = new THREE.InstancedMesh(rockGeom, rockMat, crags.length);
+        cragInst.castShadow = true;
+        cragInst.receiveShadow = true;
+        const dummy = new THREE.Object3D();
+        crags.forEach((c, idx) => {
+          const y = standAt(c.x, c.z);
+          dummy.position.set(c.x, y - 0.4, c.z);
+          dummy.scale.set(c.s, c.s, c.s);
+          dummy.rotation.y = c.ry;
+          dummy.updateMatrix();
+          cragInst.setMatrixAt(idx, dummy.matrix);
+        });
+        cragInst.instanceMatrix.needsUpdate = true;
+        this.group.add(cragInst);
+      }
+    });
+
+    // 7. Subalpine Mountain Trees with Canopy (tree_small_02.glb - 75k tris scan)
+    gltfLoader.load('/juzu/models/scans/tree_small_02.glb', (gltf) => {
+      const treeModel = gltf.scene;
+      treeModel.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          if (mesh.material instanceof THREE.MeshStandardMaterial && mesh.material.map) {
+            mesh.material.map.colorSpace = THREE.SRGBColorSpace;
+          }
+        }
+      });
+      const treeSpawns = [
+        { x: 104, z: -152, s: 1.1, ry: 0.4 },
+        { x: 136, z: -152, s: 1.0, ry: 1.9 },
+        { x: 96, z: -175, s: 1.25, ry: -0.7 },
+        { x: 144, z: -175, s: 1.15, ry: 2.8 },
+        { x: 100, z: -202, s: 1.2, ry: 1.1 },
+        { x: 140, z: -202, s: 1.3, ry: -2.3 },
+      ];
+      treeSpawns.forEach((ts) => {
+        const treeInstance = treeModel.clone(true);
+        const ty = standAt(ts.x, ts.z);
+        treeInstance.position.set(ts.x, ty - 0.2, ts.z);
+        treeInstance.scale.set(ts.s, ts.s, ts.s);
+        treeInstance.rotation.y = ts.ry;
+        this.group.add(treeInstance);
+      });
     });
   }
 }

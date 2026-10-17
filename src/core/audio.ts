@@ -210,6 +210,123 @@ export class AudioEngine {
     osc.stop(this.ctx.currentTime + 0.22);
   }
 
+  // Authentic vintage expedition sidearm gunshot report
+  public playGunshot(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    const t = this.ctx.currentTime;
+
+    // 1. Initial supersonic explosive blast wave (filtered white noise pop)
+    const bufLen = Math.floor(this.ctx.sampleRate * 0.18);
+    const noiseBuf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.035));
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = noiseBuf;
+
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(1400, t);
+    noiseFilter.frequency.exponentialRampToValueAtTime(220, t + 0.15);
+    noiseFilter.Q.value = 1.1;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.75, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.sfxGain);
+    noise.start(t);
+
+    // 2. Heavy sub-bass chamber detonation punch
+    const punch = this.ctx.createOscillator();
+    punch.type = 'triangle';
+    punch.frequency.setValueAtTime(195, t);
+    punch.frequency.exponentialRampToValueAtTime(32, t + 0.25);
+
+    const punchGain = this.ctx.createGain();
+    punchGain.gain.setValueAtTime(0.65, t);
+    punchGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+    punch.connect(punchGain);
+    punchGain.connect(this.sfxGain);
+    punch.start(t);
+    punch.stop(t + 0.25);
+
+    // 3. Metallic slide cycle & brass reverberation
+    const slide = this.ctx.createOscillator();
+    slide.type = 'sawtooth';
+    slide.frequency.setValueAtTime(1850, t + 0.04);
+    slide.frequency.exponentialRampToValueAtTime(620, t + 0.14);
+
+    const slideGain = this.ctx.createGain();
+    slideGain.gain.setValueAtTime(0, t);
+    slideGain.gain.setValueAtTime(0.18, t + 0.04);
+    slideGain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+
+    slide.connect(slideGain);
+    slideGain.connect(this.sfxGain);
+    slide.start(t + 0.04);
+    slide.stop(t + 0.16);
+  }
+
+  // Sidearm magazine insertion & slide release clack
+  public playGunReload(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    const t = this.ctx.currentTime;
+
+    // Mag latch click
+    const osc1 = this.ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(740, t);
+    osc1.frequency.exponentialRampToValueAtTime(280, t + 0.08);
+
+    const g1 = this.ctx.createGain();
+    g1.gain.setValueAtTime(0.3, t);
+    g1.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc1.connect(g1);
+    g1.connect(this.sfxGain);
+    osc1.start(t);
+    osc1.stop(t + 0.08);
+
+    // Slide rack forward
+    const osc2 = this.ctx.createOscillator();
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(450, t + 0.15);
+    osc2.frequency.exponentialRampToValueAtTime(880, t + 0.26);
+
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0, t);
+    g2.gain.setValueAtTime(0.28, t + 0.15);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    osc2.connect(g2);
+    g2.connect(this.sfxGain);
+    osc2.start(t + 0.15);
+    osc2.stop(t + 0.28);
+  }
+
+  // Bullet impact crack & ricochet ping
+  public playBulletImpact(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    const t = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2200, t);
+    osc.frequency.exponentialRampToValueAtTime(750, t + 0.12);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(t);
+    osc.stop(t + 0.12);
+  }
+
   private startAmbientMountainBreeze(): void {
     if (!this.ctx || !this.musicGain) return;
     // Continuous filtered noise simulating high mountain valley wind

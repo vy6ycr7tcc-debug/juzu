@@ -157,21 +157,13 @@ export class HUD {
 
     el.innerHTML = `
       <!-- Top Objective Banner -->
-      <div id="juzu-objective-wrap" style="position:absolute;top:20px;left:24px;max-width:440px;background:rgba(12,16,14,0.76);border-left:3px solid #c9a468;padding:10px 16px;border-radius:2px;box-shadow:0 4px 18px rgba(0,0,0,0.65);">
-        <div style="font-size:10px;letter-spacing:0.25em;color:#c9a468;text-transform:uppercase;margin-bottom:4px;">Current Expedition Objective</div>
-        <div id="juzu-objective-text" style="font-size:13px;color:#f2ede4;line-height:1.45;">Align the bronze Inti sun-mirror on the south cliff [E] or cross the hanging bridge to the North Sanctuary.</div>
+      <div id="juzu-objective-wrap" style="position:absolute;top:136px;left:18px;max-width:320px;background:rgba(12,16,14,0.76);border-left:3px solid #c9a468;padding:8px 14px;border-radius:4px;box-shadow:0 4px 18px rgba(0,0,0,0.65);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+        <div style="font-size:9px;letter-spacing:0.2em;color:#c9a468;text-transform:uppercase;margin-bottom:2px;">Objective</div>
+        <div id="juzu-objective-text" style="font-size:12px;color:#f2ede4;line-height:1.35;">Align the bronze Inti sun-mirror on the south cliff or cross the hanging bridge to the North Sanctuary.</div>
       </div>
 
-      <!-- Compass Top-Center -->
-      <div id="juzu-compass" style="position:absolute;top:20px;left:50%;transform:translateX(-50%);padding:6px 16px;background:rgba(12,16,14,0.68);border:1px solid rgba(212,184,136,0.32);border-radius:20px;font-size:12px;letter-spacing:0.18em;color:#e6c896;">
-        N · 000° ANDES
-      </div>
-
-      <!-- Top-Right Field Controls Pill -->
-      <div style="position:absolute;top:20px;right:24px;display:flex;gap:8px;pointer-events:auto;">
-        <div id="juzu-instinct-badge" style="padding:6px 12px;background:rgba(12,16,14,0.72);border:1px solid rgba(212,184,136,0.3);border-radius:3px;font-size:11px;letter-spacing:0.1em;color:#d4b888;">[Q] Survival Instinct</div>
-        <button id="juzu-btn-hud-journal" style="padding:6px 12px;background:rgba(22,28,24,0.85);border:1px solid #c9a468;border-radius:3px;font-family:Georgia,serif;font-size:11px;letter-spacing:0.1em;color:#f2ece1;cursor:pointer;">📖 Journal [Tab]</button>
-      </div>
+      <div id="juzu-compass" style="display:none;"></div>
+      <div id="juzu-instinct-badge" style="display:none;"></div>
 
       <!-- Grapple Swing Reticle & Prompt Center-Screen -->
       <div id="juzu-grapple-prompt" style="display:none;position:absolute;top:44%;left:50%;transform:translate(-50%, -50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;">
