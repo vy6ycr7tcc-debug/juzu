@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <link rel="manifest" href="/juzu/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Juzu" />
+    <meta name="theme-color" content="#0d110f" />
+    <link rel="icon" type="image/svg+xml" href="/juzu/favicon.svg" />
+    <title>Juzu — The Search for Paititi</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0d110f;
+        color: #f2ede4;
+        font-family: Georgia, serif;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        touch-action: none;
+      }
+      canvas#gl, #surface {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100lvh;
+      }
+      #surface {
+        z-index: 10;
+      }
+      /* Virtual Joystick for Mobile */
+      #joy {
+        display: none;
+        position: fixed;
+        width: 112px;
+        height: 112px;
+        border-radius: 50%;
+        border: 2px solid rgba(212, 184, 136, 0.45);
+        pointer-events: none;
+        z-index: 25;
+      }
+      #knob {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 44px;
+        height: 44px;
+        margin: -22px 0 0 -22px;
+        border-radius: 50%;
+        background: rgba(212, 184, 136, 0.65);
+        border: 1px solid #ffd700;
+        box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+      }
+      #act {
+        display: none;
+        position: fixed;
+        right: 28px;
+        bottom: 28px;
+        width: 68px;
+        height: 68px;
+        border-radius: 50%;
+        background: rgba(18, 24, 20, 0.85);
+        border: 2px solid #c9a468;
+        color: #f2ede4;
+        font-family: Georgia, serif;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        z-index: 25;
+      }
+      @media (pointer: coarse) {
+        #act { display: flex; align-items: center; justify-content: center; }
+      }
+      @keyframes juzuChakanaGlow {
+        0%, 100% { filter: drop-shadow(0 0 10px rgba(220, 185, 130, 0.45)); transform: scale(1.0); }
+        50% { filter: drop-shadow(0 0 24px rgba(255, 215, 120, 0.85)); transform: scale(1.04); }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Pre-bootstrap Archaeological Expedition Loading Screen -->
+    <div id="juzu-loading-screen" style="position:fixed;inset:0;background:#0d110f;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Georgia,serif;color:#f2ede4;transition:opacity 0.75s ease;user-select:none;">
+      <div style="width:78px;height:78px;margin-bottom:22px;animation:juzuChakanaGlow 3s ease-in-out infinite;">
+        <svg viewBox="0 0 100 100" width="78" height="78" fill="none">
+          <path d="M35 5 H65 V20 H80 V35 H95 V65 H80 V80 H65 V95 H35 V80 H20 V65 H5 V35 H20 V20 H35 Z" fill="rgba(38, 30, 20, 0.9)" stroke="#e6c896" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="50" cy="50" r="14" fill="#0d110f" stroke="#d4b888" stroke-width="2.5"/>
+          <circle cx="50" cy="50" r="5" fill="#ffd700"/>
+        </svg>
+      </div>
+      <div style="font-size:11px;letter-spacing:0.36em;color:#c9a468;text-transform:uppercase;margin-bottom:8px;">Archaeological Expedition · Andes</div>
+      <h1 style="font-size:38px;letter-spacing:0.22em;margin:0 0 6px 0;font-weight:400;color:#fdfaf2;text-shadow:0 2px 14px rgba(0,0,0,0.85);">J U Z U</h1>
+      <div style="font-size:13px;letter-spacing:0.12em;color:#a89f8d;font-style:italic;margin-bottom:28px;">The Search for Paititi</div>
+      <div style="width:240px;height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;position:relative;margin-bottom:12px;border:1px solid rgba(212,184,136,0.25);">
+        <div id="juzu-loading-bar" style="width:25%;height:100%;background:linear-gradient(90deg, #caa05b, #ffd988);transition:width 0.2s ease;"></div>
+      </div>
+      <div id="juzu-loading-status" style="font-size:11px;letter-spacing:0.08em;color:#9b9487;">Loading Andean Terrain · 25%</div>
+    </div>
+
+    <canvas id="gl"></canvas>
+    <div id="surface"></div>
+    <div id="joy"><div id="knob"></div></div>
+    <button id="act" type="button">JUMP</button>
+
+    <script>
+      // Dismiss loading screen when ready
+      var checkReady = setInterval(function() {
+        if (window.__juzuReady) {
+          clearInterval(checkReady);
+          var bar = document.getElementById('juzu-loading-bar');
+          var status = document.getElementById('juzu-loading-status');
+          if (bar) bar.style.width = '100%';
+          if (status) status.textContent = 'Expedition Ready';
+          setTimeout(function() {
+            var el = document.getElementById('juzu-loading-screen');
+            if (el) {
+              el.style.opacity = '0';
+              setTimeout(function() { el.style.display = 'none'; }, 750);
+            }
+          }, 300);
+        }
+      }, 50);
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
