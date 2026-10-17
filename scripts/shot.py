@@ -50,7 +50,7 @@ def main() -> int:
             if i > 0:
                 time.sleep(args.gap)
             path = out / f"frame{i+1}.png"
-            page.screenshot(path=str(path))
+            page.screenshot(path=str(path), timeout=60000)
             paths.append(path)
             print(f"captured {path}")
 

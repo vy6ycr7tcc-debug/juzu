@@ -22,6 +22,7 @@ export class Foliage {
   private canopyInstances: THREE.InstancedMesh;
   private grassInstances: THREE.InstancedMesh;
   private rockInstances: THREE.InstancedMesh;
+  private rootInstances: THREE.InstancedMesh;
   private readonly TREE_COUNT = 620;
   private readonly GRASS_COUNT = 3200;
   private readonly ROCK_COUNT = 420;
@@ -139,6 +140,16 @@ export class Foliage {
       metalness: 0.04,
     });
 
+    const rootGeom = new THREE.CylinderGeometry(0.4, 0.9, 0.35, 8);
+    const rootMat = new THREE.MeshStandardMaterial({
+      color: 0x483e32,
+      roughness: 0.92,
+      metalness: 0.02,
+    });
+    this.rootInstances = new THREE.InstancedMesh(rootGeom, rootMat, this.TREE_COUNT);
+    this.rootInstances.castShadow = true;
+    this.rootInstances.receiveShadow = true;
+
     this.rockInstances = new THREE.InstancedMesh(rockGeom, rockMat, this.ROCK_COUNT);
     this.rockInstances.castShadow = true;
     this.rockInstances.receiveShadow = true;
@@ -146,7 +157,7 @@ export class Foliage {
     this.populateFoliage();
 
     // Ingest photorealistic scanned assets (Poly Haven CC0 photogrammetry)
-    let pendingAssets = 2;
+    let pendingAssets = 3;
     const onAssetLoaded = () => {
       pendingAssets--;
       if (pendingAssets <= 0) {
@@ -243,10 +254,53 @@ export class Foliage {
       }
     );
 
+    // 3. Photorealistic Scanned Exposed Tree Roots (root_cluster_01)
+    gltfLoader.load(
+      '/juzu/models/scans/root_cluster_01.glb',
+      (gltf) => {
+        let scannedGeom: THREE.BufferGeometry | null = null;
+        let scannedMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
+            const mesh = child as THREE.Mesh;
+            scannedGeom = mesh.geometry.clone();
+            scannedMat = mesh.material as THREE.Material;
+            if (scannedMat instanceof THREE.MeshStandardMaterial) {
+              scannedMat.roughness = 0.90;
+              scannedMat.metalness = 0.02;
+              if (scannedMat.map) {
+                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
+                scannedMat.map.anisotropy = 8;
+              }
+              if (scannedMat.normalMap) {
+                scannedMat.normalMap.anisotropy = 8;
+                scannedMat.normalScale = new THREE.Vector2(1.25, 1.25);
+              }
+            }
+          }
+        });
+
+        if (scannedGeom && scannedMat) {
+          this.rootInstances.geometry.dispose();
+          this.rootInstances.geometry = scannedGeom;
+          this.rootInstances.material = scannedMat;
+          this.rootInstances.instanceMatrix.needsUpdate = true;
+        }
+        onAssetLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[Foliage] Could not load scanned root cluster, using fallback:', err);
+        onAssetLoaded();
+      }
+    );
+
     this.group.add(this.trunkInstances);
     this.group.add(this.canopyInstances);
     this.group.add(this.grassInstances);
     this.group.add(this.rockInstances);
+    this.group.add(this.rootInstances);
   }
 
   private buildGnarledTrunkGeometry(): THREE.BufferGeometry {
@@ -504,6 +558,14 @@ export class Foliage {
       this.trunkInstances.setMatrixAt(treeIdx, dummy.matrix);
       this.canopyInstances.setMatrixAt(treeIdx, dummy.matrix);
 
+      const rootDummy = new THREE.Object3D();
+      rootDummy.position.set(x, y - 0.06, z);
+      rootDummy.rotation.set(0, (i * 1.83) % (Math.PI * 2), 0);
+      const rs = s * 0.95;
+      rootDummy.scale.set(rs, rs * 0.82, rs);
+      rootDummy.updateMatrix();
+      this.rootInstances.setMatrixAt(treeIdx, rootDummy.matrix);
+
       const tone = 0.82 + ((i * 19) % 30) * 0.012;
       color.setRGB(tone * 0.94, tone * 1.04, tone * 0.86);
       this.canopyInstances.setColorAt(treeIdx, color);
@@ -514,6 +576,8 @@ export class Foliage {
     this.trunkInstances.instanceMatrix.needsUpdate = true;
     this.canopyInstances.count = treeIdx;
     this.canopyInstances.instanceMatrix.needsUpdate = true;
+    this.rootInstances.count = treeIdx;
+    this.rootInstances.instanceMatrix.needsUpdate = true;
     if (this.canopyInstances.instanceColor) this.canopyInstances.instanceColor.needsUpdate = true;
 
     // 2. Distribute Cyathea Ferns & Ichu Grass Rosettes across ALL 4 regions & trail edges
