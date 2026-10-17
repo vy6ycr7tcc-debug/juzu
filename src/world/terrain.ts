@@ -169,30 +169,35 @@ export class Terrain {
     this.group.name = 'Andean_Terrain';
     scene.add(this.group);
 
-    // 2048x2048 Photorealistic Andean Cloud-Forest Floor & Pebble/Moss PBR Material
+    // 2048x2048 Photorealistic Andean Cloud-Forest Floor & Organic Leaf Litter (Poly Haven CC0)
     const texLoader = new THREE.TextureLoader();
-    const meadowTex = texLoader.load('/juzu/assets/environment-textures/environment-forest-floor.jpeg');
-    meadowTex.colorSpace = THREE.SRGBColorSpace;
-    meadowTex.anisotropy = 8;
-    meadowTex.wrapS = meadowTex.wrapT = THREE.RepeatWrapping;
+    const groundTex = texLoader.load('/juzu/textures/scans/forest_leaves_02_diffuse_2k.webp');
+    groundTex.colorSpace = THREE.SRGBColorSpace;
+    groundTex.anisotropy = 8;
+    groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
 
-    const meadowNor = texLoader.load('/juzu/assets/environment-textures/environment-forest-floor-normal.jpg');
-    meadowNor.anisotropy = 8;
-    meadowNor.wrapS = meadowNor.wrapT = THREE.RepeatWrapping;
+    const groundNor = texLoader.load('/juzu/textures/scans/forest_leaves_02_nor_gl_2k.webp');
+    groundNor.anisotropy = 8;
+    groundNor.wrapS = groundNor.wrapT = THREE.RepeatWrapping;
 
-    const meadowRough = texLoader.load('/juzu/assets/environment-textures/environment-forest-floor-roughness.jpg');
-    meadowRough.anisotropy = 8;
-    meadowRough.wrapS = meadowRough.wrapT = THREE.RepeatWrapping;
+    const groundRough = texLoader.load('/juzu/textures/scans/forest_leaves_02_rough_2k.webp');
+    groundRough.anisotropy = 8;
+    groundRough.wrapS = groundRough.wrapT = THREE.RepeatWrapping;
+
+    const groundAO = texLoader.load('/juzu/textures/scans/forest_leaves_02_ao_2k.webp');
+    groundAO.wrapS = groundAO.wrapT = THREE.RepeatWrapping;
 
     this.material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
-      roughness: 0.86,
-      metalness: 0.03,
-      map: meadowTex,
-      normalMap: meadowNor,
-      normalScale: new THREE.Vector2(1.45, 1.45),
-      roughnessMap: meadowRough,
+      roughness: 0.88,
+      metalness: 0.02,
+      map: groundTex,
+      normalMap: groundNor,
+      normalScale: new THREE.Vector2(1.5, 1.5),
+      roughnessMap: groundRough,
+      aoMap: groundAO,
+      aoMapIntensity: 0.85,
       flatShading: false,
     });
   }

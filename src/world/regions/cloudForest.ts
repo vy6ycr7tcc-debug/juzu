@@ -26,28 +26,33 @@ export class CloudForestRegion {
     this.group.name = 'Region_CloudForest';
     scene.add(this.group);
 
-    // Authentic 2048x2048 Andean PBR Polygonal Stone & Timber Materials (world-space UV ready)
-    const stoneDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
+    // Authentic 2048x2048 Andean Scanned PBR Ashlar Masonry & Qhapaq Ñan Pavement (Poly Haven CC0)
+    const stoneDiff = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp');
     stoneDiff.colorSpace = THREE.SRGBColorSpace;
     stoneDiff.anisotropy = 8;
     stoneDiff.wrapS = stoneDiff.wrapT = THREE.RepeatWrapping;
 
-    const stoneNor = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-normal.jpg');
+    const stoneNor = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp');
     stoneNor.anisotropy = 8;
     stoneNor.wrapS = stoneNor.wrapT = THREE.RepeatWrapping;
 
-    const stoneRough = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-roughness.jpg');
+    const stoneRough = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_rough_2k.webp');
     stoneRough.anisotropy = 8;
     stoneRough.wrapS = stoneRough.wrapT = THREE.RepeatWrapping;
+
+    const stoneAO = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_ao_2k.webp');
+    stoneAO.wrapS = stoneAO.wrapT = THREE.RepeatWrapping;
 
     const ashlarStoneMat = solid(
       new THREE.MeshStandardMaterial({
         map: stoneDiff,
         normalMap: stoneNor,
-        normalScale: new THREE.Vector2(1.45, 1.45),
+        normalScale: new THREE.Vector2(1.35, 1.35),
         roughnessMap: stoneRough,
-        metalness: 0.03,
-        roughness: 0.82,
+        aoMap: stoneAO,
+        aoMapIntensity: 0.85,
+        metalness: 0.02,
+        roughness: 0.86,
         color: 0xffffff,
         vertexColors: true,
       })
@@ -81,24 +86,34 @@ export class CloudForestRegion {
       })
     );
 
-    const paveDiff = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_diff.jpg');
+    const paveDiff = this.texLoader.load('/juzu/textures/scans/cobblestone_01_diffuse_2k.webp');
     paveDiff.colorSpace = THREE.SRGBColorSpace;
     paveDiff.anisotropy = 8;
     paveDiff.wrapS = paveDiff.wrapT = THREE.RepeatWrapping;
 
-    const paveNor = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_nor.jpg');
+    const paveNor = this.texLoader.load('/juzu/textures/scans/cobblestone_01_nor_gl_2k.webp');
     paveNor.anisotropy = 8;
     paveNor.wrapS = paveNor.wrapT = THREE.RepeatWrapping;
+
+    const paveRough = this.texLoader.load('/juzu/textures/scans/cobblestone_01_rough_2k.webp');
+    paveRough.anisotropy = 8;
+    paveRough.wrapS = paveRough.wrapT = THREE.RepeatWrapping;
+
+    const paveARM = this.texLoader.load('/juzu/textures/scans/cobblestone_01_arm_2k.webp');
+    paveARM.wrapS = paveARM.wrapT = THREE.RepeatWrapping;
 
     const redPavementMat = solid(
       new THREE.MeshStandardMaterial({
         map: paveDiff,
         normalMap: paveNor,
-        normalScale: new THREE.Vector2(1.2, 1.2),
-        color: 0xd4b89c,
+        normalScale: new THREE.Vector2(1.35, 1.35),
+        roughnessMap: paveRough,
+        aoMap: paveARM,
+        aoMapIntensity: 0.80,
+        color: 0xe0d4c4,
         vertexColors: true,
-        roughness: 0.80,
-        metalness: 0.03,
+        roughness: 0.82,
+        metalness: 0.02,
       })
     );
 
