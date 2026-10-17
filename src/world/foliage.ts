@@ -30,28 +30,47 @@ export class Foliage {
 
     const texLoader = new THREE.TextureLoader();
 
-    // Bark textures for gnarled Polylepis (Queñua) trunks
-    const barkDiff = texLoader.load('/juzu/textures/bark_diff.jpg');
+    // 2K photorealistic mossy Andean bark textures for gnarled Polylepis (Queñua) trunks
+    const barkDiff = texLoader.load('/juzu/assets/environment-textures/environment-bark.jpeg');
+    barkDiff.colorSpace = THREE.SRGBColorSpace;
+    barkDiff.anisotropy = 8;
     barkDiff.wrapS = barkDiff.wrapT = THREE.RepeatWrapping;
-    barkDiff.repeat.set(1, 3);
+    barkDiff.repeat.set(1, 2.5);
 
-    const barkNor = texLoader.load('/juzu/textures/bark_nor.jpg');
+    const barkNor = texLoader.load('/juzu/assets/environment-textures/environment-bark-normal.jpg');
+    barkNor.anisotropy = 8;
     barkNor.wrapS = barkNor.wrapT = THREE.RepeatWrapping;
-    barkNor.repeat.set(1, 3);
+    barkNor.repeat.set(1, 2.5);
 
-    // Alpha-tested botanical canopy & fern/grass textures
+    const barkRough = texLoader.load('/juzu/assets/environment-textures/environment-bark-roughness.jpg');
+    barkRough.anisotropy = 8;
+    barkRough.wrapS = barkRough.wrapT = THREE.RepeatWrapping;
+    barkRough.repeat.set(1, 2.5);
+
+    // 1024x1024 alpha-tested botanical canopy & fern/grass textures + 2K leaf normal & roughness
     const canopyTex = texLoader.load('/juzu/textures/foliage_canopy_alpha.png');
     canopyTex.colorSpace = THREE.SRGBColorSpace;
+    canopyTex.anisotropy = 8;
 
     const fernTex = texLoader.load('/juzu/textures/fern_grass_alpha.png');
     fernTex.colorSpace = THREE.SRGBColorSpace;
+    fernTex.anisotropy = 8;
+
+    const foliageNor = texLoader.load('/juzu/assets/environment-textures/environment-foliage-normal.jpg');
+    foliageNor.anisotropy = 8;
+
+    const foliageRough = texLoader.load('/juzu/assets/environment-textures/environment-foliage-roughness.jpg');
+    foliageRough.anisotropy = 8;
 
     // Rock textures for mossy Andean boulders
     const rockDiff = texLoader.load('/juzu/textures/rock_diff.jpg');
+    rockDiff.colorSpace = THREE.SRGBColorSpace;
+    rockDiff.anisotropy = 8;
     rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
     rockDiff.repeat.set(2, 2);
 
     const rockNor = texLoader.load('/juzu/textures/rock_nor.jpg');
+    rockNor.anisotropy = 8;
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
     rockNor.repeat.set(2, 2);
 
@@ -62,18 +81,22 @@ export class Foliage {
     const trunkMat = new THREE.MeshStandardMaterial({
       map: barkDiff,
       normalMap: barkNor,
-      normalScale: new THREE.Vector2(1.1, 1.1),
-      color: 0x6e5642, // Rich weathered Polylepis bark
+      normalScale: new THREE.Vector2(1.35, 1.35),
+      roughnessMap: barkRough,
+      color: 0xd8cab8, // Preserves mossy green & warm flaking bark from 2K texture
       roughness: 0.88,
       metalness: 0.02,
     });
 
     const canopyMat = new THREE.MeshStandardMaterial({
       map: canopyTex,
-      alphaTest: 0.22,
+      normalMap: foliageNor,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughnessMap: foliageRough,
+      alphaTest: 0.24,
       side: THREE.DoubleSide,
       vertexColors: true,
-      roughness: 0.76,
+      roughness: 0.72,
       metalness: 0.02,
     });
 
@@ -89,10 +112,13 @@ export class Foliage {
     const grassGeom = this.buildFernRosetteGeometry();
     const grassMat = new THREE.MeshStandardMaterial({
       map: fernTex,
-      alphaTest: 0.24,
+      normalMap: foliageNor,
+      normalScale: new THREE.Vector2(0.95, 0.95),
+      roughnessMap: foliageRough,
+      alphaTest: 0.25,
       side: THREE.DoubleSide,
       vertexColors: true,
-      roughness: 0.82,
+      roughness: 0.74,
       metalness: 0.02,
     });
 
@@ -104,10 +130,10 @@ export class Foliage {
     const rockMat = new THREE.MeshStandardMaterial({
       map: rockDiff,
       normalMap: rockNor,
-      normalScale: new THREE.Vector2(1.1, 1.1),
+      normalScale: new THREE.Vector2(1.35, 1.35),
       vertexColors: true,
-      roughness: 0.85,
-      metalness: 0.05,
+      roughness: 0.84,
+      metalness: 0.04,
     });
 
     this.rockInstances = new THREE.InstancedMesh(rockGeom, rockMat, this.ROCK_COUNT);
@@ -198,9 +224,9 @@ export class Foliage {
 
         // Warm sunlit olive-emerald crown top vs deep mossy forest-shadow underside
         const sunT = THREE.MathUtils.clamp((dy / (c.r * 0.5)) * 0.5 + 0.55, 0.0, 1.0);
-        dColors[i * 3] = THREE.MathUtils.lerp(0.16, 0.54, sunT);
-        dColors[i * 3 + 1] = THREE.MathUtils.lerp(0.26, 0.72, sunT);
-        dColors[i * 3 + 2] = THREE.MathUtils.lerp(0.12, 0.34, sunT);
+        dColors[i * 3] = THREE.MathUtils.lerp(0.42, 0.92, sunT);
+        dColors[i * 3 + 1] = THREE.MathUtils.lerp(0.48, 0.98, sunT);
+        dColors[i * 3 + 2] = THREE.MathUtils.lerp(0.38, 0.82, sunT);
       }
       dome.setAttribute('color', new THREE.BufferAttribute(dColors, 3));
       dome.translate(c.x, c.y, c.z);
@@ -220,9 +246,9 @@ export class Foliage {
           p.setZ(i, -d2 * 0.42);
 
           const sunT = THREE.MathUtils.clamp(0.45 + (ly / c.r) * 0.55, 0.15, 1.0);
-          colors[i * 3] = THREE.MathUtils.lerp(0.20, 0.62, sunT);
-          colors[i * 3 + 1] = THREE.MathUtils.lerp(0.32, 0.80, sunT);
-          colors[i * 3 + 2] = THREE.MathUtils.lerp(0.14, 0.38, sunT);
+          colors[i * 3] = THREE.MathUtils.lerp(0.48, 0.98, sunT);
+          colors[i * 3 + 1] = THREE.MathUtils.lerp(0.55, 1.05, sunT);
+          colors[i * 3 + 2] = THREE.MathUtils.lerp(0.44, 0.88, sunT);
         }
         card.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -257,10 +283,10 @@ export class Foliage {
         p.setZ(v, t * t * 0.48);
         p.setY(v, vy * (1.0 - t * 0.16));
 
-        const shade = 0.36 + t * 0.58;
-        colors[v * 3] = shade * 0.78;
-        colors[v * 3 + 1] = shade * 1.05;
-        colors[v * 3 + 2] = shade * 0.56;
+        const shade = 0.58 + t * 0.48;
+        colors[v * 3] = shade * 0.92;
+        colors[v * 3 + 1] = shade * 1.04;
+        colors[v * 3 + 2] = shade * 0.84;
       }
       plane.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       plane.rotateX(0.26 + (i % 2) * 0.18);
@@ -293,9 +319,9 @@ export class Foliage {
 
       // Top-surface moss tint vs dark granite underside
       const moss = THREE.MathUtils.clamp((y + 0.2) / 1.2, 0, 1);
-      colors[i * 3] = THREE.MathUtils.lerp(0.32, 0.38, moss);
-      colors[i * 3 + 1] = THREE.MathUtils.lerp(0.32, 0.52, moss);
-      colors[i * 3 + 2] = THREE.MathUtils.lerp(0.28, 0.26, moss);
+      colors[i * 3] = THREE.MathUtils.lerp(0.54, 0.68, moss);
+      colors[i * 3 + 1] = THREE.MathUtils.lerp(0.54, 0.82, moss);
+      colors[i * 3 + 2] = THREE.MathUtils.lerp(0.50, 0.56, moss);
     }
 
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));

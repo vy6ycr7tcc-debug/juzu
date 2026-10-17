@@ -42,42 +42,43 @@ export function createIncaBlock(
     }
     pos.setXYZ(i, x, y, z);
 
-    // World-space box UV projection per face normal
+    // World-space box UV projection per face normal (calibrated for 2K multi-course Inca masonry)
     const nx = Math.abs(norm.getX(i));
     const ny = norm.getY(i);
     const absNy = Math.abs(ny);
     const nz = Math.abs(norm.getZ(i));
+    const effTile = tileSize * 1.35;
 
     if (absNy > nx && absNy > nz) {
-      uv.setXY(i, (x + width * 0.5) / tileSize, (z + depth * 0.5) / tileSize);
+      uv.setXY(i, (x + width * 0.5) / effTile, (z + depth * 0.5) / effTile);
     } else if (nx > nz) {
-      uv.setXY(i, (z + depth * 0.5) / tileSize, (y + height * 0.5) / tileSize);
+      uv.setXY(i, (z + depth * 0.5) / effTile, (y + height * 0.5) / effTile);
     } else {
-      uv.setXY(i, (x + width * 0.5) / tileSize, (y + height * 0.5) / tileSize);
+      uv.setXY(i, (x + width * 0.5) / effTile, (y + height * 0.5) / effTile);
     }
 
-    // Vertex-Color Weathering: damp dark-olive moss & soil AO at base (t < 0.32),
-    // warm granite in middle courses, and mossy top-ledge growth (ny > 0.5)
-    const baseMoss = Math.max(0, 1.0 - t / 0.34);
-    const topMoss = ny > 0.55 ? 0.55 : Math.max(0, (t - 0.82) / 0.18) * 0.35;
-    const grime = 0.88 + nVal * 0.16;
+    // Vertex-Color Weathering: subtle grounded AO at base (t < 0.28),
+    // clean chiseled granite in middle courses, and mossy top-ledge growth (ny > 0.55)
+    const baseMoss = Math.max(0, 1.0 - t / 0.28);
+    const topMoss = ny > 0.55 ? 0.38 : Math.max(0, (t - 0.84) / 0.16) * 0.24;
+    const grime = 0.96 + nVal * 0.12;
 
-    let r = 0.96 * grime;
-    let g = 0.94 * grime;
-    let b = 0.88 * grime;
+    let r = 1.02 * grime;
+    let g = 1.00 * grime;
+    let b = 0.96 * grime;
 
     // Blend damp forest-moss & ground AO at the bottom of the masonry
     if (baseMoss > 0) {
       const m = baseMoss * baseMoss;
-      r = THREE.MathUtils.lerp(r, 0.28, m * 0.78);
-      g = THREE.MathUtils.lerp(g, 0.38, m * 0.72);
-      b = THREE.MathUtils.lerp(b, 0.20, m * 0.82);
+      r = THREE.MathUtils.lerp(r, 0.52, m * 0.65);
+      g = THREE.MathUtils.lerp(g, 0.62, m * 0.60);
+      b = THREE.MathUtils.lerp(b, 0.44, m * 0.70);
     }
     // Blend lush green cloud-forest moss on horizontal top ledges & upper crevices
     if (topMoss > 0) {
-      r = THREE.MathUtils.lerp(r, 0.36, topMoss);
-      g = THREE.MathUtils.lerp(g, 0.48, topMoss);
-      b = THREE.MathUtils.lerp(b, 0.24, topMoss);
+      r = THREE.MathUtils.lerp(r, 0.58, topMoss);
+      g = THREE.MathUtils.lerp(g, 0.74, topMoss);
+      b = THREE.MathUtils.lerp(b, 0.46, topMoss);
     }
 
     colors[i * 3] = r;

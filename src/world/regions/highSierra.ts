@@ -14,43 +14,50 @@ export class HighSierraRegion {
     this.group.name = 'Region_HighSierra';
     scene.add(this.group);
 
-    const stoneDiff = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_05_diff.jpg');
+    const stoneDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
+    stoneDiff.colorSpace = THREE.SRGBColorSpace;
+    stoneDiff.anisotropy = 8;
     stoneDiff.wrapS = stoneDiff.wrapT = THREE.RepeatWrapping;
 
-    const stoneNor = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_05_nor.jpg');
+    const stoneNor = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-normal.jpg');
+    stoneNor.anisotropy = 8;
     stoneNor.wrapS = stoneNor.wrapT = THREE.RepeatWrapping;
 
-    const stoneArm = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_05_arm.jpg');
-    stoneArm.wrapS = stoneArm.wrapT = THREE.RepeatWrapping;
+    const stoneRough = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-roughness.jpg');
+    stoneRough.anisotropy = 8;
+    stoneRough.wrapS = stoneRough.wrapT = THREE.RepeatWrapping;
 
     const ashlarMat = solid(
       new THREE.MeshStandardMaterial({
         map: stoneDiff,
         normalMap: stoneNor,
-        normalScale: new THREE.Vector2(1.0, 1.0),
-        roughnessMap: stoneArm,
-        color: 0xa49b8a,
+        normalScale: new THREE.Vector2(1.45, 1.45),
+        roughnessMap: stoneRough,
+        color: 0xffffff,
         vertexColors: true,
-        roughness: 0.82,
-        metalness: 0.05,
+        roughness: 0.80,
+        metalness: 0.04,
       })
     );
 
     const rockDiff = this.texLoader.load('/juzu/textures/rock_diff.jpg');
+    rockDiff.colorSpace = THREE.SRGBColorSpace;
+    rockDiff.anisotropy = 8;
     rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
 
     const rockNor = this.texLoader.load('/juzu/textures/rock_nor.jpg');
+    rockNor.anisotropy = 8;
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
 
     const bedrockMat = solid(
       new THREE.MeshStandardMaterial({
         map: rockDiff,
         normalMap: rockNor,
-        normalScale: new THREE.Vector2(1.0, 1.0),
-        color: 0x827b70,
+        normalScale: new THREE.Vector2(1.35, 1.35),
+        color: 0xb8b2a6,
         vertexColors: true,
-        roughness: 0.78,
-        metalness: 0.08,
+        roughness: 0.76,
+        metalness: 0.06,
       })
     );
 

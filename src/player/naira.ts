@@ -51,18 +51,16 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
 
   const getBoneRegionColor = (bName: string): [number, number, number] => {
     const n = bName.toLowerCase();
-    // 1. Head & Hair: crown, scalp, and back of head get rich espresso hair color; face gets warm Andean skin
-    if (n.includes('head') || n.includes('neck')) {
-      return [0.76, 0.53, 0.38];
+    // Note: Vertex color Float32Array attributes are read directly in LINEAR space by Three.js!
+    // 1. Head, Neck & Fingers: warm Andean sunlit skin tone (linear equivalent of sRGB #c88c66)
+    if (n.includes('head') || n.includes('neck') || n.includes('f_') || n.includes('thumb')) {
+      return [0.46, 0.25, 0.13];
     }
-    if (n.includes('f_') || n.includes('thumb')) {
-      return [0.76, 0.53, 0.38];
-    }
-    // 2. Fingerless leather climbing gloves / wrist wraps
+    // 2. Fingerless leather climbing gloves / wrist wraps (linear saddle brown)
     if (n.includes('hand')) {
-      return [0.28, 0.19, 0.13];
+      return [0.11, 0.055, 0.030];
     }
-    // 3. Weathered slate-teal woven Andean tunic & 3/4 sleeves (spine, hips, pelvis, shoulders, upper arms, upper forearms)
+    // 3. Weathered slate-teal woven Andean tunic & 3/4 sleeves (exact linear match to tunicClothMat 0x426468)
     if (
       n.includes('spine') ||
       n.includes('hips') ||
@@ -71,14 +69,14 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
       n.includes('upper_arm') ||
       n.includes('forearm')
     ) {
-      return [0.21, 0.30, 0.31];
+      return [0.056, 0.124, 0.136];
     }
     // 4. Laced dark cordovan mountaineering boots
     if (n.includes('foot') || n.includes('toe')) {
-      return [0.18, 0.12, 0.08];
+      return [0.075, 0.042, 0.024];
     }
     // 5. Rugged dark olive-umber cargo expedition trousers (thighs, shins)
-    return [0.23, 0.21, 0.17];
+    return [0.088, 0.082, 0.056];
   };
 
   const nrmAttr = geometry.attributes.normal;
@@ -135,14 +133,14 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
       let cg = g / wSum;
       let cb = b / wSum;
 
-      // Paint the back of the skull and the entire crown/forehead above the goggles with dark espresso hair
+      // Paint the back of the skull and the entire crown/forehead above the headband with dark espresso hair
       if (headWeight > 0.35) {
         const normY = (y - minY) / rangeY;
         const isScalpOrBack = normY > 0.935 || z < 0.025;
         if (isScalpOrBack) {
-          cr = 0.08;
-          cg = 0.06;
-          cb = 0.05;
+          cr = 0.10;
+          cg = 0.08;
+          cb = 0.06;
         }
       }
 
@@ -150,9 +148,9 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
       colors[i * 3 + 1] = cg;
       colors[i * 3 + 2] = cb;
     } else {
-      colors[i * 3] = 0.45;
-      colors[i * 3 + 1] = 0.42;
-      colors[i * 3 + 2] = 0.36;
+      colors[i * 3] = 0.55;
+      colors[i * 3 + 1] = 0.50;
+      colors[i * 3 + 2] = 0.44;
     }
   }
 
@@ -169,16 +167,18 @@ export class Naira {
   private actions: Partial<Record<LocomotionPose, THREE.AnimationAction>> = {};
   private currentAction: THREE.AnimationAction | null = null;
   private currentPose: LocomotionPose = 'idle';
+  private headBone: THREE.Object3D | null = null;
 
-  // Articulated 3-segment hair braid for secondary pendulum motion
+  // Articulated 5-segment hair braid for secondary pendulum motion
   private braidSegments: THREE.Object3D[] = [];
   private braidAngleX = 0.12;
   private braidVelX = 0;
   private braidAngleZ = 0;
   private braidVelZ = 0;
-  private lastHeading = 0;
   private smoothPelvisOffset = 0;
   private smoothSpinePitch = 0;
+  private smoothTurnBank = 0;
+  private smoothHeadYaw = 0;
 
   constructor(scene: THREE.Scene) {
     this.root.name = 'Naira_PlayerRoot';
@@ -191,15 +191,31 @@ export class Naira {
     loader.setMeshoptDecoder(MeshoptDecoder);
     const texLoader = new THREE.TextureLoader();
 
-    const canvasTex = texLoader.load('/juzu/assets/character-textures/character-canvas.jpeg');
-    canvasTex.wrapS = canvasTex.wrapT = THREE.RepeatWrapping;
-    canvasTex.repeat.set(3, 4);
+    // 1. Seamless Neutral-Albedo Woven Andean Homespun Fabric for Tunic & Body (preserves exact slate-teal & skin colors!)
+    const fabricTex = texLoader.load('/juzu/textures/woven_cloth_albedo.jpg');
+    fabricTex.colorSpace = THREE.SRGBColorSpace;
+    fabricTex.anisotropy = 8;
+    fabricTex.wrapS = fabricTex.wrapT = THREE.RepeatWrapping;
+    fabricTex.repeat.set(4, 4);
 
+    // 2. 2K Weathered Field Canvas for Expedition Rucksack & Bedroll
+    const canvasTex = texLoader.load('/juzu/assets/character-textures/character-canvas.jpeg');
+    canvasTex.colorSpace = THREE.SRGBColorSpace;
+    canvasTex.anisotropy = 8;
+    canvasTex.wrapS = canvasTex.wrapT = THREE.RepeatWrapping;
+    canvasTex.repeat.set(1, 1);
+
+    // 3. 2K Saddle-Brown Weathered Leather for Harnesses, Bracers, Belt & Quiver
     const leatherTex = texLoader.load('/juzu/assets/character-textures/character-leather.jpeg');
+    leatherTex.colorSpace = THREE.SRGBColorSpace;
+    leatherTex.anisotropy = 8;
     leatherTex.wrapS = leatherTex.wrapT = THREE.RepeatWrapping;
     leatherTex.repeat.set(2, 2);
 
+    // 4. 2K Authentic Quechua Geometric Weave (White Inca Diamonds, Gold Checkerboards, Crimson & Teal)
     const weaveTex = texLoader.load('/juzu/assets/character-textures/character-quechua-weave.jpg');
+    weaveTex.colorSpace = THREE.SRGBColorSpace;
+    weaveTex.anisotropy = 8;
     weaveTex.wrapS = weaveTex.wrapT = THREE.RepeatWrapping;
     weaveTex.repeat.set(4, 1);
 
@@ -209,7 +225,13 @@ export class Naira {
         this.modelRoot = gltf.scene;
         floatAttributes(this.modelRoot);
 
-        this.applyAndeanMaterialsAndGear(this.modelRoot, canvasTex, leatherTex, weaveTex);
+        this.applyAndeanMaterialsAndGear(
+          this.modelRoot,
+          fabricTex,
+          canvasTex,
+          leatherTex,
+          weaveTex
+        );
 
         this.modelRoot.scale.setScalar(1.0);
         this.root.add(this.modelRoot);
@@ -217,20 +239,44 @@ export class Naira {
         this.mixer = new THREE.AnimationMixer(this.modelRoot);
         const clips = gltf.animations || [];
 
-        const findClip = (namePart: string) =>
-          clips.find((c) => c.name.toLowerCase().includes(namePart.toLowerCase()));
+        const findExactOrPartial = (exact: string, fallbackPart: string) =>
+          clips.find((c) => c.name.toLowerCase() === exact.toLowerCase()) ||
+          clips.find((c) => c.name.toLowerCase().includes(fallbackPart.toLowerCase()));
 
-        const idleClip = findClip('idle');
-        const walkClip = findClip('walk');
-        const runClip = findClip('jog') || findClip('run');
-        const jumpClip = findClip('jump_loop') || findClip('jump');
-        const swimClip = findClip('swim_fwd') || findClip('swim');
+        const idleClip = findExactOrPartial('Idle_Loop', 'idle');
+        const walkClip = findExactOrPartial('Walk_Loop', 'walk');
+        const runClip = findExactOrPartial('Jog_Fwd_Loop', 'jog');
+        const jumpStartClip = findExactOrPartial('Jump_Start', 'jump_start');
+        const jumpClip = findExactOrPartial('Jump_Loop', 'jump_loop');
+        const jumpLandClip = findExactOrPartial('Jump_Land', 'jump_land');
+        const swimClip = findExactOrPartial('Swim_Fwd_Loop', 'swim_fwd');
+        const swimIdleClip = findExactOrPartial('Swim_Idle_Loop', 'swim_idle');
+        const interactClip = findExactOrPartial('Interact', 'interact');
 
         if (idleClip) this.actions.idle = this.mixer.clipAction(idleClip);
         if (walkClip) this.actions.walk = this.mixer.clipAction(walkClip);
         if (runClip) this.actions.run = this.mixer.clipAction(runClip);
+        if (jumpStartClip) {
+          const act = this.mixer.clipAction(jumpStartClip);
+          act.setLoop(THREE.LoopOnce, 1);
+          act.clampWhenFinished = true;
+          this.actions.jump_start = act;
+        }
         if (jumpClip) this.actions.jump = this.mixer.clipAction(jumpClip);
+        if (jumpLandClip) {
+          const act = this.mixer.clipAction(jumpLandClip);
+          act.setLoop(THREE.LoopOnce, 1);
+          act.clampWhenFinished = true;
+          this.actions.jump_land = act;
+        }
         if (swimClip) this.actions.swim = this.mixer.clipAction(swimClip);
+        if (swimIdleClip) this.actions.swim_idle = this.mixer.clipAction(swimIdleClip);
+        if (interactClip) {
+          const act = this.mixer.clipAction(interactClip);
+          act.setLoop(THREE.LoopOnce, 1);
+          act.clampWhenFinished = true;
+          this.actions.interact = act;
+        }
 
         if (this.actions.idle) {
           this.actions.idle.play();
@@ -246,16 +292,19 @@ export class Naira {
 
   private applyAndeanMaterialsAndGear(
     root: THREE.Object3D,
+    fabricTex: THREE.Texture,
     canvasTex: THREE.Texture,
     leatherTex: THREE.Texture,
     weaveTex: THREE.Texture
   ): void {
-    // Unified seamless material for BOTH Mannequin_1 and Mannequin_2 so ball joints vanish completely
+    // Unified seamless material for BOTH Mannequin_1 and Mannequin_2 using neutral-albedo woven fabric + micro-bump
     const unifiedBodyMat = new THREE.MeshStandardMaterial({
-      map: canvasTex,
+      map: fabricTex,
+      bumpMap: fabricTex,
+      bumpScale: 0.014,
       color: 0xffffff,
       vertexColors: true,
-      roughness: 0.72,
+      roughness: 0.76,
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
@@ -272,17 +321,60 @@ export class Naira {
     });
 
     const headBone = root.getObjectByName('DEF-head');
+    this.headBone = headBone || null;
     const neckBone = root.getObjectByName('DEF-neck');
     const chestBone = root.getObjectByName('DEF-spine003') || root.getObjectByName('DEF-spine.003');
     const hipsBone = root.getObjectByName('DEF-hips');
-    const rightThighBone = root.getObjectByName('DEF-thigh.R');
+    const leftForearmBone =
+      root.getObjectByName('DEF-forearmL') || root.getObjectByName('DEF-forearm.L');
+    const rightForearmBone =
+      root.getObjectByName('DEF-forearmR') || root.getObjectByName('DEF-forearm.R');
+    const rightThighBone =
+      root.getObjectByName('DEF-thighR') || root.getObjectByName('DEF-thigh.R');
+    const leftShinBone =
+      root.getObjectByName('DEF-shinL') || root.getObjectByName('DEF-shin.L');
+    const rightShinBone =
+      root.getObjectByName('DEF-shinR') || root.getObjectByName('DEF-shin.R');
 
-    // 1. Head: Sculpted Hair Crown, Subtle Facial Features, Physics Braid, Headband & Goggles
+    // Shared expedition tunic, Quechua weave, leather & brass materials
+    const tunicClothMat = new THREE.MeshStandardMaterial({
+      map: fabricTex,
+      bumpMap: fabricTex,
+      bumpScale: 0.016,
+      color: 0x426468, // Weathered slate-teal woven Andean tunic matching ref_character_gear
+      roughness: 0.80,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    const trimWeaveMat = new THREE.MeshStandardMaterial({
+      map: weaveTex,
+      bumpMap: weaveTex,
+      bumpScale: 0.014,
+      color: 0xffffff, // Full-color Quechua weave: white Inca diamonds, gold checkerboards, crimson & teal!
+      roughness: 0.76,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    const harnessLeatherMat = new THREE.MeshStandardMaterial({
+      map: leatherTex,
+      bumpMap: leatherTex,
+      bumpScale: 0.014,
+      color: 0xd8b89a, // Preserves the rich dark saddle-brown of character-leather.jpeg
+      roughness: 0.54,
+      metalness: 0.08,
+    });
+    const buckleBrassMat = new THREE.MeshStandardMaterial({
+      color: 0xc89e48,
+      metalness: 0.88,
+      roughness: 0.28,
+    });
+
+    // 1. Head: Sculpted Hair Crown, Subtle Facial Features, Physics Braid & Quechua Headband
     if (headBone) {
       const headGroup = new THREE.Group();
       const darkHairMat = new THREE.MeshStandardMaterial({
         color: 0x16110d,
-        roughness: 0.76,
+        roughness: 0.74,
         metalness: 0.06,
       });
       const skinMat = new THREE.MeshStandardMaterial({
@@ -324,11 +416,11 @@ export class Naira {
         eyeGroup.add(sclera, iris, catchlight, lash, brow);
         headGroup.add(eyeGroup);
 
-        // Side-swept temple hair locks framing Naira's cheekbones without covering eyes
-        const sideLock = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.11, 6, 8), darkHairMat);
-        sideLock.position.set(side * 0.082, 0.088, 0.018);
-        sideLock.rotation.z = side * 0.10;
-        sideLock.rotation.x = 0.16;
+        // Slender side-swept temple hair locks framing Naira's cheekbones
+        const sideLock = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.085, 6, 8), darkHairMat);
+        sideLock.position.set(side * 0.072, 0.096, 0.042);
+        sideLock.rotation.z = side * 0.06;
+        sideLock.rotation.x = 0.14;
         headGroup.add(sideLock);
       }
 
@@ -337,7 +429,7 @@ export class Naira {
         new THREE.SphereGeometry(0.116, 18, 16),
         darkHairMat
       );
-      hairCap.scale.set(0.94, 1.04, 1.06);
+      hairCap.scale.set(0.92, 1.04, 1.06);
       hairCap.position.set(0, 0.146, -0.024);
       headGroup.add(hairCap);
 
@@ -353,22 +445,16 @@ export class Naira {
         headGroup.add(crownPlait);
       }
 
-      // Articulated 5-segment woven braid plait attached at nape (-0.038, 0.055, -0.105) resting over left-back
-      const tieMat = new THREE.MeshStandardMaterial({
-        color: 0xa83224,
-        roughness: 0.65,
-        metalness: 0.05,
-      });
-
+      // Articulated 5-segment woven braid plait attached at nape resting visibly over left-back
       this.braidSegments = [];
       let parentPivot: THREE.Object3D = headGroup;
-      const segLengths = [0.095, 0.095, 0.09, 0.085, 0.08];
-      const segRadii = [0.034, 0.031, 0.028, 0.024, 0.019];
+      const segLengths = [0.088, 0.086, 0.082, 0.078, 0.074];
+      const segRadii = [0.034, 0.031, 0.028, 0.025, 0.021];
 
       for (let s = 0; s < segLengths.length; s++) {
         const pivot = new THREE.Group();
         if (s === 0) {
-          pivot.position.set(-0.048, 0.068, -0.118);
+          pivot.position.set(-0.048, 0.072, -0.118);
         } else {
           pivot.position.set(0, -segLengths[s - 1], 0);
         }
@@ -387,7 +473,10 @@ export class Naira {
         }
 
         if (s === segLengths.length - 1) {
-          const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.020, 0.026, 10), tieMat);
+          const tie = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.020, 0.020, 0.028, 10),
+            trimWeaveMat
+          );
           tie.position.set(0, -segLen * 0.72, 0);
           pivot.add(tie);
         }
@@ -400,7 +489,7 @@ export class Naira {
       // Quechua woven headband fitted snugly to oval skull width (0.76 X scale)
       const bandMesh = new THREE.Mesh(
         new THREE.TorusGeometry(0.116, 0.011, 8, 24),
-        new THREE.MeshStandardMaterial({ map: weaveTex, color: 0xb85232, roughness: 0.75 })
+        trimWeaveMat
       );
       bandMesh.rotation.x = Math.PI / 2 - 0.15;
       bandMesh.scale.set(0.76, 0.96, 1.0);
@@ -410,37 +499,10 @@ export class Naira {
       headBone.add(headGroup);
     }
 
-    // Shared expedition tunic, trim, leather & brass materials
-    const tunicClothMat = new THREE.MeshStandardMaterial({
-      map: canvasTex,
-      color: 0x364d4f, // Weathered slate-teal woven Andean tunic
-      roughness: 0.84,
-      metalness: 0.02,
-      side: THREE.DoubleSide,
-    });
-    const trimWeaveMat = new THREE.MeshStandardMaterial({
-      map: weaveTex,
-      color: 0x9e3a26, // Red-ochre geometric embroidered border
-      roughness: 0.78,
-      metalness: 0.02,
-      side: THREE.DoubleSide,
-    });
-    const harnessLeatherMat = new THREE.MeshStandardMaterial({
-      map: leatherTex,
-      color: 0x4a2f1d, // Rich saddle-brown weathered leather
-      roughness: 0.58,
-      metalness: 0.08,
-    });
-    const buckleBrassMat = new THREE.MeshStandardMaterial({
-      color: 0xc49a45,
-      metalness: 0.88,
-      roughness: 0.3,
-    });
-
-    // 2. Neck: Woven Red-Ochre Tunic Collar (replaces oversized donut)
+    // 2. Neck: Woven Quechua Tunic Collar
     if (neckBone) {
       const collar = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.068, 0.082, 0.048, 20, 1, true),
+        new THREE.CylinderGeometry(0.068, 0.084, 0.052, 20, 1, true),
         trimWeaveMat
       );
       collar.scale.set(0.95, 1.0, 0.88);
@@ -449,8 +511,78 @@ export class Naira {
       neckBone.add(collar);
     }
 
-    // 3. Waist & Pelvis: Contoured Slate-Teal Tunic Bodice + Skirt + Red-Ochre Geometric Hem + Leather Belt & Pouches
-    // Completely covers the segmented Mannequin_2 waist/hip/pelvis sockets just like ref_character_gear!
+    // 3. Forearms & Elbows: Rolled Slate-Teal Sleeve Cuffs + Embroidered Trim + Leather Forearm Bracers
+    // Completely bridges the wanderer.glb elbow and wrist joints on both arms!
+    for (const forearmBone of [leftForearmBone, rightForearmBone]) {
+      if (!forearmBone) continue;
+      const armGroup = new THREE.Group();
+
+      // Upper forearm rolled slate-teal sleeve cuff bridging the elbow joint (y = -0.045..0.085)
+      const sleeveCuff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.063, 0.057, 0.13, 18),
+        tunicClothMat
+      );
+      sleeveCuff.position.set(0, 0.02, 0);
+      sleeveCuff.castShadow = true;
+      armGroup.add(sleeveCuff);
+
+      // Quechua embroidered sleeve cuff band
+      const cuffBand = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.059, 0.057, 0.036, 18),
+        trimWeaveMat
+      );
+      cuffBand.position.set(0, 0.076, 0);
+      armGroup.add(cuffBand);
+
+      // Lower forearm saddle-leather archer's bracer (y = 0.12..0.245)
+      const bracer = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.054, 0.044, 0.125, 18),
+        harnessLeatherMat
+      );
+      bracer.position.set(0, 0.18, 0);
+      bracer.castShadow = true;
+      armGroup.add(bracer);
+
+      forearmBone.add(armGroup);
+    }
+
+    // 4. Shins, Knees & Ankles: Contoured Leather Knee Guards + Andean Woven Leg Gaiters & Boot Cuffs
+    // Completely bridges the wanderer.glb knee and ankle joints during running/jumping!
+    for (const shinBone of [leftShinBone, rightShinBone]) {
+      if (!shinBone) continue;
+      const legGroup = new THREE.Group();
+
+      // Knee-joint trouser cuff & leather knee-guard strap bridging y = -0.035..0.075
+      const kneeWrap = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.068, 0.061, 0.11, 16),
+        harnessLeatherMat
+      );
+      kneeWrap.position.set(0, 0.02, 0.003);
+      kneeWrap.castShadow = true;
+      legGroup.add(kneeWrap);
+
+      // Woven Andean geometric calf gaiter (y = 0.15..0.28)
+      const calfGaiter = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.060, 0.052, 0.13, 16),
+        trimWeaveMat
+      );
+      calfGaiter.position.set(0, 0.215, 0);
+      calfGaiter.castShadow = true;
+      legGroup.add(calfGaiter);
+
+      // Laced leather mountaineering boot shaft bridging the ankle joint (y = 0.27..0.43)
+      const bootShaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.054, 0.048, 0.16, 16),
+        harnessLeatherMat
+      );
+      bootShaft.position.set(0, 0.35, 0);
+      bootShaft.castShadow = true;
+      legGroup.add(bootShaft);
+
+      shinBone.add(legGroup);
+    }
+
+    // 5. Waist & Pelvis: Contoured Slate-Teal Tunic Bodice + Skirt + Quechua Geometric Hem + Leather Belt & Pouches
     if (hipsBone) {
       const hipsGroup = new THREE.Group();
 
@@ -474,17 +606,17 @@ export class Naira {
       skirt.receiveShadow = true;
       hipsGroup.add(skirt);
 
-      // Embroidered red-ochre geometric hem border at bottom of tunic skirt
-      const hemGeom = new THREE.CylinderGeometry(0.202, 0.212, 0.052, 24, 1, true);
+      // Embroidered Quechua geometric hem border at bottom of tunic skirt (white Inca diamonds & gold checkerboards!)
+      const hemGeom = new THREE.CylinderGeometry(0.198, 0.214, 0.068, 24, 1, true);
       const hem = new THREE.Mesh(hemGeom, trimWeaveMat);
       hem.scale.set(1.045, 1.0, 0.785);
-      hem.position.set(0, -0.18, 0.004);
+      hem.position.set(0, -0.172, 0.004);
       hem.castShadow = true;
       hipsGroup.add(hem);
 
       // Woven waist sash (chumpi) under leather utility belt
       const sash = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.148, 0.154, 0.068, 24),
+        new THREE.CylinderGeometry(0.148, 0.154, 0.074, 24),
         trimWeaveMat
       );
       sash.scale.set(1.03, 1.0, 0.77);
@@ -521,17 +653,17 @@ export class Naira {
       hipsBone.add(hipsGroup);
     }
 
-    // 4. Right Thigh: Secondary Leather Holster Strap
+    // 6. Right Thigh: Secondary Leather Holster Strap
     if (rightThighBone) {
       const thighStrap = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.082, 0.078, 0.024, 16),
+        new THREE.CylinderGeometry(0.082, 0.078, 0.028, 16),
         harnessLeatherMat
       );
-      thighStrap.position.set(0, 0.16, 0);
+      thighStrap.position.set(0, 0.18, 0);
       rightThighBone.add(thighStrap);
     }
 
-    // 5. Torso & Back: Tunic Shoulder Mantle, Crossed Leather X-Harness, Olive Canvas Rucksack,
+    // 7. Torso & Back: Tunic Shoulder Mantle, Crossed Leather X-Harness, Olive Canvas Rucksack,
     // Top Rolled Bedroll, Coiled Hemp Rope, Steel Climbing Pickaxe & Curved Recurve Bow + Arrow Quiver
     if (chestBone) {
       const packGroup = new THREE.Group();
@@ -568,15 +700,17 @@ export class Naira {
       // Weathered Olive-Khaki Canvas Expedition Rucksack (positioned on right-center back so hair braid shows on left)
       const rucksackCanvasMat = new THREE.MeshStandardMaterial({
         map: canvasTex,
-        color: 0x6b624b, // Authentic weathered field-khaki canvas
-        roughness: 0.86,
+        bumpMap: canvasTex,
+        bumpScale: 0.016,
+        color: 0x6b634b, // Authentic weathered field-khaki canvas
+        roughness: 0.84,
         metalness: 0.02,
       });
 
       const packOffsetX = 0.035;
       const packZ = -0.168;
 
-      // Main sculpted canvas rucksack body + rounded top flap + lower front pocket + side pockets
+      // Main sculpted canvas rucksack body + rounded top flap + lower front pocket
       const packBody = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.26, 0.115), rucksackCanvasMat);
       packBody.position.set(packOffsetX, -0.015, packZ);
       packBody.castShadow = true;
@@ -609,8 +743,10 @@ export class Naira {
       // Top Rolled Blanket / Bedroll strapped horizontally above the rucksack with 2 leather rings
       const bedrollMat = new THREE.MeshStandardMaterial({
         map: canvasTex,
+        bumpMap: canvasTex,
+        bumpScale: 0.015,
         color: 0x7c7258,
-        roughness: 0.88,
+        roughness: 0.86,
         metalness: 0.01,
       });
       const topBedroll = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.25, 16), bedrollMat);
@@ -632,9 +768,11 @@ export class Naira {
 
       // Coiled Hemp Climbing Rope hanging on the left side of the rucksack
       const ropeMat = new THREE.MeshStandardMaterial({
-        map: weaveTex,
-        color: 0x8f7d5d,
-        roughness: 0.9,
+        map: fabricTex,
+        bumpMap: fabricTex,
+        bumpScale: 0.02,
+        color: 0x9c8864,
+        roughness: 0.88,
         metalness: 0.0,
       });
       for (let r = 0; r < 4; r++) {
@@ -647,13 +785,13 @@ export class Naira {
 
       // Forged Steel Mountaineering Climbing Axe strapped to the rucksack face
       const steelMat = new THREE.MeshStandardMaterial({
-        color: 0xb8c4ce,
+        color: 0xc4d0da,
         metalness: 0.92,
-        roughness: 0.26,
+        roughness: 0.24,
       });
       const woodShaftMat = new THREE.MeshStandardMaterial({
-        color: 0x6e482b,
-        roughness: 0.68,
+        color: 0x7a5030,
+        roughness: 0.65,
       });
       const gripWrapMat = new THREE.MeshStandardMaterial({
         color: 0x221d1a,
@@ -687,8 +825,8 @@ export class Naira {
 
       // Curved Wooden Recurve Bow + Taut Bowstring + Leather Quiver with 4 Fletched Arrows on Right Side
       const bowWoodMat = new THREE.MeshStandardMaterial({
-        color: 0x785334,
-        roughness: 0.58,
+        color: 0x825a38,
+        roughness: 0.56,
         metalness: 0.04,
       });
       const bowCurve = new THREE.CatmullRomCurve3([
@@ -723,7 +861,7 @@ export class Naira {
       quiverGroup.add(quiverTube);
 
       const featherMat = new THREE.MeshStandardMaterial({
-        color: 0x9c7850,
+        color: 0xb08a5e,
         roughness: 0.85,
         side: THREE.DoubleSide,
       });
@@ -745,62 +883,77 @@ export class Naira {
     }
   }
 
-  public update(controller: Controller, dt: number): void {
-    // 1. Sync transform with controller + Foot IK / Crouch pelvis offset
+  public update(controller: Controller, dt: number, camYaw?: number): void {
+    // 1. Sync transform with controller + Foot IK / Crouch / Landing pelvis offset
     this.root.position.copy(controller.pos);
     this.root.rotation.y = controller.heading;
 
-    // 2-Bone Foot Slope Grounding & Crouch posture offset
+    // 2-Bone Foot Slope Grounding, Crouch drop & Landing knee compression
     const sinH = Math.sin(controller.heading);
     const cosH = Math.cos(controller.heading);
     const leftFootH = standAt(controller.pos.x + cosH * 0.18, controller.pos.z - sinH * 0.18);
     const rightFootH = standAt(controller.pos.x - cosH * 0.18, controller.pos.z + sinH * 0.18);
     const slopeDiff = Math.min(0.35, Math.abs(leftFootH - rightFootH));
-    const crouchDrop = controller.crouching ? -0.32 : 0;
-    const targetPelvisOffset = -slopeDiff * 0.35 + crouchDrop;
+    const crouchDrop = controller.crouching ? -0.30 : controller.dodging ? -0.22 : 0;
+    const landDrop = controller.pose === 'jump_land' ? -0.14 : 0;
+    const targetPelvisOffset = -slopeDiff * 0.35 + crouchDrop + landDrop;
     this.smoothPelvisOffset = THREE.MathUtils.lerp(
       this.smoothPelvisOffset,
       targetPelvisOffset,
       Math.min(1, dt * 12)
     );
 
-    // Forward athletic lean when sprinting, mantling, or crouching
-    const targetPitch = controller.mantling
-      ? 0.24
-      : controller.crouching
-        ? 0.28
-        : controller.pose === 'run'
-          ? 0.09
-          : controller.pose === 'walk'
-            ? 0.04
-            : 0;
+    // 2. Forward Athletic Lean (Sprint / Uphill Slope / Mantle / Crouch / Dodge) + Turn Banking
+    const uphillLean = THREE.MathUtils.clamp(controller.slopePitch * 0.22, -0.08, 0.18);
+    const targetPitch =
+      (controller.mantling
+        ? 0.26
+        : controller.dodging
+          ? 0.34
+          : controller.crouching
+            ? 0.26
+            : controller.pose === 'run'
+              ? 0.11
+              : controller.pose === 'walk'
+                ? 0.045
+                : 0) + uphillLean;
     this.smoothSpinePitch = THREE.MathUtils.lerp(
       this.smoothSpinePitch,
       targetPitch,
       Math.min(1, dt * 10)
     );
 
+    // Procedural body banking into turns (proportional to angular velocity * forward speed)
+    const speedFactor = THREE.MathUtils.clamp(controller.speed / 6.0, 0.15, 1.0);
+    const targetBank = THREE.MathUtils.clamp(-controller.turnRate * 0.042 * speedFactor, -0.18, 0.18);
+    this.smoothTurnBank = THREE.MathUtils.lerp(
+      this.smoothTurnBank,
+      targetBank,
+      Math.min(1, dt * 10)
+    );
+
     if (this.modelRoot) {
       this.modelRoot.position.y = this.smoothPelvisOffset;
       this.modelRoot.rotation.x = this.smoothSpinePitch;
+      this.modelRoot.rotation.z = this.smoothTurnBank;
     }
 
-    // 3. Secondary Damped-Spring Physics for 3-Segment Hair Braid
-    const turnRate = (controller.heading - this.lastHeading) / Math.max(0.001, dt);
-    this.lastHeading = controller.heading;
-    const clampTurn = THREE.MathUtils.clamp(turnRate, -8, 8);
-
-    const restAngleX = 0.18 + (controller.pose === 'run' ? 0.38 : controller.pose === 'walk' ? 0.16 : 0);
+    // 3. Secondary Damped-Spring Physics for 5-Segment Hair Braid
+    const clampTurn = THREE.MathUtils.clamp(controller.turnRate, -8, 8);
+    const restAngleX =
+      0.28 +
+      (controller.pose === 'run' ? 0.36 : controller.pose === 'walk' ? 0.16 : 0) +
+      Math.max(0, this.smoothSpinePitch * 0.45);
     const strideBounce =
       controller.grounded && controller.speed > 0.2
         ? Math.sin(performance.now() * 0.012 * (controller.pose === 'run' ? 1.5 : 1.0)) *
           0.08 *
           Math.min(1, controller.speed / 4)
         : 0;
-    const airLift = !controller.grounded ? THREE.MathUtils.clamp(-controller.vy * 0.06, -0.25, 0.45) : 0;
+    const airLift = !controller.grounded ? THREE.MathUtils.clamp(-controller.vy * 0.05, -0.2, 0.38) : 0;
 
     const targetX = restAngleX + strideBounce + airLift;
-    const targetZ = THREE.MathUtils.clamp(-clampTurn * 0.065, -0.35, 0.35);
+    const targetZ = THREE.MathUtils.clamp(-clampTurn * 0.06, -0.32, 0.32);
 
     const k = 36;
     const d = 7.5;
@@ -812,42 +965,60 @@ export class Naira {
 
     for (let i = 0; i < this.braidSegments.length; i++) {
       const seg = this.braidSegments[i];
-      const w = (i + 1) * 0.36;
-      // Negative X rotation tilts -Y (down) toward -Z (backward over collar & rucksack bedroll)
-      seg.rotation.x = -this.braidAngleX * w;
-      seg.rotation.z = -0.12 + this.braidAngleZ * w;
+      // Positive X rotation swings -Y (downward) toward -Z (backward over collar & left shoulder)
+      const linkWeight = i === 0 ? 0.55 : i === 1 ? 0.22 : 0.10;
+      seg.rotation.x = this.braidAngleX * linkWeight;
+      seg.rotation.z = (i === 0 ? -0.14 : -0.02) + this.braidAngleZ * linkWeight;
     }
 
-    // 4. Blend locomotion animations
+    // 4. Blend 9-State Locomotion Animations
     if (this.currentPose !== controller.pose) {
-      const nextAction = this.actions[controller.pose];
+      const nextAction = this.actions[controller.pose] || this.actions.idle;
       if (nextAction && this.currentAction && nextAction !== this.currentAction) {
         nextAction.reset();
         nextAction.enabled = true;
 
         if (controller.pose === 'walk') {
-          nextAction.timeScale = Math.max(0.7, controller.speed / 2.2);
+          nextAction.timeScale = Math.max(0.68, controller.speed / 2.35);
         } else if (controller.pose === 'run') {
-          nextAction.timeScale = Math.max(0.85, controller.speed / 5.5);
+          nextAction.timeScale = Math.max(0.88, controller.speed / 5.4);
+        } else if (controller.pose === 'jump_start' || controller.pose === 'jump_land') {
+          nextAction.timeScale = 1.35;
         } else {
           nextAction.timeScale = 1.0;
         }
 
-        nextAction.crossFadeFrom(this.currentAction, 0.2, true);
+        const fadeDur =
+          controller.pose === 'jump_start' || controller.pose === 'jump_land' ? 0.12 : 0.2;
+        nextAction.crossFadeFrom(this.currentAction, fadeDur, true);
         nextAction.play();
         this.currentAction = nextAction;
       }
       this.currentPose = controller.pose;
     } else if (this.currentAction) {
       if (controller.pose === 'walk') {
-        this.currentAction.timeScale = Math.max(0.7, controller.speed / 2.2);
+        this.currentAction.timeScale = Math.max(0.68, controller.speed / 2.35);
       } else if (controller.pose === 'run') {
-        this.currentAction.timeScale = Math.max(0.85, controller.speed / 5.5);
+        this.currentAction.timeScale = Math.max(0.88, controller.speed / 5.4);
       }
     }
 
     if (this.mixer) {
       this.mixer.update(dt);
+    }
+
+    // 5. Post-Mixer Procedural Head Look-Direction Alignment (Naira subtly glances toward camera look direction)
+    if (this.headBone && camYaw !== undefined) {
+      const camForwardYaw = camYaw + Math.PI;
+      let diffYaw = (camForwardYaw - controller.heading) % (Math.PI * 2);
+      if (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+      if (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+      const goalHeadYaw =
+        Math.abs(diffYaw) < 1.35
+          ? THREE.MathUtils.clamp(diffYaw * 0.35, -0.32, 0.32)
+          : 0;
+      this.smoothHeadYaw = THREE.MathUtils.lerp(this.smoothHeadYaw, goalHeadYaw, Math.min(1, dt * 8));
+      this.headBone.rotation.y += this.smoothHeadYaw;
     }
   }
 }

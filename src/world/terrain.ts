@@ -162,28 +162,30 @@ export class Terrain {
     this.group.name = 'Andean_Terrain';
     scene.add(this.group);
 
-    // High-frequency PBR Terrain Material with 3D slope-compensated UVs
+    // 2048x2048 Photorealistic Andean Cloud-Forest Floor & Pebble/Moss PBR Material
     const texLoader = new THREE.TextureLoader();
-    const meadowTex = texLoader.load('/juzu/textures/meadow_diff.jpg');
+    const meadowTex = texLoader.load('/juzu/assets/environment-textures/environment-forest-floor.jpeg');
+    meadowTex.colorSpace = THREE.SRGBColorSpace;
+    meadowTex.anisotropy = 8;
     meadowTex.wrapS = meadowTex.wrapT = THREE.RepeatWrapping;
 
-    const meadowNor = texLoader.load('/juzu/textures/meadow_nor.jpg');
+    const meadowNor = texLoader.load('/juzu/assets/environment-textures/environment-forest-floor-normal.jpg');
+    meadowNor.anisotropy = 8;
     meadowNor.wrapS = meadowNor.wrapT = THREE.RepeatWrapping;
 
-    const meadowArm = texLoader.load('/juzu/textures/meadow_arm.jpg');
-    meadowArm.wrapS = meadowArm.wrapT = THREE.RepeatWrapping;
+    const meadowRough = texLoader.load('/juzu/assets/environment-textures/environment-forest-floor-roughness.jpg');
+    meadowRough.anisotropy = 8;
+    meadowRough.wrapS = meadowRough.wrapT = THREE.RepeatWrapping;
 
     this.material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
-      roughness: 0.88,
-      metalness: 0.04,
+      roughness: 0.86,
+      metalness: 0.03,
       map: meadowTex,
       normalMap: meadowNor,
-      normalScale: new THREE.Vector2(1.15, 1.15),
-      roughnessMap: meadowArm,
-      aoMap: meadowArm,
-      aoMapIntensity: 0.65,
+      normalScale: new THREE.Vector2(1.45, 1.45),
+      roughnessMap: meadowRough,
       flatShading: false,
     });
   }
@@ -259,17 +261,17 @@ export class Terrain {
       const ny = normAttr.getY(i);
       const nz = normAttr.getZ(i);
 
-      // 3D arc-length UV projection so vertical cliff walls never stretch textures
-      const tileFreq = 0.26;
+      // 3D arc-length UV projection so vertical cliff walls never stretch textures (~4.5m per 2K tile)
+      const tileFreq = 0.22;
       uvAttr.setXY(
         i,
-        (vx + Math.sign(nx || 1) * vy * 0.75) * tileFreq,
-        (vz + Math.sign(nz || 1) * vy * 0.75) * tileFreq
+        (vx + Math.sign(nx || 1) * vy * 0.78) * tileFreq,
+        (vz + Math.sign(nz || 1) * vy * 0.78) * tileFreq
       );
 
       // Micro-noise & horizontal rock strata banding
       const detailNoise = vnoise(vx * 0.14, vz * 0.14);
-      const strataBand = 0.82 + 0.18 * Math.sin(vy * 2.6 + detailNoise * 3.0);
+      const strataBand = 0.84 + 0.16 * Math.sin(vy * 2.6 + detailNoise * 3.0);
 
       // Slope factor: 1 = flat Andean valley/terrace, 0 = sheer granite gorge wall
       const slope = THREE.MathUtils.clamp((ny - 0.58) / 0.28, 0, 1);
@@ -283,14 +285,14 @@ export class Terrain {
       // Riverbank wet dark slate & cobbles near water line
       const riverbank = THREE.MathUtils.clamp((vy - 0.4) / 2.2, 0, 1);
 
-      // Steep granite cliff color (stratified dark charcoal-warm andesite) vs lush cloud-forest moss/grass
-      const rockR = 0.38 * strataBand;
-      const rockG = 0.35 * strataBand + mossCrevice * 0.14;
-      const rockB = 0.31 * strataBand;
+      // Steep granite cliff color (stratified warm-charcoal andesite) vs lush cloud-forest moss/pebble floor
+      const rockR = 0.64 * strataBand;
+      const rockG = 0.60 * strataBand + mossCrevice * 0.18;
+      const rockB = 0.56 * strataBand;
 
-      const grassR = 0.36 + detailNoise * 0.12;
-      const grassG = 0.52 + detailNoise * 0.14;
-      const grassB = 0.24 + detailNoise * 0.08;
+      const grassR = 0.74 + detailNoise * 0.18;
+      const grassG = 0.88 + detailNoise * 0.16;
+      const grassB = 0.66 + detailNoise * 0.12;
 
       // Above 28m, transition vegetation into rugged high-alpine stone & scree before snowline
       const alpineRockMask = THREE.MathUtils.clamp((vy - 28) / 14, 0, 1);
@@ -300,15 +302,23 @@ export class Terrain {
       let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope);
       let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope);
 
+      // Worn stone-and-earth expedition footpath along the sanctuary trail
+      if (vz > -48 && vz < 16 && Math.abs(vx) < 2.8 && vy > 3.5) {
+        const trailT = (1.0 - Math.abs(vx) / 2.8) * slope * 0.55;
+        r = THREE.MathUtils.lerp(r, 0.88, trailT);
+        g = THREE.MathUtils.lerp(g, 0.78, trailT);
+        b = THREE.MathUtils.lerp(b, 0.64, trailT);
+      }
+
       // Darken damp river canyon stone along the gorge waterline
-      r = THREE.MathUtils.lerp(0.22, r, riverbank);
-      g = THREE.MathUtils.lerp(0.24, g, riverbank);
-      b = THREE.MathUtils.lerp(0.21, b, riverbank);
+      r = THREE.MathUtils.lerp(0.36, r, riverbank);
+      g = THREE.MathUtils.lerp(0.38, g, riverbank);
+      b = THREE.MathUtils.lerp(0.34, b, riverbank);
 
       // Glaciated alpine snow on high cordillera peaks
-      r = THREE.MathUtils.lerp(r, 0.92, snow);
-      g = THREE.MathUtils.lerp(g, 0.95, snow);
-      b = THREE.MathUtils.lerp(b, 0.99, snow);
+      r = THREE.MathUtils.lerp(r, 1.05, snow);
+      g = THREE.MathUtils.lerp(g, 1.08, snow);
+      b = THREE.MathUtils.lerp(b, 1.14, snow);
 
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;

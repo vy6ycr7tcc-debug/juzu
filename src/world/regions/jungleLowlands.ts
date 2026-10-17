@@ -14,43 +14,50 @@ export class JungleLowlandsRegion {
     this.group.name = 'Region_JungleLowlands';
     scene.add(this.group);
 
-    const crackDiff = this.texLoader.load('/juzu/textures/temple/sandstone_cracks_diff.jpg');
+    const crackDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
+    crackDiff.colorSpace = THREE.SRGBColorSpace;
+    crackDiff.anisotropy = 8;
     crackDiff.wrapS = crackDiff.wrapT = THREE.RepeatWrapping;
 
-    const crackNor = this.texLoader.load('/juzu/textures/temple/sandstone_cracks_nor.jpg');
+    const crackNor = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-normal.jpg');
+    crackNor.anisotropy = 8;
     crackNor.wrapS = crackNor.wrapT = THREE.RepeatWrapping;
 
-    const crackArm = this.texLoader.load('/juzu/textures/temple/sandstone_cracks_arm.jpg');
-    crackArm.wrapS = crackArm.wrapT = THREE.RepeatWrapping;
+    const crackRough = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-roughness.jpg');
+    crackRough.anisotropy = 8;
+    crackRough.wrapS = crackRough.wrapT = THREE.RepeatWrapping;
 
     const jungleStoneMat = solid(
       new THREE.MeshStandardMaterial({
         map: crackDiff,
         normalMap: crackNor,
-        normalScale: new THREE.Vector2(1.0, 1.0),
-        roughnessMap: crackArm,
-        color: 0x78846c,
+        normalScale: new THREE.Vector2(1.45, 1.45),
+        roughnessMap: crackRough,
+        color: 0xd0d8c6,
         vertexColors: true,
-        roughness: 0.9,
-        metalness: 0.05,
+        roughness: 0.86,
+        metalness: 0.04,
       })
     );
 
-    const rockDiff = this.texLoader.load('/juzu/textures/rock_diff.jpg');
+    const rockDiff = this.texLoader.load('/juzu/textures/cliff_diff.jpg');
+    rockDiff.colorSpace = THREE.SRGBColorSpace;
+    rockDiff.anisotropy = 8;
     rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
 
-    const rockNor = this.texLoader.load('/juzu/textures/rock_nor.jpg');
+    const rockNor = this.texLoader.load('/juzu/textures/cliff_nor.jpg');
+    rockNor.anisotropy = 8;
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
 
     const wetStoneMat = solid(
       new THREE.MeshStandardMaterial({
         map: rockDiff,
         normalMap: rockNor,
-        normalScale: new THREE.Vector2(1.0, 1.0),
-        color: 0x4b564a,
+        normalScale: new THREE.Vector2(1.35, 1.35),
+        color: 0x7e8a7c,
         vertexColors: true,
-        roughness: 0.52,
-        metalness: 0.12,
+        roughness: 0.48,
+        metalness: 0.08,
       })
     );
 

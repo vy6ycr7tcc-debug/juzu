@@ -365,7 +365,7 @@ async function bootJuzu() {
       followCamera.triggerLandingDip(controller.landingImpact);
       audio.playFootstep(controller.getSurfaceType());
     }
-    naira.update(controller, dt);
+    naira.update(controller, dt, followCamera.yaw);
 
     // Input & Over-the-Shoulder Camera
     const look = input.resetLook();
@@ -375,7 +375,9 @@ async function bootJuzu() {
       dt,
       controller.pose === 'run',
       controller.crouching,
-      instinctTimer > 0
+      instinctTimer > 0,
+      controller.vel,
+      controller.grounded
     );
     hud.updateCompass(followCamera.yaw);
 
@@ -413,6 +415,7 @@ async function bootJuzu() {
       hud.setInteractHint('[E] Align Bronze Inti Sun-Mirror');
       if (eTriggered) {
         mirrorSolved = true;
+        controller.triggerInteract(new THREE.Vector3(-4.2, controller.pos.y, 3.8));
         cloudForest.alignSunMirror();
         audio.playCajon(0.5);
         audio.playQuenaNote(523.25, 1.6);
@@ -429,6 +432,7 @@ async function bootJuzu() {
       hud.setInteractHint('[E] Decipher Carved Inca Stele');
       if (eTriggered) {
         steleSolved = true;
+        controller.triggerInteract(new THREE.Vector3(0, controller.pos.y, -44));
         audio.playQuenaNote(659.25, 1.8);
         hud.setObjective('Stele deciphered! Open [Tab] Journal to review notes or ascend to the High Sierra Intihuatana.');
         hud.addJournalEntry({
@@ -443,6 +447,7 @@ async function bootJuzu() {
       hud.setInteractHint('[E] Align Intihuatana Solstice Gnomon');
       if (eTriggered) {
         gnomonSolved = true;
+        controller.triggerInteract(new THREE.Vector3(120, controller.pos.y, -165));
         highSierra.alignIntihuatanaDial();
         audio.playCajon(0.55);
         audio.playQuenaNote(587.33, 1.8);
@@ -459,6 +464,7 @@ async function bootJuzu() {
       hud.setInteractHint('[E] Turn Ancient Bronze Sluice Wheel');
       if (eTriggered) {
         sluiceSolved = true;
+        controller.triggerInteract(new THREE.Vector3(-180, controller.pos.y, 124.6));
         jungleLowlands.openCenoteSluice();
         audio.playCajon(0.6);
         audio.playQuenaNote(493.88, 1.8);
@@ -475,6 +481,7 @@ async function bootJuzu() {
       hud.setInteractHint('[E] Awaken Golden Sun Disk of Paititi');
       if (eTriggered) {
         paititiSolved = true;
+        controller.triggerInteract(new THREE.Vector3(200, controller.pos.y, 180));
         paititi.awakenSunPlaza();
         audio.playCajon(0.65);
         audio.playQuenaNote(783.99, 2.2);

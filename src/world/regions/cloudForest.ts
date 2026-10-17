@@ -22,62 +22,78 @@ export class CloudForestRegion {
     this.group.name = 'Region_CloudForest';
     scene.add(this.group);
 
-    // Authentic Andean PBR Stone & Timber Materials (world-space UV ready)
-    const stoneDiff = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_05_diff.jpg');
+    // Authentic 2048x2048 Andean PBR Polygonal Stone & Timber Materials (world-space UV ready)
+    const stoneDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
+    stoneDiff.colorSpace = THREE.SRGBColorSpace;
+    stoneDiff.anisotropy = 8;
     stoneDiff.wrapS = stoneDiff.wrapT = THREE.RepeatWrapping;
 
-    const stoneNor = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_05_nor.jpg');
+    const stoneNor = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-normal.jpg');
+    stoneNor.anisotropy = 8;
     stoneNor.wrapS = stoneNor.wrapT = THREE.RepeatWrapping;
 
-    const stoneArm = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_05_arm.jpg');
-    stoneArm.wrapS = stoneArm.wrapT = THREE.RepeatWrapping;
+    const stoneRough = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-roughness.jpg');
+    stoneRough.anisotropy = 8;
+    stoneRough.wrapS = stoneRough.wrapT = THREE.RepeatWrapping;
 
     const ashlarStoneMat = solid(
       new THREE.MeshStandardMaterial({
         map: stoneDiff,
         normalMap: stoneNor,
-        normalScale: new THREE.Vector2(1.0, 1.0),
-        roughnessMap: stoneArm,
-        metalness: 0.04,
+        normalScale: new THREE.Vector2(1.45, 1.45),
+        roughnessMap: stoneRough,
+        metalness: 0.03,
         roughness: 0.82,
-        color: 0x989182,
+        color: 0xffffff,
         vertexColors: true,
       })
     );
 
     const plankDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-planks.jpeg');
+    plankDiff.colorSpace = THREE.SRGBColorSpace;
+    plankDiff.anisotropy = 8;
     plankDiff.wrapS = plankDiff.wrapT = THREE.RepeatWrapping;
-    plankDiff.repeat.set(1.5, 0.5);
+    plankDiff.repeat.set(1.0, 0.35);
 
     const plankNor = this.texLoader.load('/juzu/assets/environment-textures/environment-planks-normal.jpg');
+    plankNor.anisotropy = 8;
     plankNor.wrapS = plankNor.wrapT = THREE.RepeatWrapping;
-    plankNor.repeat.set(1.5, 0.5);
+    plankNor.repeat.set(1.0, 0.35);
+
+    const plankRough = this.texLoader.load('/juzu/assets/environment-textures/environment-planks-roughness.jpg');
+    plankRough.anisotropy = 8;
+    plankRough.wrapS = plankRough.wrapT = THREE.RepeatWrapping;
+    plankRough.repeat.set(1.0, 0.35);
 
     const timberPlankMat = solid(
       new THREE.MeshStandardMaterial({
         map: plankDiff,
         normalMap: plankNor,
-        normalScale: new THREE.Vector2(0.9, 0.9),
-        color: 0x5c4633,
-        roughness: 0.86,
+        normalScale: new THREE.Vector2(1.25, 1.25),
+        roughnessMap: plankRough,
+        color: 0xb8a48c,
+        roughness: 0.84,
         metalness: 0.02,
       })
     );
 
     const paveDiff = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_diff.jpg');
+    paveDiff.colorSpace = THREE.SRGBColorSpace;
+    paveDiff.anisotropy = 8;
     paveDiff.wrapS = paveDiff.wrapT = THREE.RepeatWrapping;
 
     const paveNor = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_nor.jpg');
+    paveNor.anisotropy = 8;
     paveNor.wrapS = paveNor.wrapT = THREE.RepeatWrapping;
 
     const redPavementMat = solid(
       new THREE.MeshStandardMaterial({
         map: paveDiff,
         normalMap: paveNor,
-        normalScale: new THREE.Vector2(0.95, 0.95),
-        color: 0x8e6f5a,
+        normalScale: new THREE.Vector2(1.2, 1.2),
+        color: 0xd4b89c,
         vertexColors: true,
-        roughness: 0.82,
+        roughness: 0.80,
         metalness: 0.03,
       })
     );
@@ -717,9 +733,18 @@ export class CloudForestRegion {
     }
 
     // Weathered Olive-Canvas Expedition A-Frame Shelter Tent & Camp Gear beside the fire (matching ref_camp_and_sun_mirror)
+    const tentCanvasTex = this.texLoader.load('/juzu/assets/character-textures/character-canvas.jpeg');
+    tentCanvasTex.colorSpace = THREE.SRGBColorSpace;
+    tentCanvasTex.anisotropy = 8;
+    tentCanvasTex.wrapS = tentCanvasTex.wrapT = THREE.RepeatWrapping;
+    tentCanvasTex.repeat.set(2, 2);
+
     const tentCanvasMat = new THREE.MeshStandardMaterial({
-      color: 0x5c5542,
-      roughness: 0.9,
+      map: tentCanvasTex,
+      bumpMap: tentCanvasTex,
+      bumpScale: 0.015,
+      color: 0x8f866a,
+      roughness: 0.88,
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
@@ -796,19 +821,29 @@ export class CloudForestRegion {
     const wz = -29.5;
     fallsGroup.position.set(wx, -2.2, wz);
 
-    const rockDiff = this.texLoader.load('/juzu/textures/rock_diff.jpg');
-    rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
-    const rockNor = this.texLoader.load('/juzu/textures/rock_nor.jpg');
-    rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
+    const cliffDiff = this.texLoader.load('/juzu/textures/cliff_diff.jpg');
+    cliffDiff.colorSpace = THREE.SRGBColorSpace;
+    cliffDiff.anisotropy = 8;
+    cliffDiff.wrapS = cliffDiff.wrapT = THREE.RepeatWrapping;
+
+    const cliffNor = this.texLoader.load('/juzu/textures/cliff_nor.jpg');
+    cliffNor.anisotropy = 8;
+    cliffNor.wrapS = cliffNor.wrapT = THREE.RepeatWrapping;
+
+    const cliffArm = this.texLoader.load('/juzu/textures/cliff_arm.jpg');
+    cliffArm.anisotropy = 8;
+    cliffArm.wrapS = cliffArm.wrapT = THREE.RepeatWrapping;
 
     const wetSlateMat = solid(
       new THREE.MeshStandardMaterial({
-        map: rockDiff,
-        normalMap: rockNor,
-        color: 0x42473e,
+        map: cliffDiff,
+        normalMap: cliffNor,
+        normalScale: new THREE.Vector2(1.45, 1.45),
+        roughnessMap: cliffArm,
+        color: 0x868a80,
         vertexColors: true,
-        roughness: 0.46,
-        metalness: 0.08,
+        roughness: 0.48,
+        metalness: 0.06,
       })
     );
 

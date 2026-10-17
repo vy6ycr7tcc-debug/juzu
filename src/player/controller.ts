@@ -2,12 +2,22 @@ import * as THREE from 'three/webgpu';
 import { standAt, WATER_Y } from '../world/terrain';
 import { solidity, STEP } from '../world/solidity';
 
-export type LocomotionPose = 'idle' | 'walk' | 'run' | 'jump' | 'swim';
+export type LocomotionPose =
+  | 'idle'
+  | 'walk'
+  | 'run'
+  | 'jump_start'
+  | 'jump'
+  | 'jump_land'
+  | 'swim'
+  | 'swim_idle'
+  | 'interact';
 
-const WALK_SPEED = 2.6;
-const RUN_SPEED = 6.5;
-const CROUCH_SPEED = 1.65;
-const JUMP_VELOCITY = 6.9;
+const WALK_SPEED = 2.75;
+const RUN_SPEED = 6.65;
+const CROUCH_SPEED = 1.7;
+const DODGE_SPEED = 8.4;
+const JUMP_VELOCITY = 7.0;
 const GRAVITY = 18.0;
 const SWIM_FEET = WATER_Y - 1.0;
 
@@ -19,8 +29,12 @@ export class Controller {
   swimming = false;
   crouching = false;
   mantling = false;
+  dodging = false;
+  justJumped = false;
   justLanded = false;
   landingImpact = 0;
+  turnRate = 0;
+  slopePitch = 0;
   pose: LocomotionPose = 'idle';
   speed = 0;
 
@@ -28,6 +42,11 @@ export class Controller {
   private mantleTimer = 0;
   private mantleStart = new THREE.Vector3();
   private mantleEnd = new THREE.Vector3();
+  private landingTimer = 0;
+  private interactTimer = 0;
+  private dodgeTimer = 0;
+  private dodgeCooldown = 0;
+  private lastCrouchInput = false;
 
   get vy(): number {
     return this.vel.y;
@@ -64,6 +83,17 @@ export class Controller {
     return 'grass';
   }
 
+  public triggerInteract(targetPos?: THREE.Vector3): void {
+    this.interactTimer = 0.72;
+    if (targetPos) {
+      const dx = targetPos.x - this.pos.x;
+      const dz = targetPos.z - this.pos.z;
+      if (Math.hypot(dx, dz) > 0.05) {
+        this.heading = Math.atan2(dx, dz);
+      }
+    }
+  }
+
   public update(
     inputMove: { x: number; y: number },
     isBoost: boolean,
@@ -72,7 +102,14 @@ export class Controller {
     dt: number,
     isCrouch: boolean = false
   ): void {
+    this.justJumped = false;
     this.justLanded = false;
+    if (this.landingTimer > 0) this.landingTimer = Math.max(0, this.landingTimer - dt);
+    if (this.interactTimer > 0) this.interactTimer = Math.max(0, this.interactTimer - dt);
+    if (this.dodgeCooldown > 0) this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
+
+    const crouchPressedEdge = isCrouch && !this.lastCrouchInput;
+    this.lastCrouchInput = isCrouch;
 
     // 0. Handle active Tomb Raider Ledge Mantle arc
     if (this.mantling) {
@@ -84,13 +121,15 @@ export class Controller {
       // Parabolic vertical lift over the ledge lip
       const arcLift = Math.sin(t * Math.PI) * 0.28;
       this.pos.y = THREE.MathUtils.lerp(this.mantleStart.y, this.mantleEnd.y, Math.pow(t, 0.7)) + arcLift;
-      this.pose = 'jump';
+      this.pose = 'jump_start';
+      this.turnRate = 0;
       if (t >= 1) {
         this.mantling = false;
         this.grounded = true;
         this.vel.y = 0;
         this.justLanded = true;
         this.landingImpact = 3.5;
+        this.landingTimer = 0.22;
       }
       return;
     }
@@ -100,7 +139,28 @@ export class Controller {
     // 1. Water state check
     const inWater = this.pos.y < WATER_Y - 0.4;
     this.swimming = inWater && groundH < SWIM_FEET;
-    this.crouching = isCrouch && this.grounded && !this.swimming;
+
+    // Trigger athletic Tomb Raider scramble/dodge burst if tapping Crouch while sprinting
+    if (
+      crouchPressedEdge &&
+      isBoost &&
+      this.grounded &&
+      !this.swimming &&
+      this.speed > 4.0 &&
+      this.dodgeCooldown <= 0
+    ) {
+      this.dodging = true;
+      this.dodgeTimer = 0.36;
+      this.dodgeCooldown = 0.75;
+    }
+    if (this.dodgeTimer > 0) {
+      this.dodgeTimer = Math.max(0, this.dodgeTimer - dt);
+      if (this.dodgeTimer <= 0) this.dodging = false;
+    } else {
+      this.dodging = false;
+    }
+
+    this.crouching = isCrouch && this.grounded && !this.swimming && !this.dodging;
 
     if (this.swimming) {
       this.grounded = false;
@@ -117,6 +177,8 @@ export class Controller {
           this.vel.y = JUMP_VELOCITY;
           this.grounded = false;
           this.crouching = false;
+          this.dodging = false;
+          this.justJumped = true;
         }
       } else {
         this.airTime += dt;
@@ -132,33 +194,67 @@ export class Controller {
           if (this.airTime > 0.14) {
             this.justLanded = true;
             this.landingImpact = Math.min(10, Math.abs(prevVy));
+            this.landingTimer = 0.22;
           }
         }
       }
     }
 
     // 3. Horizontal Locomotion (Camera-relative: W moves away from camera along -sinYaw, -cosYaw)
-    const hasMove = Math.hypot(inputMove.x, inputMove.y) > 0.08;
+    const inputMag = Math.min(1.0, Math.hypot(inputMove.x, inputMove.y));
+    const hasMove = inputMag > 0.08 || this.dodging;
     if (hasMove) {
-      const sinY = Math.sin(camYaw);
-      const cosY = Math.cos(camYaw);
-      const wx = inputMove.x * cosY - inputMove.y * sinY;
-      const wz = -inputMove.x * sinY - inputMove.y * cosY;
-      const targetHeading = Math.atan2(wx, wz);
+      if (inputMag > 0.08) {
+        const sinY = Math.sin(camYaw);
+        const cosY = Math.cos(camYaw);
+        const wx = inputMove.x * cosY - inputMove.y * sinY;
+        const wz = -inputMove.x * sinY - inputMove.y * cosY;
+        const targetHeading = Math.atan2(wx, wz);
 
-      let dHeading = (targetHeading - this.heading) % (Math.PI * 2);
-      if (dHeading > Math.PI) dHeading -= Math.PI * 2;
-      if (dHeading < -Math.PI) dHeading += Math.PI * 2;
-      this.heading += dHeading * Math.min(1, dt * 14);
+        let dHeading = (targetHeading - this.heading) % (Math.PI * 2);
+        if (dHeading > Math.PI) dHeading -= Math.PI * 2;
+        if (dHeading < -Math.PI) dHeading += Math.PI * 2;
 
-      const targetSpeed = this.crouching
-        ? CROUCH_SPEED
-        : isBoost
-          ? RUN_SPEED
-          : WALK_SPEED;
-      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 12));
+        const prevHeading = this.heading;
+        const turnBlend = Math.min(1, dt * (this.grounded ? 13.5 : 6.0));
+        this.heading += dHeading * turnBlend;
+
+        const instTurnRate = (this.heading - prevHeading) / Math.max(0.001, dt);
+        this.turnRate = THREE.MathUtils.lerp(this.turnRate, instTurnRate, Math.min(1, dt * 12));
+      } else {
+        this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 10));
+      }
 
       const moveDir = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+
+      // Compute forward terrain slope pitch for realistic uphill/downhill speed & body lean
+      const aheadH = this.getGroundAt(
+        this.pos.x + moveDir.x * 0.65,
+        this.pos.z + moveDir.z * 0.65,
+        this.pos.y
+      );
+      const rawSlope = THREE.MathUtils.clamp((aheadH - this.pos.y) / 0.65, -0.65, 0.65);
+      this.slopePitch = THREE.MathUtils.lerp(
+        this.slopePitch,
+        this.grounded ? rawSlope : 0,
+        Math.min(1, dt * 10)
+      );
+      const slopeSpeedFactor = this.grounded
+        ? THREE.MathUtils.clamp(1.0 - this.slopePitch * 0.22, 0.78, 1.12)
+        : 1.0;
+
+      const baseTargetSpeed = this.dodging
+        ? DODGE_SPEED
+        : this.crouching
+          ? CROUCH_SPEED
+          : isBoost
+            ? RUN_SPEED
+            : WALK_SPEED * Math.max(0.55, inputMag);
+      const targetSpeed = baseTargetSpeed * slopeSpeedFactor;
+
+      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 11));
+      this.vel.x = moveDir.x * this.speed;
+      this.vel.z = moveDir.z * this.speed;
 
       // Check airborne Ledge Grab / Mantle against solid masonry or rock ledges (0.8m..2.15m above feet)
       if (!this.grounded && !this.swimming && this.vel.y > -6.5) {
@@ -176,9 +272,8 @@ export class Controller {
         }
       }
 
-      const step = moveDir.clone().multiplyScalar(this.speed * dt);
-      const nextX = this.pos.x + step.x;
-      const nextZ = this.pos.z + step.z;
+      const nextX = this.pos.x + this.vel.x * dt;
+      const nextZ = this.pos.z + this.vel.z * dt;
       const nextTerrainH = standAt(nextX, nextZ);
 
       // Prevent climbing sheer terrain cliffs steeper than 60°
@@ -195,18 +290,38 @@ export class Controller {
         this.pos.y = this.getGroundAt(this.pos.x, this.pos.z, this.pos.y);
       }
     } else {
-      this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 16));
+      // Smooth athletic deceleration inertia
+      this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 12));
+      this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, 0, Math.min(1, dt * 10));
+      this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 13));
+      this.vel.x = Math.sin(this.heading) * this.speed;
+      this.vel.z = Math.cos(this.heading) * this.speed;
+      if (this.speed > 0.04) {
+        const nextX = this.pos.x + this.vel.x * dt;
+        const nextZ = this.pos.z + this.vel.z * dt;
+        if (standAt(nextX, nextZ) - this.pos.y < 1.45) {
+          this.pos.x = nextX;
+          this.pos.z = nextZ;
+        }
+      }
       solidity.pushWalk(this.pos, this.pos.y, 0.38);
+      if (this.grounded) {
+        this.pos.y = this.getGroundAt(this.pos.x, this.pos.z, this.pos.y);
+      }
     }
 
-    // 4. Update Pose
+    // 4. Update Pose (Full 9-State Locomotion Machine)
     if (this.swimming) {
-      this.pose = 'swim';
+      this.pose = this.speed > 0.25 ? 'swim' : 'swim_idle';
     } else if (!this.grounded) {
-      this.pose = 'jump';
-    } else if (this.speed > 3.8 && !this.crouching) {
+      this.pose = this.airTime < 0.22 && this.vel.y > 1.5 ? 'jump_start' : 'jump';
+    } else if (this.interactTimer > 0 && this.speed < 0.35) {
+      this.pose = 'interact';
+    } else if (this.landingTimer > 0 && this.speed < 1.2) {
+      this.pose = 'jump_land';
+    } else if ((this.speed > 3.8 && !this.crouching) || this.dodging) {
       this.pose = 'run';
-    } else if (this.speed > 0.2) {
+    } else if (this.speed > 0.18) {
       this.pose = 'walk';
     } else {
       this.pose = 'idle';
@@ -218,7 +333,12 @@ export class Controller {
     this.pos.y = this.getGroundAt(pos.x, pos.z, pos.y);
     this.vel.set(0, 0, 0);
     this.speed = 0;
+    this.turnRate = 0;
+    this.slopePitch = 0;
     this.grounded = true;
     this.mantling = false;
+    this.dodging = false;
+    this.landingTimer = 0;
+    this.interactTimer = 0;
   }
 }

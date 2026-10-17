@@ -15,21 +15,25 @@ export class PaititiRegion {
     scene.add(this.group);
 
     const blockDiff = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_08_diff.jpg');
+    blockDiff.colorSpace = THREE.SRGBColorSpace;
+    blockDiff.anisotropy = 8;
     blockDiff.wrapS = blockDiff.wrapT = THREE.RepeatWrapping;
 
     const blockNor = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_08_nor.jpg');
+    blockNor.anisotropy = 8;
     blockNor.wrapS = blockNor.wrapT = THREE.RepeatWrapping;
 
     const blockArm = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_08_arm.jpg');
+    blockArm.anisotropy = 8;
     blockArm.wrapS = blockArm.wrapT = THREE.RepeatWrapping;
 
     const precisionAshlarMat = solid(
       new THREE.MeshStandardMaterial({
         map: blockDiff,
         normalMap: blockNor,
-        normalScale: new THREE.Vector2(0.95, 0.95),
+        normalScale: new THREE.Vector2(1.25, 1.25),
         roughnessMap: blockArm,
-        color: 0xc8bfaf,
+        color: 0xe6ded0,
         vertexColors: true,
         roughness: 0.72,
         metalness: 0.04,
@@ -37,20 +41,23 @@ export class PaititiRegion {
     );
 
     const paveDiff = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_diff.jpg');
+    paveDiff.colorSpace = THREE.SRGBColorSpace;
+    paveDiff.anisotropy = 8;
     paveDiff.wrapS = paveDiff.wrapT = THREE.RepeatWrapping;
-    paveDiff.repeat.set(6, 6);
+    paveDiff.repeat.set(22, 22);
 
     const paveNor = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_nor.jpg');
+    paveNor.anisotropy = 8;
     paveNor.wrapS = paveNor.wrapT = THREE.RepeatWrapping;
-    paveNor.repeat.set(6, 6);
+    paveNor.repeat.set(22, 22);
 
     const redPlazaPavingMat = solid(
       new THREE.MeshStandardMaterial({
         map: paveDiff,
         normalMap: paveNor,
-        normalScale: new THREE.Vector2(0.95, 0.95),
-        color: 0x9b7b62,
-        roughness: 0.78,
+        normalScale: new THREE.Vector2(1.25, 1.25),
+        color: 0xd8b89c,
+        roughness: 0.76,
         metalness: 0.05,
       })
     );
