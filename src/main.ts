@@ -271,6 +271,16 @@ async function bootJuzu() {
       followCamera.dist = 5.2;
       followCamera.shoulderOffset = 0.28;
       followCamera.teleport(controller.pos);
+    } else if (shotParam === 'sanctuary') {
+      const px = 0.0;
+      const pz = -36.5;
+      controller.pos.set(px, standAt(px, pz) + 0.1, pz);
+      controller.heading = Math.PI;
+      followCamera.yaw = 0.0;
+      followCamera.pitch = 0.04;
+      followCamera.dist = 5.2;
+      followCamera.shoulderOffset = 0.46;
+      followCamera.teleport(controller.pos);
     }
   }
 

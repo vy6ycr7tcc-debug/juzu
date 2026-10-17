@@ -895,7 +895,7 @@ export class CloudForestRegion {
     const wz = -29.5;
     fallsGroup.position.set(wx, -2.2, wz);
 
-    let pendingScans = 4;
+    let pendingScans = 5;
     const checkScansLoaded = () => {
       pendingScans--;
       if (pendingScans <= 0) {
@@ -1183,7 +1183,108 @@ export class CloudForestRegion {
       }
     );
 
-    // 5. Physical Cascading Waterfall Chute & Whitewater Foam
+    // 5. Photorealistic Scanned Incan Citadel & Bastion Architecture (modular_fort_01)
+    gltfLoader.load(
+      '/juzu/models/scans/modular_fort_01.glb',
+      (gltf) => {
+        const bastionGroup = new THREE.Group();
+        bastionGroup.name = 'Inca_North_Sanctuary_Bastion';
+        this.group.add(bastionGroup);
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            if (mesh.material instanceof THREE.MeshStandardMaterial) {
+              mesh.material.roughness = 0.86;
+              mesh.material.metalness = 0.02;
+              if (mesh.material.map) {
+                mesh.material.map.colorSpace = THREE.SRGBColorSpace;
+                mesh.material.map.anisotropy = 8;
+              }
+              if (mesh.material.normalMap) {
+                mesh.material.normalMap.anisotropy = 8;
+                mesh.material.normalScale = new THREE.Vector2(1.35, 1.35);
+              }
+            }
+          }
+        });
+
+        let towerNode: THREE.Object3D | null = null;
+        let wallStraightNode: THREE.Object3D | null = null;
+        let wallCornerNode: THREE.Object3D | null = null;
+
+        gltf.scene.traverse((child) => {
+          if (child.name === 'modular_fort_01_tower_round' && !towerNode) {
+            towerNode = child;
+          } else if (child.name === 'modular_fort_01_wall_thick_straight_01' && !wallStraightNode) {
+            wallStraightNode = child;
+          } else if (child.name === 'modular_fort_01_wall_thick_corner_01' && !wallCornerNode) {
+            wallCornerNode = child;
+          }
+        });
+
+        if (towerNode && wallStraightNode) {
+          // Twin flanking round bastion towers
+          const towerL = (towerNode as THREE.Object3D).clone(true);
+          const tyL = standAt(-11.5, -42.0);
+          towerL.position.set(-11.5, tyL, -42.0);
+          towerL.scale.set(0.65, 0.75, 0.65);
+          bastionGroup.add(towerL);
+
+          const towerR = (towerNode as THREE.Object3D).clone(true);
+          const tyR = standAt(11.5, -42.0);
+          towerR.position.set(11.5, tyR, -42.0);
+          towerR.scale.set(0.65, 0.75, 0.65);
+          bastionGroup.add(towerR);
+
+          // Defensive curtain ramparts connecting the gateway to the flank towers
+          const wallL = (wallStraightNode as THREE.Object3D).clone(true);
+          const wyL = standAt(-6.2, -40.5);
+          wallL.position.set(-6.2, wyL, -40.5);
+          wallL.scale.set(0.75, 0.72, 0.75);
+          bastionGroup.add(wallL);
+
+          const wallR = (wallStraightNode as THREE.Object3D).clone(true);
+          const wyR = standAt(6.2, -40.5);
+          wallR.position.set(6.2, wyR, -40.5);
+          wallR.scale.set(0.75, 0.72, 0.75);
+          bastionGroup.add(wallR);
+
+          // Rear megalithic sanctuary wall enclosing the sacred Chakana Stele
+          const rearWall = (wallStraightNode as THREE.Object3D).clone(true);
+          const ry = standAt(0, -48.5);
+          rearWall.position.set(0, ry, -48.5);
+          rearWall.scale.set(1.1, 0.85, 0.85);
+          bastionGroup.add(rearWall);
+
+          if (wallCornerNode) {
+            const cornerL = (wallCornerNode as THREE.Object3D).clone(true);
+            const cyL = standAt(-7.5, -47.5);
+            cornerL.position.set(-7.5, cyL, -47.5);
+            cornerL.scale.set(0.75, 0.80, 0.75);
+            bastionGroup.add(cornerL);
+
+            const cornerR = (wallCornerNode as THREE.Object3D).clone(true);
+            const cyR = standAt(7.5, -47.5);
+            cornerR.position.set(7.5, cyR, -47.5);
+            cornerR.scale.set(0.75, 0.80, 0.75);
+            cornerR.rotation.y = Math.PI / 2;
+            bastionGroup.add(cornerR);
+          }
+        }
+
+        checkScansLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[CloudForest] Could not load modular fort scans, using fallback:', err);
+        checkScansLoaded();
+      }
+    );
+
+    // 6. Physical Cascading Waterfall Chute & Whitewater Foam
     const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
     waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
     waterNor.repeat.set(3, 12);
