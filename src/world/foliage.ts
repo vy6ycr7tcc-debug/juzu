@@ -25,11 +25,13 @@ export class Foliage {
   private rootInstances: THREE.InstancedMesh;
   private flowerInstances: THREE.InstancedMesh;
   private shrubInstances: THREE.InstancedMesh;
+  private anthuriumInstances: THREE.InstancedMesh;
   private readonly TREE_COUNT = 620;
   private readonly GRASS_COUNT = 3200;
   private readonly ROCK_COUNT = 420;
   private readonly FLOWER_COUNT = 1400;
   private readonly SHRUB_COUNT = 240;
+  private readonly ANTHURIUM_COUNT = 480;
   public isLoaded = false;
 
   constructor(scene: THREE.Scene) {
@@ -176,10 +178,20 @@ export class Foliage {
     this.shrubInstances.castShadow = true;
     this.shrubInstances.receiveShadow = true;
 
+    const anthuriumGeom = new THREE.PlaneGeometry(0.85, 0.85, 1, 1);
+    const anthuriumMat = new THREE.MeshStandardMaterial({
+      color: 0x2e4a28,
+      roughness: 0.70,
+      side: THREE.DoubleSide,
+    });
+    this.anthuriumInstances = new THREE.InstancedMesh(anthuriumGeom, anthuriumMat, this.ANTHURIUM_COUNT);
+    this.anthuriumInstances.castShadow = true;
+    this.anthuriumInstances.receiveShadow = true;
+
     this.populateFoliage();
 
     // Ingest photorealistic scanned assets (Poly Haven CC0 photogrammetry)
-    let pendingAssets = 5;
+    let pendingAssets = 6;
     const onAssetLoaded = () => {
       pendingAssets--;
       if (pendingAssets <= 0) {
@@ -406,6 +418,50 @@ export class Foliage {
       }
     );
 
+    // 6. Photorealistic Scanned Tropical Understory Anthurium (anthurium_botany_01)
+    gltfLoader.load(
+      '/juzu/models/scans/anthurium_botany_01.glb',
+      (gltf) => {
+        let scannedGeom: THREE.BufferGeometry | null = null;
+        let scannedMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
+            const mesh = child as THREE.Mesh;
+            scannedGeom = mesh.geometry.clone();
+            scannedMat = mesh.material as THREE.Material;
+            if (scannedMat instanceof THREE.MeshStandardMaterial) {
+              scannedMat.roughness = 0.65;
+              scannedMat.metalness = 0.02;
+              scannedMat.alphaTest = 0.32;
+              scannedMat.side = THREE.DoubleSide;
+              if (scannedMat.map) {
+                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
+                scannedMat.map.anisotropy = 8;
+              }
+              if (scannedMat.normalMap) {
+                scannedMat.normalMap.anisotropy = 8;
+                scannedMat.normalScale = new THREE.Vector2(1.20, 1.20);
+              }
+            }
+          }
+        });
+
+        if (scannedGeom && scannedMat) {
+          this.anthuriumInstances.geometry.dispose();
+          this.anthuriumInstances.geometry = scannedGeom;
+          this.anthuriumInstances.material = scannedMat;
+          this.anthuriumInstances.instanceMatrix.needsUpdate = true;
+        }
+        onAssetLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[Foliage] Could not load scanned anthurium, using fallback:', err);
+        onAssetLoaded();
+      }
+    );
+
     this.group.add(this.trunkInstances);
     this.group.add(this.canopyInstances);
     this.group.add(this.grassInstances);
@@ -413,6 +469,7 @@ export class Foliage {
     this.group.add(this.rootInstances);
     this.group.add(this.flowerInstances);
     this.group.add(this.shrubInstances);
+    this.group.add(this.anthuriumInstances);
   }
 
   private buildGnarledTrunkGeometry(): THREE.BufferGeometry {
@@ -845,6 +902,59 @@ export class Foliage {
     }
     this.shrubInstances.count = shrubIdx;
     this.shrubInstances.instanceMatrix.needsUpdate = true;
+
+    // 6. Distribute Scanned Anthurium Broadleaf Understory Clusters
+    // Focus in humid riparian zones (Urubamba river gorge margins, waterfall glade, mossy rock bases, moist jungle clearings)
+    let anthuriumIdx = 0;
+    for (let a = 1; a <= this.ANTHURIUM_COUNT * 3 && anthuriumIdx < this.ANTHURIUM_COUNT; a++) {
+      const u = halton(a + 4500, 2);
+      const v = halton(a + 4500, 3);
+      const w = halton(a + 4500, 5);
+
+      let x: number;
+      let z: number;
+
+      // 60% of anthuriums grow in the Cloud Forest river gorge / waterfall mist corridor
+      if (a % 10 < 6) {
+        x = (u * 2 - 1) * 48;
+        const riverZ = -17.0 + Math.sin(x * 0.018) * 6.5;
+        const sideSign = (a % 2 === 0) ? 1 : -1;
+        const offset = 5.5 + v * 12.0;
+        z = riverZ + sideSign * offset;
+      } else {
+        // 40% across other moist glades (Cloud Forest glades, Jungle Lowlands around -180, 148, Paititi around 200, 180)
+        const hub = pickHub(w);
+        x = hub.cx + (u * 2 - 1) * (hub.span * 0.85);
+        z = hub.cz + (v * 2 - 1) * (hub.span * 0.85);
+      }
+
+      // Avoid blocking footpath centers, campfires, or bridge spans
+      if (Math.abs(x) < 2.0 && z > -45 && z < 14) continue;
+      if (Math.hypot(x - 1.2, z - 10.5) < 3.0) continue;
+      if (Math.hypot(x - 0, z - (-46)) < 16.0) continue; // North Sanctuary inner courtyard
+      if (Math.abs(z + 17) < 3.5 && Math.abs(x) < 45) continue; // In water deep channel
+
+      const y = standAt(x, z);
+      if (y < 0.2 || y > 38.0) continue; // Prefer humid lower elevations
+
+      const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
+      if (dy > 1.15) continue; // Not on vertical dropoffs
+
+      // Firm grounding: base embeds ~0.04m into soil
+      dummy.position.set(x, y - 0.04, z);
+      dummy.rotation.set(
+        Math.sin(a * 1.1) * 0.05,
+        (a * 2.39996) % (Math.PI * 2),
+        Math.cos(a * 1.3) * 0.05
+      );
+      const s = 1.05 + ((a * 31) % 40) * 0.018;
+      dummy.scale.set(s, s * 0.96, s);
+      dummy.updateMatrix();
+
+      this.anthuriumInstances.setMatrixAt(anthuriumIdx++, dummy.matrix);
+    }
+    this.anthuriumInstances.count = anthuriumIdx;
+    this.anthuriumInstances.instanceMatrix.needsUpdate = true;
   }
 
   public update(_time: number): void {

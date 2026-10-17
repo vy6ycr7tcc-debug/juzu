@@ -281,6 +281,16 @@ async function bootJuzu() {
       followCamera.dist = 5.2;
       followCamera.shoulderOffset = 0.46;
       followCamera.teleport(controller.pos);
+    } else if (shotParam === 'botanical') {
+      const px = 2.5;
+      const pz = 5.0;
+      controller.pos.set(px, standAt(px, pz) + 0.1, pz);
+      controller.heading = Math.PI;
+      followCamera.yaw = 0.0;
+      followCamera.pitch = -0.06;
+      followCamera.dist = 5.4;
+      followCamera.shoulderOffset = 0.35;
+      followCamera.teleport(controller.pos);
     }
   }
 
