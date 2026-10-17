@@ -41,8 +41,8 @@ file boundaries for the parallel visual sessions. **Two sessions never own the s
 | `src/lighting.ts` | **NEW — light rig** (extract from `environment.ts`) | Sun/moon directional, hemisphere ambient, camera fill, shadow-map config, per-region light overrides. See §7 for the exact interface. |
 | `src/materials.ts` | **NEW — shared PBR material library** | Every stone/metal/wood/fabric/water material in the game. Regions and systems import from here; they do not define their own. See §4 and §7. |
 | `src/terrain.ts` | Terrain geometry + ground material | `getGlobalTerrainHeight(x, z)` — **shared height function** used by `decor.ts`, all four region modules, and character placement. Chunked LOD meshes, vertex-color biome blending, terrain PBR material. |
-| `src/textures.ts` | Procedural texture factory | `createNoiseTexture(size, scale, octaves)`, `createNormalTexture(size, scale, intensity)` — shared by terrain, decor, river. |
-| `src/decor.ts` | Instanced vegetation + rocks + mist | `DecorManager`: 5000 tree instances, 2000 rock instances, 200 mist planes; deterministic seeded placement around camera. Currently cone "trees" — slated for full replacement (§4). |
+| `src/textures.ts` | PBR texture loader & procedural fallback | Loads scanned PBR sets (`aerial_grass_rock`, `forest_leaves_02`, `mud_forest`, `cliff_side`) with procedural fallback (`createNoiseTexture`, `createNormalTexture`). |
+| `src/decor.ts` | Instanced scanned vegetation + rocks | `DecorManager`: Instanced scanned GLB models (`tree_small_02`, `shrub_01`, `boulder_01`, `namaqualand_cliff_01` from `~/game-assets/manifest.json`), seeded placement, terrain-grounded. |
 | `src/river.ts` | Water surfaces | `createRiver(scene)` → `{mesh, update}`. Currently one 40×1000 plane, glass-like transmission, **no flow animation** (update is a no-op). |
 | `src/volumetrics.ts` | Light shafts | `VolumetricLightShafts(scene, todParam)`: additive gradient billboards in 5 clusters. **Uses `Math.random()` — non-deterministic**; must become seeded. |
 | `src/particles.ts` | Ambient particles | `ParticleSystem(scene, type)` with types `dust | leaves | snow | spray`; `update(cameraPosition, type)`. CPU-simulated `THREE.Points`, soft radial sprites. |
@@ -300,6 +300,16 @@ Every scene uses exactly this rig. No additional lights except the two narrow ca
 ---
 
 ## §4 — Material rules
+
+### 4.0 The Shift: Asset-Driven Photorealism ("The models arrange; they don't sculpt")
+
+1. **Photogrammetry scans, not procedural math.** Photorealism in AAA action-adventure games (*Assassin's Creed*, *Tomb Raider*) comes from high-fidelity 3D scans and calibrated PBR maps, never algorithmic primitives or math-sculpted geometry.
+2. **Role of the Agent:** The builder arranges, instances, scales, clusters, and lights real scanned assets. It does NOT sculpt placeholder primitives (no stacked boxes for stone walls, no procedural cone trees, no flat math rocks).
+3. **Master Asset Library (`~/game-assets/`):** All environmental set pieces, boulders, cliffs, foliage, ground textures, and sky radiance maps are drawn from the master asset repository indexed in `~/game-assets/manifest.json`.
+4. **Format & Web Standards:**
+   - **3D Models:** Standalone binary `.glb` containers with embedded materials, geometry, and textures.
+   - **Surfaces:** 2K PBR texture sets (Diffuse, Normal OpenGL, ARM [AO/Roughness/Metallic], Roughness, AO) with WebP compression (`q85` diffuse, `q92` vector/data maps) for smooth browser delivery.
+   - **Sky & IBL:** Calibrated 2K sky HDRIs (`alps_field`, `forest_slope`, `kloppenheim_02`) driving image-based lighting via `scene.environment`.
 
 ### 4.1 PBR standards (every material in the game)
 
