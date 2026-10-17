@@ -37,13 +37,13 @@ def main() -> int:
         print(f"loading {args.url}")
         page.goto(args.url, wait_until="load", timeout=30000)
         try:
-            page.wait_for_function("window.__shotReady === true || window.__juzuReady === true", timeout=args.ready_timeout)
+            page.wait_for_function("window.__shotReady === true", timeout=args.ready_timeout)
             print("game signalled ready")
         except Exception as e:
             print(f"Wait failed ({e}), capturing anyway...")
 
         # Allow Three.js a moment to warm shaders and render frame
-        time.sleep(1.0)
+        time.sleep(1.2)
 
         paths = []
         for i in range(args.shots):

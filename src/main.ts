@@ -20,6 +20,7 @@ import { PaititiRegion } from './world/regions/paititi';
 import { HUD } from './ui/hud';
 import { activeToD, setTimeOfDay, type TimeOfDay } from './world/fog';
 import { offlineManager } from './pwa/offline';
+import { solidity } from './world/solidity';
 
 declare global {
   interface Window {
@@ -106,8 +107,8 @@ async function bootJuzu() {
   // 8. Player: Controller, Naira Model, FollowCamera
   let startPos = SPAWN.clone();
   if (regionParam === 'highSierra') startPos.set(120, standAt(120, -170), -170);
-  else if (regionParam === 'jungleLowlands') startPos.set(-180, standAt(-180, 140), 140);
-  else if (regionParam === 'paititi') startPos.set(200, standAt(200, 180), 180);
+  else if (regionParam === 'jungleLowlands') startPos.set(-180, 2.3, 126);
+  else if (regionParam === 'paititi') startPos.set(200, standAt(200, 168) + 0.9, 168);
 
   const controller = new Controller(startPos);
   const naira = new Naira(scene);
@@ -134,8 +135,8 @@ async function bootJuzu() {
     onSelectRegion: (r) => {
       let target = SPAWN.clone();
       if (r === 'highSierra') target.set(120, standAt(120, -170), -170);
-      else if (r === 'jungleLowlands') target.set(-180, standAt(-180, 140), 140);
-      else if (r === 'paititi') target.set(200, standAt(200, 180), 180);
+      else if (r === 'jungleLowlands') target.set(-180, 2.3, 126);
+      else if (r === 'paititi') target.set(200, standAt(200, 168) + 0.9, 168);
 
       controller.teleport(target);
       followCamera.teleport(target);
@@ -197,6 +198,9 @@ async function bootJuzu() {
     followCamera.update(controller.pos, look, dt);
     hud.updateCompass(followCamera.yaw);
 
+    // Solidity BVH update for nearby solid stone geometry
+    solidity.update(scene, controller.pos, dt);
+
     // Controller & Character
     controller.update(input.move, input.boost, input.jump, followCamera.yaw, dt);
     naira.update(controller, dt);
@@ -233,7 +237,9 @@ async function bootJuzu() {
     post.render();
 
     // Signal ready for Playwright shots
-    if (frameCount > 30 && naira.modelRoot && !window.__shotReady) {
+    const loadingScreen = document.getElementById('juzu-loading-screen');
+    const loadingDismissed = !loadingScreen || loadingScreen.style.display === 'none';
+    if (frameCount > 30 && naira.modelRoot && loadingDismissed && !window.__shotReady) {
       window.__shotReady = true;
     }
   }
