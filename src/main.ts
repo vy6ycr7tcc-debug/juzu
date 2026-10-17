@@ -23,6 +23,10 @@ import { HUD } from './ui/hud';
 import { activeToD, setTimeOfDay, type TimeOfDay } from './world/fog';
 import { offlineManager } from './pwa/offline';
 import { solidity } from './world/solidity';
+import { WeaponManager } from './player/weapon';
+import { Minimap } from './ui/minimap';
+import { ExpeditionMenu } from './ui/expeditionMenu';
+import { TouchControls } from './ui/touchControls';
 
 declare global {
   interface Window {
@@ -45,7 +49,7 @@ async function bootJuzu() {
     setTimeOfDay(todParam);
   }
 
-  // 2. Canvas & WebGPURenderer Bootstrap
+  // 2. Canvas & WebGPURenderer Bootstrap with WebGL2 Fallback Guard
   let canvas = document.getElementById('gl') as HTMLCanvasElement;
   if (!canvas) {
     canvas = document.createElement('canvas');
@@ -53,19 +57,35 @@ async function bootJuzu() {
     document.body.appendChild(canvas);
   }
 
-  const renderer = new THREE.WebGPURenderer({
-    canvas,
-    powerPreference: 'high-performance',
-    antialias: false,
-    stencil: false,
-    forceWebGL,
-  });
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.info.autoReset = false;
-
-  await renderer.init();
+  let renderer: THREE.WebGPURenderer;
+  try {
+    renderer = new THREE.WebGPURenderer({
+      canvas,
+      powerPreference: 'high-performance',
+      antialias: false,
+      stencil: false,
+      forceWebGL,
+    });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.info.autoReset = false;
+    await renderer.init();
+  } catch (err) {
+    console.warn('[Juzu] Primary WebGPU init failed, engaging WebGL2 fallback:', err);
+    renderer = new THREE.WebGPURenderer({
+      canvas,
+      powerPreference: 'high-performance',
+      antialias: false,
+      stencil: false,
+      forceWebGL: true,
+    });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.info.autoReset = false;
+    await renderer.init();
+  }
 
   // 3. Scene, Camera, and Fog
   const scene = new THREE.Scene();
@@ -227,6 +247,51 @@ async function bootJuzu() {
   } else if (regionParam === 'paititi') {
     hud.setObjective('Approach the Golden Sun Disk Dais [E] to awaken the Plaza of the Sun.');
   }
+
+  // 10.1 Expedition Weapon, World Map, Inventory, and Mobile Touch Controls
+  const weapon = new WeaponManager(scene, naira, audio, camera);
+
+  const expeditionMenu = new ExpeditionMenu({
+    audio,
+    weapon,
+    onFastTravel: (target) => {
+      controller.teleport(target);
+      followCamera.teleport(target);
+    },
+  });
+
+  const minimap = new Minimap({
+    onOpenWorldMap: () => expeditionMenu.open('map'),
+  });
+
+  const collidables: THREE.Object3D[] = [
+    terrain.group,
+    cloudForest.group,
+    highSierra.group,
+    jungleLowlands.group,
+    paititi.group,
+  ];
+
+  const touchControls = new TouchControls({
+    input,
+    weapon,
+    expeditionMenu,
+    onFire: () => weapon.fire(collidables),
+    onGrapple: () => {
+      const reachableAnchor = grapple.findReachableAnchor(
+        controller.pos,
+        followCamera.yaw,
+        !controller.grounded
+      );
+      if (reachableAnchor) {
+        grapple.attach(reachableAnchor.point, controller.pos, controller.vel, followCamera.yaw);
+        controller.startGrapple(reachableAnchor.point.pos);
+        audio.playGrappleThrow();
+        audio.playGrappleLatch();
+      }
+    },
+    onInteract: () => input.triggerVirtualInteract(),
+  });
 
   // Dismiss legacy HTML boot splash so only the interactive HUD title screen is shown
   const bootSplash = document.getElementById('title');
@@ -471,6 +536,17 @@ async function bootJuzu() {
     if (wheel !== 0) {
       followCamera.adjustDistance(wheel * 0.0035);
     }
+    // Weapon Aim & Fire inputs
+    if (input.aim) {
+      weapon.toggleAim();
+    }
+    if (input.shoot) {
+      weapon.fire(collidables);
+    }
+    weapon.update(dt);
+    minimap.update(controller.pos, controller.heading);
+    expeditionMenu.update(controller.pos, controller.heading);
+
     const look = input.resetLook();
     followCamera.update(
       controller.pos,
@@ -480,7 +556,8 @@ async function bootJuzu() {
       controller.crouching,
       instinctTimer > 0,
       controller.vel,
-      controller.grounded
+      controller.grounded,
+      weapon.isAiming
     );
     hud.updateCompass(followCamera.yaw);
 
@@ -659,6 +736,10 @@ async function bootJuzu() {
     routes,
     hud,
     input,
+    weapon,
+    minimap,
+    expeditionMenu,
+    touchControls,
     get puzzleState() {
       return { mirrorSolved, steleSolved, gnomonSolved, sluiceSolved, paititiSolved };
     },
@@ -667,4 +748,8 @@ async function bootJuzu() {
   offlineManager.register();
 }
 
-window.addEventListener('DOMContentLoaded', bootJuzu);
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootJuzu);
+} else {
+  bootJuzu();
+}

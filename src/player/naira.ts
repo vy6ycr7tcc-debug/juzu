@@ -173,6 +173,8 @@ export class Naira {
   public rightUpperArmBone: THREE.Object3D | null = null;
   public leftUpperArmBone: THREE.Object3D | null = null;
   public leftForearmBone: THREE.Object3D | null = null;
+  public rightThighBone: THREE.Object3D | null = null;
+  public isAiming = false;
 
   // Articulated 5-segment hair braid for secondary pendulum motion
   private braidSegments: THREE.Object3D[] = [];
@@ -353,6 +355,7 @@ export class Naira {
     this.rightUpperArmBone = rightUpperArmBone || null;
     this.leftUpperArmBone = leftUpperArmBone || null;
     this.leftForearmBone = leftForearmBone || null;
+    this.rightThighBone = rightThighBone || null;
 
     // Shared expedition tunic, Quechua weave, leather & brass materials
     const tunicClothMat = new THREE.MeshStandardMaterial({
@@ -1055,6 +1058,26 @@ export class Naira {
       }
       if (this.leftForearmBone) {
         this.leftForearmBone.rotation.x = -0.75;
+      }
+    } else if (this.isAiming) {
+      // Precise two-handed Weaver / isosceles pistol stance pointing forward
+      if (this.rightUpperArmBone) {
+        this.rightUpperArmBone.rotation.x = -1.48;
+        this.rightUpperArmBone.rotation.y = -0.18;
+        this.rightUpperArmBone.rotation.z = 0.08;
+      }
+      if (this.rightForearmBone) {
+        this.rightForearmBone.rotation.x = -0.15;
+        this.rightForearmBone.rotation.y = 0.05;
+      }
+      if (this.leftUpperArmBone) {
+        this.leftUpperArmBone.rotation.x = -1.35;
+        this.leftUpperArmBone.rotation.y = 0.42;
+        this.leftUpperArmBone.rotation.z = -0.22;
+      }
+      if (this.leftForearmBone) {
+        this.leftForearmBone.rotation.x = -0.45;
+        this.leftForearmBone.rotation.z = 0.35;
       }
     }
 

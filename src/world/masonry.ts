@@ -6,21 +6,69 @@ function pseudoNoise(x: number, y: number, z: number): number {
 }
 
 /**
- * Builds an authentic Inca battered trapezoidal stone block with world-space UVs,
- * subtle polygonal megalithic undulation, and vertex-color moss/ambient-occlusion weathering.
+ * Creates authentic 2K scanned Inca Ashlar megalithic cut-stone material
+ * (Poly Haven CC0 large_sandstone_blocks 2K).
+ */
+export function createIncaAshlarMaterial(texLoader: THREE.TextureLoader): THREE.MeshStandardMaterial {
+  const diff = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_diffuse_2k.webp');
+  diff.colorSpace = THREE.SRGBColorSpace;
+  diff.anisotropy = 8;
+  diff.wrapS = diff.wrapT = THREE.RepeatWrapping;
+
+  const nor = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_nor_gl_2k.webp');
+  nor.anisotropy = 8;
+  nor.wrapS = nor.wrapT = THREE.RepeatWrapping;
+
+  const rough = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_rough_2k.webp');
+  rough.anisotropy = 8;
+  rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
+
+  const ao = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_ao_2k.webp');
+  ao.wrapS = ao.wrapT = THREE.RepeatWrapping;
+
+  return new THREE.MeshStandardMaterial({
+    map: diff,
+    normalMap: nor,
+    normalScale: new THREE.Vector2(2.2, 2.2),
+    roughnessMap: rough,
+    aoMap: ao,
+    aoMapIntensity: 0.95,
+    color: 0xf4eee4,
+    vertexColors: true,
+    roughness: 0.88,
+    metalness: 0.02,
+  });
+}
+
+/**
+ * Builds an authentic Inca battered trapezoidal stone block with randomized world-space UVs,
+ * subtle polygonal megalithic undulation, uv2 for PBR AO maps, and vertex-color moss/weathering.
  */
 export function createIncaBlock(
   width: number,
   height: number,
   depth: number,
   batter = 0.08,
-  tileSize = 2.0
+  tileSize = 2.0,
+  seed = 0
 ): THREE.BufferGeometry {
   const geom = new THREE.BoxGeometry(width, height, depth, 4, 5, 4);
   const pos = geom.attributes.position;
   const norm = geom.attributes.normal;
   const uv = geom.attributes.uv;
   const colors = new Float32Array(pos.count * 3);
+
+  // Per-block stochastic offset and orientation flip breaking tiling patterns
+  const uOffset = ((Math.abs(seed) * 1.6180339) % 1.0) * 1.8;
+  const vOffset = ((Math.abs(seed) * 2.7182818) % 1.0) * 1.8;
+  const flipU = Math.floor(Math.abs(seed) * 7.1) % 2 === 1 ? -1 : 1;
+  const flipV = Math.floor(Math.abs(seed) * 13.3) % 2 === 1 ? -1 : 1;
+
+  // Block-level warm ochre / cool slate tint shift
+  const hueShift = ((Math.abs(seed) * 3.14159) % 1.0) - 0.5; // [-0.5, 0.5]
+  const baseR = 1.02 + hueShift * 0.08;
+  const baseG = 1.00 + hueShift * 0.04;
+  const baseB = 0.96 - hueShift * 0.07;
 
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i);
@@ -34,7 +82,7 @@ export function createIncaBlock(
     z *= taper;
 
     // Subtle hand-dressed polygonal stone undulation on interior vertices
-    const nVal = pseudoNoise(x * 1.7, y * 2.1, z * 1.7) - 0.5;
+    const nVal = pseudoNoise(x * 1.7 + seed * 0.5, y * 2.1, z * 1.7) - 0.5;
     const edgeDistY = Math.min(t, 1.0 - t);
     if (edgeDistY > 0.05) {
       x += nVal * 0.045 * Math.min(1.0, width * 0.3);
@@ -42,20 +90,27 @@ export function createIncaBlock(
     }
     pos.setXYZ(i, x, y, z);
 
-    // World-space box UV projection per face normal (calibrated for 2K multi-course Inca masonry)
+    // World-space box UV projection per face normal with randomized offsets
     const nx = Math.abs(norm.getX(i));
     const ny = norm.getY(i);
     const absNy = Math.abs(ny);
     const nz = Math.abs(norm.getZ(i));
     const effTile = tileSize * 1.35;
 
+    let u = 0;
+    let v = 0;
     if (absNy > nx && absNy > nz) {
-      uv.setXY(i, (x + width * 0.5) / effTile, (z + depth * 0.5) / effTile);
+      u = (x + width * 0.5) / effTile;
+      v = (z + depth * 0.5) / effTile;
     } else if (nx > nz) {
-      uv.setXY(i, (z + depth * 0.5) / effTile, (y + height * 0.5) / effTile);
+      u = (z + depth * 0.5) / effTile;
+      v = (y + height * 0.5) / effTile;
     } else {
-      uv.setXY(i, (x + width * 0.5) / effTile, (y + height * 0.5) / effTile);
+      u = (x + width * 0.5) / effTile;
+      v = (y + height * 0.5) / effTile;
     }
+
+    uv.setXY(i, u * flipU + uOffset, v * flipV + vOffset);
 
     // Vertex-Color Weathering: subtle grounded AO at base (t < 0.28),
     // clean chiseled granite in middle courses, and mossy top-ledge growth (ny > 0.55)
@@ -63,9 +118,9 @@ export function createIncaBlock(
     const topMoss = ny > 0.55 ? 0.38 : Math.max(0, (t - 0.84) / 0.16) * 0.24;
     const grime = 0.96 + nVal * 0.12;
 
-    let r = 1.02 * grime;
-    let g = 1.00 * grime;
-    let b = 0.96 * grime;
+    let r = baseR * grime;
+    let g = baseG * grime;
+    let b = baseB * grime;
 
     // Blend damp forest-moss & ground AO at the bottom of the masonry
     if (baseMoss > 0) {
@@ -88,6 +143,7 @@ export function createIncaBlock(
 
   pos.needsUpdate = true;
   uv.needsUpdate = true;
+  geom.setAttribute('uv2', uv.clone());
   geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geom.computeVertexNormals();
   return geom;
@@ -120,9 +176,10 @@ export function buildTrapezoidalGateway(
   });
 
   for (const side of [-1, 1]) {
+    const sideIdx = side === -1 ? 1 : 2;
     // 1. Stepped foundation plinth
     const plinth = new THREE.Mesh(
-      createIncaBlock(pillarWidth * 1.28, 0.95, depth * 1.22, 0.06, 1.8),
+      createIncaBlock(pillarWidth * 1.28, 0.95, depth * 1.22, 0.06, 1.8, sideIdx * 11),
       mat
     );
     plinth.position.set(side * offset, 0.45, 0);
@@ -133,7 +190,7 @@ export function buildTrapezoidalGateway(
     // 2. Main battered trapezoidal jamb pillar leaning slightly inward toward the portal
     const jambX = side * (offset - side * 0.12);
     const jamb = new THREE.Mesh(
-      createIncaBlock(pillarWidth, height, depth, 0.14, 1.8),
+      createIncaBlock(pillarWidth, height, depth, 0.14, 1.8, sideIdx * 17),
       mat
     );
     jamb.position.set(jambX, height * 0.5 + 0.4, 0);
@@ -144,7 +201,7 @@ export function buildTrapezoidalGateway(
 
     // 3. Inner double-jamb reveal framing the doorway
     const innerReveal = new THREE.Mesh(
-      createIncaBlock(pillarWidth * 0.32, height * 0.94, depth * 0.86, 0.10, 1.6),
+      createIncaBlock(pillarWidth * 0.32, height * 0.94, depth * 0.86, 0.10, 1.6, sideIdx * 23),
       mat
     );
     innerReveal.position.set(
@@ -161,15 +218,16 @@ export function buildTrapezoidalGateway(
     const nicheH = height * 0.30;
     const nicheY = height * 0.52 + 0.4;
     for (const faceZ of [-1, 1]) {
+      const faceIdx = faceZ === -1 ? 3 : 5;
       const recess = new THREE.Mesh(
-        createIncaBlock(nicheW, nicheH, 0.14, 0.18, 1.0),
+        createIncaBlock(nicheW, nicheH, 0.14, 0.18, 1.0, sideIdx * 29 + faceIdx),
         nicheDarkMat
       );
       recess.position.set(jambX, nicheY, faceZ * (depth * 0.45));
       group.add(recess);
 
       const sill = new THREE.Mesh(
-        createIncaBlock(nicheW * 1.25, 0.18, 0.24, 0.04, 1.2),
+        createIncaBlock(nicheW * 1.25, 0.18, 0.24, 0.04, 1.2, sideIdx * 37 + faceIdx),
         mat
       );
       sill.position.set(jambX, nicheY - nicheH * 0.54, faceZ * (depth * 0.47));
@@ -182,7 +240,7 @@ export function buildTrapezoidalGateway(
   const lintelW = openingWidth + pillarWidth * 2.22;
   const lintelH = height * 0.24;
   const lintel = new THREE.Mesh(
-    createIncaBlock(lintelW, lintelH, depth * 1.12, 0.12, 1.8),
+    createIncaBlock(lintelW, lintelH, depth * 1.12, 0.12, 1.8, 43),
     mat
   );
   lintel.position.set(0, height + lintelH * 0.42, 0);
@@ -191,7 +249,7 @@ export function buildTrapezoidalGateway(
   group.add(lintel);
 
   const cornice = new THREE.Mesh(
-    createIncaBlock(lintelW * 0.94, lintelH * 0.48, depth * 1.18, 0.08, 1.8),
+    createIncaBlock(lintelW * 0.94, lintelH * 0.48, depth * 1.18, 0.08, 1.8, 47),
     mat
   );
   cornice.position.set(0, height + lintelH * 1.04, 0);
@@ -206,7 +264,7 @@ export function buildTrapezoidalGateway(
     const cw = (lintelW * 0.82) / crestCount;
     const ch = lintelH * (0.34 + ((c * 7) % 3) * 0.11);
     const crestBlock = new THREE.Mesh(
-      createIncaBlock(cw * 0.94, ch, depth * 0.96, 0.12, 1.5),
+      createIncaBlock(cw * 0.94, ch, depth * 0.96, 0.12, 1.5, 50 + c * 7),
       mat
     );
     crestBlock.position.set(
@@ -232,7 +290,7 @@ export function buildTrapezoidalGateway(
   // 7. Worn stone threshold paving slabs in the portal opening
   for (let s = -1; s <= 1; s++) {
     const slab = new THREE.Mesh(
-      createIncaBlock(openingWidth * 0.36, 0.18, depth * 1.35, 0.04, 1.6),
+      createIncaBlock(openingWidth * 0.36, 0.18, depth * 1.35, 0.04, 1.6, 90 + s * 13),
       mat
     );
     slab.position.set(s * openingWidth * 0.31, 0.07, 0);
