@@ -251,6 +251,26 @@ async function bootJuzu() {
     } else if (shotParam === 'vista') {
       followCamera.dist = 11.5;
       followCamera.pitch = 0.34;
+    } else if (shotParam === 'waterfall') {
+      const px = 4.2;
+      const pz = 1.8;
+      controller.pos.set(px, standAt(px, pz), pz);
+      controller.heading = Math.PI * 0.85;
+      followCamera.yaw = -0.56;
+      followCamera.pitch = 0.02;
+      followCamera.dist = 3.6;
+      followCamera.shoulderOffset = 0.40;
+      followCamera.teleport(controller.pos);
+    } else if (shotParam === 'gorge') {
+      const px = 4.2;
+      const pz = 1.8;
+      controller.pos.set(px, standAt(px, pz), pz);
+      controller.heading = Math.PI * 0.85;
+      followCamera.yaw = -0.56;
+      followCamera.pitch = -0.18;
+      followCamera.dist = 3.6;
+      followCamera.shoulderOffset = 0.40;
+      followCamera.teleport(controller.pos);
     }
   }
 
@@ -567,7 +587,14 @@ async function bootJuzu() {
     // Signal ready for Playwright shots
     const loadingScreen = document.getElementById('juzu-loading-screen');
     const loadingDismissed = !loadingScreen || loadingScreen.style.display === 'none';
-    if (frameCount > 6 && naira.modelRoot && foliage.isLoaded && loadingDismissed && !window.__shotReady) {
+    if (
+      frameCount > 6 &&
+      naira.modelRoot &&
+      foliage.isLoaded &&
+      cloudForest.isLoaded &&
+      loadingDismissed &&
+      !window.__shotReady
+    ) {
       window.__shotReady = true;
     }
   }
