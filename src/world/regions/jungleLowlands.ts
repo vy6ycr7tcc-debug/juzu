@@ -14,50 +14,66 @@ export class JungleLowlandsRegion {
     this.group.name = 'Region_JungleLowlands';
     scene.add(this.group);
 
-    const crackDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
-    crackDiff.colorSpace = THREE.SRGBColorSpace;
-    crackDiff.anisotropy = 8;
-    crackDiff.wrapS = crackDiff.wrapT = THREE.RepeatWrapping;
+    // Authentic Jungle Rainforest Scanned PBR Mossy Rock & Damp Cliff (Poly Haven CC0)
+    const mossDiff = this.texLoader.load('/juzu/textures/scans/mossy_rock_diffuse_2k.webp');
+    mossDiff.colorSpace = THREE.SRGBColorSpace;
+    mossDiff.anisotropy = 8;
+    mossDiff.wrapS = mossDiff.wrapT = THREE.RepeatWrapping;
 
-    const crackNor = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-normal.jpg');
-    crackNor.anisotropy = 8;
-    crackNor.wrapS = crackNor.wrapT = THREE.RepeatWrapping;
+    const mossNor = this.texLoader.load('/juzu/textures/scans/mossy_rock_nor_gl_2k.webp');
+    mossNor.anisotropy = 8;
+    mossNor.wrapS = mossNor.wrapT = THREE.RepeatWrapping;
 
-    const crackRough = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-roughness.jpg');
-    crackRough.anisotropy = 8;
-    crackRough.wrapS = crackRough.wrapT = THREE.RepeatWrapping;
+    const mossRough = this.texLoader.load('/juzu/textures/scans/mossy_rock_rough_2k.webp');
+    mossRough.anisotropy = 8;
+    mossRough.wrapS = mossRough.wrapT = THREE.RepeatWrapping;
+
+    const mossAO = this.texLoader.load('/juzu/textures/scans/mossy_rock_ao_2k.webp');
+    mossAO.wrapS = mossAO.wrapT = THREE.RepeatWrapping;
 
     const jungleStoneMat = solid(
       new THREE.MeshStandardMaterial({
-        map: crackDiff,
-        normalMap: crackNor,
-        normalScale: new THREE.Vector2(1.45, 1.45),
-        roughnessMap: crackRough,
-        color: 0xd0d8c6,
+        map: mossDiff,
+        normalMap: mossNor,
+        normalScale: new THREE.Vector2(1.35, 1.35),
+        roughnessMap: mossRough,
+        aoMap: mossAO,
+        aoMapIntensity: 0.85,
+        color: 0xc8d4b8,
         vertexColors: true,
         roughness: 0.86,
-        metalness: 0.04,
+        metalness: 0.02,
       })
     );
 
-    const rockDiff = this.texLoader.load('/juzu/textures/cliff_diff.jpg');
-    rockDiff.colorSpace = THREE.SRGBColorSpace;
-    rockDiff.anisotropy = 8;
-    rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
+    const cliffDiff = this.texLoader.load('/juzu/textures/scans/cliff_side_diffuse_2k.webp');
+    cliffDiff.colorSpace = THREE.SRGBColorSpace;
+    cliffDiff.anisotropy = 8;
+    cliffDiff.wrapS = cliffDiff.wrapT = THREE.RepeatWrapping;
 
-    const rockNor = this.texLoader.load('/juzu/textures/cliff_nor.jpg');
-    rockNor.anisotropy = 8;
-    rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
+    const cliffNor = this.texLoader.load('/juzu/textures/scans/cliff_side_nor_gl_2k.webp');
+    cliffNor.anisotropy = 8;
+    cliffNor.wrapS = cliffNor.wrapT = THREE.RepeatWrapping;
+
+    const cliffRough = this.texLoader.load('/juzu/textures/scans/cliff_side_rough_2k.webp');
+    cliffRough.anisotropy = 8;
+    cliffRough.wrapS = cliffRough.wrapT = THREE.RepeatWrapping;
+
+    const cliffAO = this.texLoader.load('/juzu/textures/scans/cliff_side_ao_2k.webp');
+    cliffAO.wrapS = cliffAO.wrapT = THREE.RepeatWrapping;
 
     const wetStoneMat = solid(
       new THREE.MeshStandardMaterial({
-        map: rockDiff,
-        normalMap: rockNor,
-        normalScale: new THREE.Vector2(1.35, 1.35),
-        color: 0x7e8a7c,
+        map: cliffDiff,
+        normalMap: cliffNor,
+        normalScale: new THREE.Vector2(1.4, 1.4),
+        roughnessMap: cliffRough,
+        aoMap: cliffAO,
+        aoMapIntensity: 0.85,
+        color: 0x6e786c,
         vertexColors: true,
-        roughness: 0.48,
-        metalness: 0.08,
+        roughness: 0.42,
+        metalness: 0.04,
       })
     );
 

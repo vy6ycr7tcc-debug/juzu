@@ -14,50 +14,66 @@ export class HighSierraRegion {
     this.group.name = 'Region_HighSierra';
     scene.add(this.group);
 
-    const stoneDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
+    // Authentic High Sierra Scanned PBR Ashlar Masonry & Alpine Bedrock (Poly Haven CC0)
+    const stoneDiff = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp');
     stoneDiff.colorSpace = THREE.SRGBColorSpace;
     stoneDiff.anisotropy = 8;
     stoneDiff.wrapS = stoneDiff.wrapT = THREE.RepeatWrapping;
 
-    const stoneNor = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-normal.jpg');
+    const stoneNor = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp');
     stoneNor.anisotropy = 8;
     stoneNor.wrapS = stoneNor.wrapT = THREE.RepeatWrapping;
 
-    const stoneRough = this.texLoader.load('/juzu/assets/environment-textures/environment-stonework-roughness.jpg');
+    const stoneRough = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_rough_2k.webp');
     stoneRough.anisotropy = 8;
     stoneRough.wrapS = stoneRough.wrapT = THREE.RepeatWrapping;
+
+    const stoneAO = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_ao_2k.webp');
+    stoneAO.wrapS = stoneAO.wrapT = THREE.RepeatWrapping;
 
     const ashlarMat = solid(
       new THREE.MeshStandardMaterial({
         map: stoneDiff,
         normalMap: stoneNor,
-        normalScale: new THREE.Vector2(1.45, 1.45),
+        normalScale: new THREE.Vector2(1.35, 1.35),
         roughnessMap: stoneRough,
-        color: 0xffffff,
+        aoMap: stoneAO,
+        aoMapIntensity: 0.85,
+        color: 0xf5eedc,
         vertexColors: true,
-        roughness: 0.80,
-        metalness: 0.04,
+        roughness: 0.84,
+        metalness: 0.02,
       })
     );
 
-    const rockDiff = this.texLoader.load('/juzu/textures/rock_diff.jpg');
+    const rockDiff = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_diffuse_2k.webp');
     rockDiff.colorSpace = THREE.SRGBColorSpace;
     rockDiff.anisotropy = 8;
     rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
 
-    const rockNor = this.texLoader.load('/juzu/textures/rock_nor.jpg');
+    const rockNor = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_nor_gl_2k.webp');
     rockNor.anisotropy = 8;
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
+
+    const rockRough = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_rough_2k.webp');
+    rockRough.anisotropy = 8;
+    rockRough.wrapS = rockRough.wrapT = THREE.RepeatWrapping;
+
+    const rockAO = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_ao_2k.webp');
+    rockAO.wrapS = rockAO.wrapT = THREE.RepeatWrapping;
 
     const bedrockMat = solid(
       new THREE.MeshStandardMaterial({
         map: rockDiff,
         normalMap: rockNor,
-        normalScale: new THREE.Vector2(1.35, 1.35),
-        color: 0xb8b2a6,
+        normalScale: new THREE.Vector2(1.4, 1.4),
+        roughnessMap: rockRough,
+        aoMap: rockAO,
+        aoMapIntensity: 0.80,
+        color: 0xcdc6b8,
         vertexColors: true,
-        roughness: 0.76,
-        metalness: 0.06,
+        roughness: 0.82,
+        metalness: 0.03,
       })
     );
 

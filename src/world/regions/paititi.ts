@@ -14,51 +14,69 @@ export class PaititiRegion {
     this.group.name = 'Region_Paititi';
     scene.add(this.group);
 
-    const blockDiff = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_08_diff.jpg');
+    // Authentic Paititi Imperial Golden Ashlar Masonry & Sacred Plaza Cobblestones (Poly Haven CC0)
+    const blockDiff = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp');
     blockDiff.colorSpace = THREE.SRGBColorSpace;
     blockDiff.anisotropy = 8;
     blockDiff.wrapS = blockDiff.wrapT = THREE.RepeatWrapping;
 
-    const blockNor = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_08_nor.jpg');
+    const blockNor = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp');
     blockNor.anisotropy = 8;
     blockNor.wrapS = blockNor.wrapT = THREE.RepeatWrapping;
 
-    const blockArm = this.texLoader.load('/juzu/textures/temple/sandstone_blocks_08_arm.jpg');
-    blockArm.anisotropy = 8;
-    blockArm.wrapS = blockArm.wrapT = THREE.RepeatWrapping;
+    const blockRough = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_rough_2k.webp');
+    blockRough.anisotropy = 8;
+    blockRough.wrapS = blockRough.wrapT = THREE.RepeatWrapping;
+
+    const blockAO = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_ao_2k.webp');
+    blockAO.wrapS = blockAO.wrapT = THREE.RepeatWrapping;
 
     const precisionAshlarMat = solid(
       new THREE.MeshStandardMaterial({
         map: blockDiff,
         normalMap: blockNor,
-        normalScale: new THREE.Vector2(1.25, 1.25),
-        roughnessMap: blockArm,
-        color: 0xe6ded0,
+        normalScale: new THREE.Vector2(1.3, 1.3),
+        roughnessMap: blockRough,
+        aoMap: blockAO,
+        aoMapIntensity: 0.85,
+        color: 0xf4ebe0,
         vertexColors: true,
-        roughness: 0.72,
-        metalness: 0.04,
+        roughness: 0.78,
+        metalness: 0.02,
       })
     );
 
-    const paveDiff = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_diff.jpg');
+    const paveDiff = this.texLoader.load('/juzu/textures/scans/cobblestone_01_diffuse_2k.webp');
     paveDiff.colorSpace = THREE.SRGBColorSpace;
     paveDiff.anisotropy = 8;
     paveDiff.wrapS = paveDiff.wrapT = THREE.RepeatWrapping;
-    paveDiff.repeat.set(22, 22);
+    paveDiff.repeat.set(12, 12);
 
-    const paveNor = this.texLoader.load('/juzu/textures/temple/red_sandstone_pavement_nor.jpg');
+    const paveNor = this.texLoader.load('/juzu/textures/scans/cobblestone_01_nor_gl_2k.webp');
     paveNor.anisotropy = 8;
     paveNor.wrapS = paveNor.wrapT = THREE.RepeatWrapping;
-    paveNor.repeat.set(22, 22);
+    paveNor.repeat.set(12, 12);
+
+    const paveRough = this.texLoader.load('/juzu/textures/scans/cobblestone_01_rough_2k.webp');
+    paveRough.anisotropy = 8;
+    paveRough.wrapS = paveRough.wrapT = THREE.RepeatWrapping;
+    paveRough.repeat.set(12, 12);
+
+    const paveARM = this.texLoader.load('/juzu/textures/scans/cobblestone_01_arm_2k.webp');
+    paveARM.wrapS = paveARM.wrapT = THREE.RepeatWrapping;
+    paveARM.repeat.set(12, 12);
 
     const redPlazaPavingMat = solid(
       new THREE.MeshStandardMaterial({
         map: paveDiff,
         normalMap: paveNor,
-        normalScale: new THREE.Vector2(1.25, 1.25),
-        color: 0xd8b89c,
+        normalScale: new THREE.Vector2(1.3, 1.3),
+        roughnessMap: paveRough,
+        aoMap: paveARM,
+        aoMapIntensity: 0.80,
+        color: 0xe6cead,
         roughness: 0.76,
-        metalness: 0.05,
+        metalness: 0.03,
       })
     );
 
