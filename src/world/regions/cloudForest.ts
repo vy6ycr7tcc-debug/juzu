@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { standAt } from '../terrain';
 import { solid } from '../solidity';
 import { createIncaBlock, buildTrapezoidalGateway } from '../masonry';
@@ -16,7 +18,9 @@ export class CloudForestRegion {
   private sparkMeshes: THREE.Mesh[] = [];
   private waterfallStrips: THREE.Mesh[] = [];
   private mistPlumes: THREE.Mesh[] = [];
+  private waterfallNormalMap?: THREE.Texture;
   private mirrorAligned = false;
+  public isLoaded = false;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Region_CloudForest';
@@ -142,8 +146,12 @@ export class CloudForestRegion {
     }
     for (let i = 0; i < this.waterfallStrips.length; i++) {
       const w = this.waterfallStrips[i];
-      w.scale.x = 0.92 + Math.sin(time * 6.5 + i * 1.7) * 0.12;
-      w.position.y = (w.userData.baseY as number) + Math.sin(time * 8.0 + i * 2.3) * 0.14;
+      w.scale.x = 0.96 + Math.sin(time * 5.0 + i * 1.5) * 0.06;
+      w.position.y = (w.userData.baseY as number) + Math.sin(time * 6.0 + i * 2.0) * 0.08;
+    }
+    if (this.waterfallNormalMap) {
+      this.waterfallNormalMap.offset.y = -(time * 1.85) % 1.0;
+      this.waterfallNormalMap.offset.x = Math.sin(time * 0.7) * 0.03;
     }
     for (let i = 0; i < this.mistPlumes.length; i++) {
       const m = this.mistPlumes[i];
@@ -813,176 +821,311 @@ export class CloudForestRegion {
     this.group.add(campGroup);
   }
 
+  private buildWaterfallChuteGeometry(
+    topWidth: number,
+    bottomWidth: number,
+    height: number,
+    depthArc: number,
+    segX = 16,
+    segY = 32
+  ): THREE.BufferGeometry {
+    const geom = new THREE.BufferGeometry();
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    for (let iy = 0; iy <= segY; iy++) {
+      const v = iy / segY;
+      const y = (1.0 - v) * height;
+      const z = (1.0 - Math.cos(v * Math.PI * 0.5)) * depthArc + v * 0.35;
+      const width = THREE.MathUtils.lerp(topWidth, bottomWidth, v);
+
+      for (let ix = 0; ix <= segX; ix++) {
+        const u = ix / segX;
+        const x = (u - 0.5) * width;
+        const xNorm = (u - 0.5) * 2.0;
+        const curlZ = -(xNorm * xNorm) * 0.35 * (1.0 - v * 0.4);
+
+        positions.push(x, y, z + curlZ);
+        normals.push(0, 0, 1);
+        uvs.push(u, v * 5.0);
+      }
+    }
+
+    for (let iy = 0; iy < segY; iy++) {
+      for (let ix = 0; ix < segX; ix++) {
+        const a = iy * (segX + 1) + ix;
+        const b = (iy + 1) * (segX + 1) + ix;
+        const c = (iy + 1) * (segX + 1) + (ix + 1);
+        const d = iy * (segX + 1) + (ix + 1);
+        indices.push(a, b, d);
+        indices.push(b, c, d);
+      }
+    }
+
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  }
+
   private buildGorgeWaterfall(_stoneMat: THREE.MeshStandardMaterial): void {
     // Cascading Andean mountain waterfall pouring down Horizontally Stratified Craggy Cliff Ledges
-    // into the Urubamba River (-2.2m) — modeled 1:1 after ref_gorge_waterfall_bridge!
+    // into the Urubamba River (-2.2m)
     const fallsGroup = new THREE.Group();
     const wx = 17.5;
     const wz = -29.5;
     fallsGroup.position.set(wx, -2.2, wz);
 
-    const cliffDiff = this.texLoader.load('/juzu/textures/cliff_diff.jpg');
-    cliffDiff.colorSpace = THREE.SRGBColorSpace;
-    cliffDiff.anisotropy = 8;
-    cliffDiff.wrapS = cliffDiff.wrapT = THREE.RepeatWrapping;
+    let pendingScans = 2;
+    const checkScansLoaded = () => {
+      pendingScans--;
+      if (pendingScans <= 0) {
+        this.isLoaded = true;
+      }
+    };
 
-    const cliffNor = this.texLoader.load('/juzu/textures/cliff_nor.jpg');
-    cliffNor.anisotropy = 8;
-    cliffNor.wrapS = cliffNor.wrapT = THREE.RepeatWrapping;
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 
-    const cliffArm = this.texLoader.load('/juzu/textures/cliff_arm.jpg');
-    cliffArm.anisotropy = 8;
-    cliffArm.wrapS = cliffArm.wrapT = THREE.RepeatWrapping;
+    // 1. Photorealistic Scanned Escarpment Cliff (namaqualand_cliff_01)
+    gltfLoader.load(
+      '/juzu/models/scans/namaqualand_cliff_01.glb',
+      (gltf) => {
+        let cliffGeom: THREE.BufferGeometry | null = null;
+        let cliffMat: THREE.Material | null = null;
 
-    const wetSlateMat = solid(
-      new THREE.MeshStandardMaterial({
-        map: cliffDiff,
-        normalMap: cliffNor,
-        normalScale: new THREE.Vector2(1.45, 1.45),
-        roughnessMap: cliffArm,
-        color: 0x868a80,
-        vertexColors: true,
-        roughness: 0.48,
-        metalness: 0.06,
-      })
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !cliffGeom) {
+            const mesh = child as THREE.Mesh;
+            cliffGeom = mesh.geometry.clone();
+            cliffMat = mesh.material as THREE.Material;
+            if (cliffMat instanceof THREE.MeshStandardMaterial) {
+              cliffMat.roughness = 0.90;
+              cliffMat.metalness = 0.02;
+              if (cliffMat.map) {
+                cliffMat.map.colorSpace = THREE.SRGBColorSpace;
+                cliffMat.map.anisotropy = 8;
+              }
+              if (cliffMat.normalMap) {
+                cliffMat.normalMap.anisotropy = 8;
+                cliffMat.normalScale = new THREE.Vector2(1.3, 1.3);
+              }
+            }
+          }
+        });
+
+        if (cliffGeom && cliffMat) {
+          const cliffPlacements = [
+            // Waterfall backwall rock face directly behind cascading chute
+            { x: 0.0, y: 0.8, z: -3.6, sx: 1.35, sy: 2.3, sz: 1.1, ry: -1.0 },
+            // North flank framing the left chute
+            { x: -5.4, y: 0.6, z: -1.6, sx: 1.2, sy: 2.1, sz: 1.15, ry: 0.42 },
+            // South flank framing the right chute
+            { x: 5.6, y: 0.5, z: -1.8, sx: 1.25, sy: 2.1, sz: 1.1, ry: -0.38 },
+            // Upper headwall crest above the waterfall lip
+            { x: 0.4, y: 7.2, z: -4.8, sx: 1.45, sy: 1.7, sz: 1.2, ry: 3.14 },
+            // South gorge canyon wall extending toward the suspension bridge
+            { x: -12.5, y: 0.2, z: 12.0, sx: 1.5, sy: 2.0, sz: 1.3, ry: 1.18 },
+            // North gorge canyon wall extending toward the cliff sanctuary
+            { x: -12.0, y: 0.3, z: -14.0, sx: 1.5, sy: 2.0, sz: 1.3, ry: -1.12 },
+            // Bluff wall underneath the suspension bridge
+            { x: -22.5, y: 0.1, z: 0.0, sx: 1.6, sy: 2.1, sz: 1.4, ry: 0.78 },
+            // Escarpment terraces along the right gorge slope
+            { x: 4.8, y: 1.8, z: 10.5, sx: 2.2, sy: 2.4, sz: 1.9, ry: -0.72 },
+            { x: -1.5, y: 3.2, z: 18.0, sx: 2.4, sy: 2.7, sz: 2.1, ry: -1.15 },
+            { x: 6.2, y: 3.6, z: 19.5, sx: 2.0, sy: 2.5, sz: 1.8, ry: -0.58 },
+            { x: -7.5, y: 2.0, z: 15.0, sx: 2.1, sy: 2.4, sz: 1.9, ry: 1.35 },
+            { x: 8.8, y: 1.2, z: 3.5, sx: 1.8, sy: 2.2, sz: 1.7, ry: -0.42 },
+          ];
+
+          const cliffInstMesh = new THREE.InstancedMesh(cliffGeom, cliffMat, cliffPlacements.length);
+          cliffInstMesh.castShadow = true;
+          cliffInstMesh.receiveShadow = true;
+
+          const dummy = new THREE.Object3D();
+          for (let i = 0; i < cliffPlacements.length; i++) {
+            const p = cliffPlacements[i];
+            dummy.position.set(p.x, p.y, p.z);
+            dummy.scale.set(p.sx, p.sy, p.sz);
+            dummy.rotation.set(0, p.ry, 0);
+            dummy.updateMatrix();
+            cliffInstMesh.setMatrixAt(i, dummy.matrix);
+          }
+          cliffInstMesh.instanceMatrix.needsUpdate = true;
+          fallsGroup.add(cliffInstMesh);
+        }
+        checkScansLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[CloudForest] Could not load scanned cliff, using fallback:', err);
+        checkScansLoaded();
+      }
     );
 
-    // Horizontally Stratified Canyon Cliff Ledges (replaces round spheres with authentic geological rock shelves!)
-    const strataLedges = [
-      // Left & Right stepped cliff shelves framing the waterfall chute
-      { x: -3.2, y: 1.4, z: -0.4, w: 4.6, h: 2.8, d: 3.4, ry: 0.14 },
-      { x: 3.3, y: 1.5, z: -0.4, w: 4.8, h: 3.0, d: 3.4, ry: -0.16 },
-      { x: -3.0, y: 4.2, z: -1.1, w: 4.4, h: 2.6, d: 3.2, ry: 0.08 },
-      { x: 3.1, y: 4.4, z: -1.1, w: 4.5, h: 2.8, d: 3.2, ry: -0.12 },
-      { x: -2.8, y: 7.0, z: -1.8, w: 4.2, h: 2.6, d: 3.0, ry: 0.18 },
-      { x: 2.9, y: 7.2, z: -1.8, w: 4.2, h: 2.6, d: 3.0, ry: -0.10 },
-      { x: -2.5, y: 9.8, z: -2.4, w: 3.8, h: 2.4, d: 2.8, ry: 0.12 },
-      { x: 2.6, y: 9.9, z: -2.4, w: 3.8, h: 2.4, d: 2.8, ry: -0.14 },
-      // Stepped backwall rock shelves behind the cascading water
-      { x: 0.0, y: 2.4, z: -1.1, w: 3.8, h: 4.2, d: 2.2, ry: 0.0 },
-      { x: 0.0, y: 6.4, z: -1.9, w: 3.4, h: 4.2, d: 2.2, ry: 0.0 },
-      { x: 0.0, y: 10.2, z: -2.6, w: 3.0, h: 3.6, d: 2.0, ry: 0.0 },
-    ];
-    for (const st of strataLedges) {
-      const shelf = new THREE.Mesh(
-        createIncaBlock(st.w, st.h, st.d, 0.14, 1.8),
-        wetSlateMat
-      );
-      shelf.position.set(st.x, st.y, st.z);
-      shelf.rotation.y = st.ry;
-      shelf.castShadow = true;
-      shelf.receiveShadow = true;
-      fallsGroup.add(shelf);
-    }
+    // 2. Photorealistic Scanned Riverbed Boulders (boulder_01)
+    gltfLoader.load(
+      '/juzu/models/scans/boulder_01.glb',
+      (gltf) => {
+        let bldGeom: THREE.BufferGeometry | null = null;
+        let bldMat: THREE.Material | null = null;
 
-    // Additional stratified rock outcrops along the Urubamba Gorge walls near the rope bridge (x = -12..12)
-    const gorgeWallLedges = [
-      { x: -25.5, y: 2.2, z: 0.5, w: 7.5, h: 4.2, d: 3.2, ry: 0.12 },
-      { x: -24.0, y: 5.2, z: -1.2, w: 6.8, h: 3.2, d: 2.8, ry: 0.08 },
-      { x: -11.5, y: 2.4, z: 0.8, w: 6.4, h: 4.4, d: 3.0, ry: -0.10 },
-      { x: -11.0, y: 5.4, z: -0.8, w: 5.8, h: 3.0, d: 2.6, ry: -0.06 },
-      { x: -23.0, y: 2.4, z: 27.5, w: 7.2, h: 4.2, d: 3.2, ry: -0.14 },
-      { x: -11.0, y: 2.5, z: 28.0, w: 6.2, h: 4.4, d: 3.0, ry: 0.12 },
-    ];
-    for (const gw of gorgeWallLedges) {
-      const cliffBlock = new THREE.Mesh(
-        createIncaBlock(gw.w, gw.h, gw.d, 0.16, 2.0),
-        wetSlateMat
-      );
-      cliffBlock.position.set(gw.x, gw.y, gw.z);
-      cliffBlock.rotation.y = gw.ry;
-      cliffBlock.castShadow = true;
-      cliffBlock.receiveShadow = true;
-      fallsGroup.add(cliffBlock);
-    }
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !bldGeom) {
+            const mesh = child as THREE.Mesh;
+            bldGeom = mesh.geometry.clone();
+            bldMat = mesh.material as THREE.Material;
+            if (bldMat instanceof THREE.MeshStandardMaterial) {
+              bldMat.roughness = 0.88;
+              bldMat.metalness = 0.02;
+              if (bldMat.map) {
+                bldMat.map.colorSpace = THREE.SRGBColorSpace;
+                bldMat.map.anisotropy = 8;
+              }
+              if (bldMat.normalMap) {
+                bldMat.normalMap.anisotropy = 8;
+                bldMat.normalScale = new THREE.Vector2(1.25, 1.25);
+              }
+            }
+          }
+        });
 
-    // Riverbed Boulders emerging from the Urubamba River beneath the Rope Bridge (matching ref_gorge_waterfall_bridge!)
-    const riverRocks = [
-      { x: -14.5, z: 12.0, s: 1.35 },
-      { x: -19.2, z: 10.5, s: 1.65 },
-      { x: -16.8, z: 14.2, s: 1.15 },
-      { x: -21.5, z: 13.0, s: 1.45 },
-      { x: -12.0, z: 9.8, s: 1.25 },
-      { x: -6.5, z: 11.5, s: 1.40 },
-    ];
-    for (let rr = 0; rr < riverRocks.length; rr++) {
-      const rSpec = riverRocks[rr];
-      const rBoulder = new THREE.Mesh(
-        createIncaBlock(rSpec.s * 1.6, rSpec.s * 0.95, rSpec.s * 1.4, 0.22, 1.4),
-        wetSlateMat
-      );
-      rBoulder.position.set(rSpec.x, 0.18, rSpec.z);
-      rBoulder.rotation.y = rr * 0.85;
-      rBoulder.castShadow = true;
-      rBoulder.receiveShadow = true;
-      fallsGroup.add(rBoulder);
-    }
+        if (bldGeom && bldMat) {
+          const riverRocks = [
+            { x: -14.5, z: 12.0, s: 2.8, ry: 0.4 },
+            { x: -19.2, z: 10.5, s: 3.2, ry: 1.8 },
+            { x: -16.8, z: 14.2, s: 2.4, ry: 2.5 },
+            { x: -21.5, z: 13.0, s: 3.0, ry: 0.9 },
+            { x: -12.0, z: 9.8, s: 2.6, ry: 3.1 },
+            { x: -6.5, z: 11.5, s: 2.9, ry: 1.4 },
+            { x: -3.8, z: 2.4, s: 2.2, ry: 0.6 },
+            { x: 4.1, z: 2.1, s: 2.5, ry: 2.1 },
+            { x: 0.5, z: 4.8, s: 3.4, ry: 1.1 },
+            { x: -2.2, z: 6.2, s: 2.0, ry: 2.9 },
+            { x: 3.2, z: 7.0, s: 2.3, ry: 0.3 },
+          ];
 
-    // Multi-tier cascading whitewater sheets pouring over the 3 stepped rock shelves
-    for (let i = 0; i < 4; i++) {
-      const stripMat = new THREE.MeshBasicMaterial({
-        color: i % 2 === 0 ? 0xc8e6f0 : 0xeaf6fa,
-        transparent: true,
-        opacity: 0.15 - i * 0.02,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const stripH = 11.6;
-      const strip = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.75 + i * 0.16, 1.45 + i * 0.22, stripH, 12, 1, true),
-        stripMat
-      );
-      const baseY = 5.7;
-      strip.position.set((i - 1.5) * 0.15, baseY, -0.55 + i * 0.14);
-      strip.rotation.x = 0.20;
-      strip.userData.baseY = baseY;
-      this.waterfallStrips.push(strip);
-      fallsGroup.add(strip);
-    }
+          const boulderInstMesh = new THREE.InstancedMesh(bldGeom, bldMat, riverRocks.length);
+          boulderInstMesh.castShadow = true;
+          boulderInstMesh.receiveShadow = true;
 
-    // Soft rising misty spray plumes at the mid-ledge & plunge pool base
-    const mistMat = new THREE.MeshBasicMaterial({
-      color: 0xd0e6ee,
+          const dummy = new THREE.Object3D();
+          for (let i = 0; i < riverRocks.length; i++) {
+            const r = riverRocks[i];
+            dummy.position.set(r.x, 0.16, r.z);
+            dummy.scale.set(r.s, r.s * 0.92, r.s);
+            dummy.rotation.set(0, r.ry, 0);
+            dummy.updateMatrix();
+            boulderInstMesh.setMatrixAt(i, dummy.matrix);
+          }
+          boulderInstMesh.instanceMatrix.needsUpdate = true;
+          fallsGroup.add(boulderInstMesh);
+        }
+        checkScansLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[CloudForest] Could not load scanned boulder, using fallback:', err);
+        checkScansLoaded();
+      }
+    );
+
+    // 3. Physical Cascading Waterfall Chute & Whitewater Foam
+    const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
+    waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
+    waterNor.repeat.set(3, 12);
+    this.waterfallNormalMap = waterNor;
+
+    const cascadeGroup = new THREE.Group();
+    cascadeGroup.rotation.y = -1.05;
+    fallsGroup.add(cascadeGroup);
+
+    const mainChuteGeom = this.buildWaterfallChuteGeometry(4.2, 6.8, 12.2, 2.2, 18, 36);
+    const mainWaterMat = new THREE.MeshStandardMaterial({
+      color: 0x5894a0,
+      roughness: 0.12,
+      metalness: 0.08,
       transparent: true,
-      opacity: 0.11,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.75,
+      normalMap: waterNor,
+      normalScale: new THREE.Vector2(2.2, 2.2),
+      side: THREE.DoubleSide,
       depthWrite: false,
     });
-    for (let m = 0; m < 5; m++) {
-      const plume = new THREE.Mesh(new THREE.SphereGeometry(1.4 + (m % 2) * 0.45, 10, 8), mistMat);
+    const mainCascade = new THREE.Mesh(mainChuteGeom, mainWaterMat);
+    mainCascade.position.set(0, 0.1, -1.8);
+    mainCascade.castShadow = false;
+    mainCascade.receiveShadow = true;
+    mainCascade.userData.baseY = 0.1;
+    this.waterfallStrips.push(mainCascade);
+    cascadeGroup.add(mainCascade);
+
+    // Inner aerated whitewater cascade sheet
+    const innerChuteGeom = this.buildWaterfallChuteGeometry(3.5, 5.8, 12.0, 2.0, 16, 32);
+    const innerFoamMat = new THREE.MeshStandardMaterial({
+      color: 0xf4fcff,
+      roughness: 0.38,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.48,
+      normalMap: waterNor,
+      normalScale: new THREE.Vector2(1.5, 1.5),
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const innerCascade = new THREE.Mesh(innerChuteGeom, innerFoamMat);
+    innerCascade.position.set(0, 0.2, -1.9);
+    innerCascade.castShadow = false;
+    innerCascade.receiveShadow = true;
+    innerCascade.userData.baseY = 0.2;
+    this.waterfallStrips.push(innerCascade);
+    cascadeGroup.add(innerCascade);
+
+    // Secondary braided side cascade chute
+    const sideChuteGeom = this.buildWaterfallChuteGeometry(1.8, 3.2, 9.4, 1.6, 12, 24);
+    const sideCascade = new THREE.Mesh(sideChuteGeom, mainWaterMat);
+    sideCascade.position.set(3.4, 0.1, -1.2);
+    sideCascade.rotation.y = 0.22;
+    sideCascade.userData.baseY = 0.1;
+    this.waterfallStrips.push(sideCascade);
+    cascadeGroup.add(sideCascade);
+
+    // 4. Soft Billowing Mountain Plunge Mist Plumes (Non-additive, subtle physical vapor)
+    const mistMat = new THREE.MeshStandardMaterial({
+      color: 0xdeeef3,
+      transparent: true,
+      opacity: 0.045,
+      roughness: 0.95,
+      depthWrite: false,
+    });
+    for (let m = 0; m < 7; m++) {
+      const plume = new THREE.Mesh(new THREE.SphereGeometry(1.8 + (m % 2) * 0.6, 10, 8), mistMat);
       plume.position.set(
-        (m - 2.0) * 0.75,
-        m === 4 ? 4.4 : 0.45 + (m % 2) * 0.35,
-        m === 4 ? -0.6 : 0.7 + (m % 2) * 0.4
+        (m - 3.0) * 1.0,
+        m === 5 ? 5.2 : 0.6 + (m % 2) * 0.4,
+        m === 5 ? -1.0 : 1.2 + (m % 2) * 0.5
       );
       this.mistPlumes.push(plume);
-      fallsGroup.add(plume);
+      cascadeGroup.add(plume);
     }
 
-    // Concentric plunge-pool & river-boulder surface foam rings
+    // 5. Concentric plunge-pool surface foam rings
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xd4eaf2,
       transparent: true,
-      opacity: 0.18,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.14,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
     for (let r = 0; r < 3; r++) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(1.5 + r * 1.1, 1.85 + r * 1.15, 24), ringMat);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.6 + r * 1.2, 2.0 + r * 1.25, 24), ringMat);
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(0, 0.06, 0.6);
-      fallsGroup.add(ring);
-    }
-    for (const rSpec of riverRocks) {
-      const eddy = new THREE.Mesh(
-        new THREE.RingGeometry(rSpec.s * 0.85, rSpec.s * 1.25, 18),
-        ringMat
-      );
-      eddy.rotation.x = -Math.PI / 2;
-      eddy.position.set(rSpec.x, 0.05, rSpec.z);
-      fallsGroup.add(eddy);
+      cascadeGroup.add(ring);
     }
 
     this.group.add(fallsGroup);
