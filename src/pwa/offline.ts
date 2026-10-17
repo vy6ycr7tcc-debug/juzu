@@ -36,7 +36,7 @@ class OfflineManager {
   }
 
   public async register(): Promise<boolean> {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator) || import.meta.env.DEV) {
       return false;
     }
 
