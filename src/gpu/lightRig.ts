@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { activeToD, sunDirection, TOD_PRESETS, type TimeOfDay } from '../world/fog';
 import { fogUniforms } from './tsl';
 
@@ -10,10 +11,13 @@ export class LightRig {
   sun: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
   camFill: THREE.DirectionalLight;
+  private sceneRef: THREE.Scene;
   private targetObj = new THREE.Object3D();
   private camFillTarget = new THREE.Object3D();
+  private envTexture?: THREE.DataTexture;
 
   constructor(scene: THREE.Scene) {
+    this.sceneRef = scene;
     scene.add(this.targetObj);
     scene.add(this.camFillTarget);
 
@@ -51,6 +55,22 @@ export class LightRig {
     this.camFill = new THREE.DirectionalLight(0xffecd8, 0.62);
     this.camFill.target = this.camFillTarget;
     scene.add(this.camFill);
+
+    // 4. Photorealistic Andean Image-Based Lighting (IBL) & Environment Map (Poly Haven CC0)
+    const hdrLoader = new HDRLoader();
+    hdrLoader.load(
+      '/juzu/textures/hdr/forest_slope_2k.hdr',
+      (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        this.envTexture = texture;
+        this.sceneRef.environment = texture;
+        this.applyEnvironmentIntensity(activeToD);
+      },
+      undefined,
+      (err) => {
+        console.warn('[LightRig] Could not load HDR environment map:', err);
+      }
+    );
 
     this.applyToD(activeToD);
   }
@@ -92,6 +112,19 @@ export class LightRig {
     fogUniforms.sunDir.value.set(sDir.x, sDir.y, sDir.z);
     fogUniforms.density.value = cfg.fogDensity;
     fogUniforms.falloff.value = cfg.fogFalloff;
+
+    this.applyEnvironmentIntensity(tod);
+  }
+
+  private applyEnvironmentIntensity(tod: TimeOfDay): void {
+    if (!this.sceneRef.environment) return;
+    if (tod === 'night') {
+      this.sceneRef.environmentIntensity = 0.12;
+    } else if (tod === 'dawn' || tod === 'dusk') {
+      this.sceneRef.environmentIntensity = 0.42;
+    } else {
+      this.sceneRef.environmentIntensity = 0.72;
+    }
   }
 
   public setShadowSize(size: number): void {
