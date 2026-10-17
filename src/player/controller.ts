@@ -51,6 +51,8 @@ export class Controller {
   private dodgeTimer = 0;
   private dodgeCooldown = 0;
   private lastCrouchInput = false;
+  private coyoteTimer = 0;
+  private jumpBufferTimer = 0;
 
   get vy(): number {
     return this.vel.y;
@@ -134,6 +136,9 @@ export class Controller {
     if (this.landingTimer > 0) this.landingTimer = Math.max(0, this.landingTimer - dt);
     if (this.interactTimer > 0) this.interactTimer = Math.max(0, this.interactTimer - dt);
     if (this.dodgeCooldown > 0) this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
+    if (this.jumpBufferTimer > 0) this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+    if (!this.grounded && this.coyoteTimer > 0) this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    if (isJump) this.jumpBufferTimer = 0.14;
 
     const crouchPressedEdge = isCrouch && !this.lastCrouchInput;
     this.lastCrouchInput = isCrouch;
@@ -219,19 +224,23 @@ export class Controller {
       this.vel.y = 0;
       this.pos.y = THREE.MathUtils.lerp(this.pos.y, SWIM_FEET, Math.min(1, dt * 6));
     } else {
-      // 2. Vertical Physics (Gravity & Jump)
-      if (this.grounded) {
+      // 2. Vertical Physics (Gravity & Jump with Coyote Time and Input Buffering)
+      const wantsJump = isJump || this.jumpBufferTimer > 0;
+      const canJump = (this.grounded || this.coyoteTimer > 0) && wantsJump;
+
+      if (canJump) {
+        this.vel.y = JUMP_VELOCITY;
+        this.grounded = false;
+        this.coyoteTimer = 0;
+        this.jumpBufferTimer = 0;
+        this.crouching = false;
+        this.dodging = false;
+        this.justJumped = true;
+      } else if (this.grounded) {
         this.airTime = 0;
         this.vel.y = 0;
         this.pos.y = groundH;
-
-        if (isJump) {
-          this.vel.y = JUMP_VELOCITY;
-          this.grounded = false;
-          this.crouching = false;
-          this.dodging = false;
-          this.justJumped = true;
-        }
+        this.coyoteTimer = 0.12;
       } else {
         this.airTime += dt;
         const prevVy = this.vel.y;
@@ -243,6 +252,7 @@ export class Controller {
           this.pos.y = groundH;
           this.vel.y = 0;
           this.grounded = true;
+          this.coyoteTimer = 0.12;
           if (this.airTime > 0.14) {
             this.justLanded = true;
             this.landingImpact = Math.min(10, Math.abs(prevVy));
@@ -268,7 +278,7 @@ export class Controller {
         if (dHeading < -Math.PI) dHeading += Math.PI * 2;
 
         const prevHeading = this.heading;
-        const turnBlend = Math.min(1, dt * (this.grounded ? 13.5 : 6.0));
+        const turnBlend = Math.min(1, dt * (this.grounded ? 16.5 : 8.5));
         this.heading += dHeading * turnBlend;
 
         const instTurnRate = (this.heading - prevHeading) / Math.max(0.001, dt);
@@ -304,7 +314,7 @@ export class Controller {
             : WALK_SPEED * Math.max(0.55, inputMag);
       const targetSpeed = baseTargetSpeed * slopeSpeedFactor;
 
-      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 11));
+      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 14));
       this.vel.x = moveDir.x * this.speed;
       this.vel.z = moveDir.z * this.speed;
 
