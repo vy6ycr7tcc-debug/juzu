@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { standAt } from '../terrain';
-import { solid } from '../solidity';
+import { solid, passable } from '../solidity';
 import { createIncaBlock, buildTrapezoidalGateway } from '../masonry';
 
 export class CloudForestRegion {
@@ -214,7 +214,7 @@ export class CloudForestRegion {
       const y = baseY - sag;
 
       // Overlapping collision & visual plank (0.66m pitch, 0.68m depth -> zero gap fall-through)
-      const plank = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.14, 0.68), plankMat);
+      const plank = passable(new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.14, 0.68), plankMat));
       plank.position.set(0, y, z);
       plank.castShadow = true;
       plank.receiveShadow = true;
@@ -243,7 +243,7 @@ export class CloudForestRegion {
       { z: zSouth + 1.1, y: ySouth, rotX: -0.14 },
       { z: zNorth - 1.1, y: yNorth, rotX: 0.14 },
     ]) {
-      const ramp = new THREE.Mesh(createIncaBlock(3.2, 0.45, 2.2, 0.08, 1.8), abutmentMat);
+      const ramp = passable(new THREE.Mesh(createIncaBlock(3.2, 0.45, 2.2, 0.08, 1.8), abutmentMat));
       ramp.position.set(0, end.y - 0.12, end.z);
       ramp.rotation.x = end.rotX;
       ramp.castShadow = true;
@@ -257,10 +257,10 @@ export class CloudForestRegion {
       const tz = trailZs[s];
       const tx = Math.sin(s * 1.7) * 0.22;
       const ty = standAt(tx, tz);
-      const slab = new THREE.Mesh(
+      const slab = passable(new THREE.Mesh(
         createIncaBlock(1.85 + (s % 2) * 0.35, 0.16, 1.35, 0.06, 1.5),
         abutmentMat
-      );
+      ));
       slab.position.set(tx, ty - 0.02, tz);
       slab.rotation.y = ((s % 3) - 1) * 0.08;
       slab.receiveShadow = true;

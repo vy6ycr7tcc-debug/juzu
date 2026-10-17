@@ -204,6 +204,10 @@ async function bootJuzu() {
       followCamera.teleport(target);
     },
     onBeginExpedition: () => {
+      hud.closeTitle();
+      if (typeof (window as any).__juzuDismissLoading === 'function') {
+        (window as any).__juzuDismissLoading();
+      }
       surface.addEventListener('click', () => {
         if (!document.pointerLockElement && !hud.isJournalOpen) {
           surface.requestPointerLock?.();
@@ -608,18 +612,24 @@ async function bootJuzu() {
     gpuUniforms.time.value = totalTime;
     post.render();
 
-    // Signal ready for Playwright shots
-    const loadingScreen = document.getElementById('juzu-loading-screen');
-    const loadingDismissed = !loadingScreen || loadingScreen.style.display === 'none';
+    // Signal ready and dismiss pre-bootstrap loading screen once 3D world is ready
     if (
       frameCount > 6 &&
       naira.modelRoot &&
       foliage.isLoaded &&
-      cloudForest.isLoaded &&
-      loadingDismissed &&
-      !window.__shotReady
+      cloudForest.isLoaded
     ) {
-      window.__shotReady = true;
+      if (typeof (window as any).__juzuDismissLoading === 'function') {
+        (window as any).__juzuDismissLoading();
+      }
+      const loadingScreen = document.getElementById('juzu-loading-screen');
+      const loadingDismissed =
+        !loadingScreen ||
+        loadingScreen.style.display === 'none' ||
+        loadingScreen.style.opacity === '0';
+      if (loadingDismissed && !window.__shotReady) {
+        window.__shotReady = true;
+      }
     }
   }
 
@@ -646,6 +656,7 @@ async function bootJuzu() {
     grapple,
     routes,
     hud,
+    input,
   };
   window.__juzuOffline = offlineManager;
   offlineManager.register();

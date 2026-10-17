@@ -11,12 +11,34 @@ export class Input {
     return val;
   }
 
+  private virtualMove: { x: number; y: number } | null = null;
+  private virtualBoost = false;
+  private virtualJump = false;
+
+  public setVirtualMove(x: number, y: number): void {
+    const len = Math.hypot(x, y);
+    if (len > 0) {
+      this.virtualMove = { x: x / len, y: y / len };
+    } else {
+      this.virtualMove = null;
+    }
+    this.updateKeyboardMove();
+  }
+
+  public setVirtualBoost(active: boolean): void {
+    this.virtualBoost = active;
+  }
+
+  public setVirtualJump(active: boolean): void {
+    this.virtualJump = active;
+  }
+
   get boost(): boolean {
-    return this.enabled && (this.keys.has('shift') || this.joyRun > 0.5);
+    return this.enabled && (this.keys.has('shift') || this.joyRun > 0.5 || this.virtualBoost);
   }
 
   get jump(): boolean {
-    return this.enabled && (this.keys.has(' ') || this.actPressed);
+    return this.enabled && (this.keys.has(' ') || this.actPressed || this.virtualJump);
   }
 
   get crouch(): boolean {
@@ -110,13 +132,21 @@ export class Input {
     });
 
     window.addEventListener('blur', () => {
-      this.keys.clear();
-      this.move.x = 0;
-      this.move.y = 0;
+      // In headless testing or unfocused window contexts, do not clear active keys unless page is truly hidden
+      if (document.hidden) {
+        this.keys.clear();
+        this.move.x = 0;
+        this.move.y = 0;
+      }
     });
   }
 
   private updateKeyboardMove(): void {
+    if (this.virtualMove !== null) {
+      this.move.x = this.virtualMove.x;
+      this.move.y = this.virtualMove.y;
+      return;
+    }
     if (this.joyId !== null) return; // Touch joystick takes precedence
     let x = 0;
     let y = 0;
