@@ -138,7 +138,7 @@ export class Controller {
     if (this.dodgeCooldown > 0) this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
     if (this.jumpBufferTimer > 0) this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
     if (!this.grounded && this.coyoteTimer > 0) this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
-    if (isJump) this.jumpBufferTimer = 0.14;
+    if (isJump) this.jumpBufferTimer = 0.16;
 
     const crouchPressedEdge = isCrouch && !this.lastCrouchInput;
     this.lastCrouchInput = isCrouch;
@@ -240,7 +240,7 @@ export class Controller {
         this.airTime = 0;
         this.vel.y = 0;
         this.pos.y = groundH;
-        this.coyoteTimer = 0.12;
+        this.coyoteTimer = 0.14;
       } else {
         this.airTime += dt;
         const prevVy = this.vel.y;
@@ -252,7 +252,7 @@ export class Controller {
           this.pos.y = groundH;
           this.vel.y = 0;
           this.grounded = true;
-          this.coyoteTimer = 0.12;
+          this.coyoteTimer = 0.14;
           if (this.airTime > 0.14) {
             this.justLanded = true;
             this.landingImpact = Math.min(10, Math.abs(prevVy));
@@ -278,7 +278,7 @@ export class Controller {
         if (dHeading < -Math.PI) dHeading += Math.PI * 2;
 
         const prevHeading = this.heading;
-        const turnBlend = Math.min(1, dt * (this.grounded ? 16.5 : 8.5));
+        const turnBlend = Math.min(1, dt * (this.grounded ? 18.0 : 10.5));
         this.heading += dHeading * turnBlend;
 
         const instTurnRate = (this.heading - prevHeading) / Math.max(0.001, dt);
@@ -314,7 +314,7 @@ export class Controller {
             : WALK_SPEED * Math.max(0.55, inputMag);
       const targetSpeed = baseTargetSpeed * slopeSpeedFactor;
 
-      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 14));
+      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 16));
       this.vel.x = moveDir.x * this.speed;
       this.vel.z = moveDir.z * this.speed;
 
@@ -355,7 +355,7 @@ export class Controller {
       // Smooth athletic deceleration inertia
       this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 12));
       this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, 0, Math.min(1, dt * 10));
-      this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 13));
+      this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 15));
       this.vel.x = Math.sin(this.heading) * this.speed;
       this.vel.z = Math.cos(this.heading) * this.speed;
       if (this.speed > 0.04) {
