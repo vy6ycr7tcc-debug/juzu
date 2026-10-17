@@ -23,9 +23,13 @@ export class Foliage {
   private grassInstances: THREE.InstancedMesh;
   private rockInstances: THREE.InstancedMesh;
   private rootInstances: THREE.InstancedMesh;
+  private flowerInstances: THREE.InstancedMesh;
+  private shrubInstances: THREE.InstancedMesh;
   private readonly TREE_COUNT = 620;
   private readonly GRASS_COUNT = 3200;
   private readonly ROCK_COUNT = 420;
+  private readonly FLOWER_COUNT = 1400;
+  private readonly SHRUB_COUNT = 240;
   public isLoaded = false;
 
   constructor(scene: THREE.Scene) {
@@ -154,10 +158,28 @@ export class Foliage {
     this.rockInstances.castShadow = true;
     this.rockInstances.receiveShadow = true;
 
+    const flowerGeom = new THREE.PlaneGeometry(0.7, 0.7, 1, 1);
+    const flowerMat = new THREE.MeshStandardMaterial({
+      color: 0xdbcf48,
+      roughness: 0.75,
+      side: THREE.DoubleSide,
+    });
+    this.flowerInstances = new THREE.InstancedMesh(flowerGeom, flowerMat, this.FLOWER_COUNT);
+    this.flowerInstances.receiveShadow = true;
+
+    const shrubGeom = new THREE.SphereGeometry(0.8, 6, 6);
+    const shrubMat = new THREE.MeshStandardMaterial({
+      color: 0x3d4a2c,
+      roughness: 0.85,
+    });
+    this.shrubInstances = new THREE.InstancedMesh(shrubGeom, shrubMat, this.SHRUB_COUNT);
+    this.shrubInstances.castShadow = true;
+    this.shrubInstances.receiveShadow = true;
+
     this.populateFoliage();
 
     // Ingest photorealistic scanned assets (Poly Haven CC0 photogrammetry)
-    let pendingAssets = 3;
+    let pendingAssets = 5;
     const onAssetLoaded = () => {
       pendingAssets--;
       if (pendingAssets <= 0) {
@@ -296,11 +318,101 @@ export class Foliage {
       }
     );
 
+    // 4. Photorealistic Scanned Mountain Flowering Ground Cover (celandine_01)
+    gltfLoader.load(
+      '/juzu/models/scans/celandine_01.glb',
+      (gltf) => {
+        let scannedGeom: THREE.BufferGeometry | null = null;
+        let scannedMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
+            const mesh = child as THREE.Mesh;
+            scannedGeom = mesh.geometry.clone();
+            scannedMat = mesh.material as THREE.Material;
+            if (scannedMat instanceof THREE.MeshStandardMaterial) {
+              scannedMat.roughness = 0.72;
+              scannedMat.metalness = 0.02;
+              scannedMat.alphaTest = 0.30;
+              scannedMat.side = THREE.DoubleSide;
+              if (scannedMat.map) {
+                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
+                scannedMat.map.anisotropy = 8;
+              }
+              if (scannedMat.normalMap) {
+                scannedMat.normalMap.anisotropy = 8;
+                scannedMat.normalScale = new THREE.Vector2(1.15, 1.15);
+              }
+            }
+          }
+        });
+
+        if (scannedGeom && scannedMat) {
+          this.flowerInstances.geometry.dispose();
+          this.flowerInstances.geometry = scannedGeom;
+          this.flowerInstances.material = scannedMat;
+          this.flowerInstances.instanceMatrix.needsUpdate = true;
+        }
+        onAssetLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[Foliage] Could not load scanned celandine, using fallback:', err);
+        onAssetLoaded();
+      }
+    );
+
+    // 5. Photorealistic Scanned Mountain Shrub (shrub_01)
+    gltfLoader.load(
+      '/juzu/models/scans/shrub_01.glb',
+      (gltf) => {
+        let scannedGeom: THREE.BufferGeometry | null = null;
+        let scannedMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
+            const mesh = child as THREE.Mesh;
+            scannedGeom = mesh.geometry.clone();
+            scannedMat = mesh.material as THREE.Material;
+            if (scannedMat instanceof THREE.MeshStandardMaterial) {
+              scannedMat.roughness = 0.78;
+              scannedMat.metalness = 0.02;
+              scannedMat.alphaTest = 0.35;
+              scannedMat.side = THREE.DoubleSide;
+              if (scannedMat.map) {
+                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
+                scannedMat.map.anisotropy = 8;
+              }
+              if (scannedMat.normalMap) {
+                scannedMat.normalMap.anisotropy = 8;
+                scannedMat.normalScale = new THREE.Vector2(1.20, 1.20);
+              }
+            }
+          }
+        });
+
+        if (scannedGeom && scannedMat) {
+          this.shrubInstances.geometry.dispose();
+          this.shrubInstances.geometry = scannedGeom;
+          this.shrubInstances.material = scannedMat;
+          this.shrubInstances.instanceMatrix.needsUpdate = true;
+        }
+        onAssetLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[Foliage] Could not load scanned shrub, using fallback:', err);
+        onAssetLoaded();
+      }
+    );
+
     this.group.add(this.trunkInstances);
     this.group.add(this.canopyInstances);
     this.group.add(this.grassInstances);
     this.group.add(this.rockInstances);
     this.group.add(this.rootInstances);
+    this.group.add(this.flowerInstances);
+    this.group.add(this.shrubInstances);
   }
 
   private buildGnarledTrunkGeometry(): THREE.BufferGeometry {
@@ -659,6 +771,80 @@ export class Foliage {
     }
     this.rockInstances.count = rockIdx;
     this.rockInstances.instanceMatrix.needsUpdate = true;
+
+    // 4. Distribute Celandine Flowering Mountain Ground Cover along trail edges, clearings, and rocks
+    let flowerIdx = 0;
+    for (let f = 1; f <= this.FLOWER_COUNT * 2 && flowerIdx < this.FLOWER_COUNT; f++) {
+      const u = halton(f + 1500, 2);
+      const v = halton(f + 1500, 3);
+      const w = halton(f + 1500, 5);
+      const hub = pickHub(w);
+
+      const x = hub.cx + (u * 2 - 1) * (hub.span * 0.92);
+      const z = hub.cz + (v * 2 - 1) * (hub.span * 0.92);
+
+      // Keep footpath center clear while populating sides and borders
+      if (Math.abs(x) < 2.0 && z > -45 && z < 14) continue;
+      if (Math.hypot(x - 1.2, z - 10.5) < 3.2) continue; // campfire clearing
+      if (Math.abs(z + 17) < 13.0 && Math.abs(x) < 55) continue;
+      if (Math.hypot(x - 200, z - 180) < 22.0) continue;
+      if (Math.abs(x - (-180)) < 2.5 && z > 122 && z < 182) continue;
+
+      const y = standAt(x, z);
+      if (y < 0.5 || y > 44.0) continue;
+
+      const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
+      if (dy > 1.1) continue;
+
+      dummy.position.set(x, y - 0.02, z);
+      dummy.rotation.set(
+        Math.sin(f * 0.8) * 0.06,
+        (f * 2.39996) % (Math.PI * 2),
+        Math.cos(f * 0.8) * 0.06
+      );
+      const s = 1.1 + ((f * 19) % 35) * 0.02;
+      dummy.scale.set(s, s * 0.95, s);
+      dummy.updateMatrix();
+
+      this.flowerInstances.setMatrixAt(flowerIdx++, dummy.matrix);
+    }
+    this.flowerInstances.count = flowerIdx;
+    this.flowerInstances.instanceMatrix.needsUpdate = true;
+
+    // 5. Distribute Subalpine Mountain Shrubs on slope transitions and forest perimeters
+    let shrubIdx = 0;
+    for (let sIdx = 1; sIdx <= this.SHRUB_COUNT * 3 && shrubIdx < this.SHRUB_COUNT; sIdx++) {
+      const u = halton(sIdx + 3000, 2);
+      const v = halton(sIdx + 3000, 3);
+      const w = halton(sIdx + 3000, 5);
+      const hub = pickHub(w);
+
+      const x = hub.cx + (u * 2 - 1) * hub.span;
+      const z = hub.cz + (v * 2 - 1) * hub.span;
+
+      if (this.isInClearZone(x, z)) continue;
+      if (Math.abs(z + 17) < 13.0 && Math.abs(x) < 55) continue;
+
+      const y = standAt(x, z);
+      if (y < 0.6 || y > 45.0) continue;
+
+      const dy = Math.hypot(standAt(x + 1.2, z) - y, standAt(x, z + 1.2) - y);
+      if (dy > 1.2) continue;
+
+      dummy.position.set(x, y - 0.06, z);
+      dummy.rotation.set(
+        Math.sin(sIdx * 0.6) * 0.08,
+        (sIdx * 1.93) % (Math.PI * 2),
+        Math.cos(sIdx * 0.6) * 0.08
+      );
+      const s = 0.95 + ((sIdx * 23) % 40) * 0.02;
+      dummy.scale.set(s, s * 0.92, s);
+      dummy.updateMatrix();
+
+      this.shrubInstances.setMatrixAt(shrubIdx++, dummy.matrix);
+    }
+    this.shrubInstances.count = shrubIdx;
+    this.shrubInstances.instanceMatrix.needsUpdate = true;
   }
 
   public update(_time: number): void {
