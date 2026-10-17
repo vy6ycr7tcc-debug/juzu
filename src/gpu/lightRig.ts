@@ -24,13 +24,13 @@ export class LightRig {
     this.sun.target = this.targetObj;
 
     const cam = this.sun.shadow.camera as THREE.OrthographicCamera;
-    const radius = 32;
+    const radius = 54;
     cam.left = -radius;
     cam.right = radius;
     cam.top = radius;
     cam.bottom = -radius;
     cam.near = 1;
-    cam.far = 180;
+    cam.far = 200;
 
     this.sun.shadow.mapSize.set(rig.shadowSize, rig.shadowSize);
     this.sun.shadow.bias = -0.0005;
@@ -47,8 +47,8 @@ export class LightRig {
     );
     scene.add(this.hemi);
 
-    // 3. Andean Camera Fill / Bounce Light
-    this.camFill = new THREE.DirectionalLight(0xffecd8, 0.85);
+    // 3. Andean Camera Fill / Bounce Light (scaled dynamically by Time of Day)
+    this.camFill = new THREE.DirectionalLight(0xffecd8, 0.62);
     this.camFill.target = this.camFillTarget;
     scene.add(this.camFill);
 
@@ -59,7 +59,7 @@ export class LightRig {
     this.targetObj.position.copy(playerPos);
 
     const sDir = sunDirection(activeToD);
-    this.sun.position.copy(playerPos).addScaledVector(sDir, 80);
+    this.sun.position.copy(playerPos).addScaledVector(sDir, 85);
 
     // Position fill light from camera toward player
     this.camFill.position.copy(cameraPos);
@@ -74,6 +74,17 @@ export class LightRig {
     this.hemi.color.set(cfg.hemiSky);
     this.hemi.groundColor.set(cfg.hemiGround);
     this.hemi.intensity = cfg.hemiIntensity * 1.5;
+
+    if (tod === 'night') {
+      this.camFill.color.setHex(0x6886b4);
+      this.camFill.intensity = 0.24;
+    } else if (tod === 'dawn' || tod === 'dusk') {
+      this.camFill.color.setHex(0xffcca0);
+      this.camFill.intensity = 0.48;
+    } else {
+      this.camFill.color.setHex(0xffecd8);
+      this.camFill.intensity = 0.62;
+    }
 
     const sDir = sunDirection(tod);
     fogUniforms.color.value.set(cfg.fogColor);

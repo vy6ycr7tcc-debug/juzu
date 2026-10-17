@@ -17,13 +17,39 @@ export class Input {
   }
 
   get interact(): boolean {
-    return this.enabled && (this.keys.has('e') || this.interactPressed);
+    if (!this.enabled) return false;
+    if (this.interactLatched) {
+      this.interactLatched = false;
+      return true;
+    }
+    return this.keys.has('e') || this.interactPressed;
+  }
+
+  get instinct(): boolean {
+    if (!this.enabled) return false;
+    if (this.instinctLatched) {
+      this.instinctLatched = false;
+      return true;
+    }
+    return this.keys.has('q');
+  }
+
+  get journal(): boolean {
+    if (!this.enabled) return false;
+    if (this.journalLatched) {
+      this.journalLatched = false;
+      return true;
+    }
+    return this.keys.has('tab') || this.keys.has('j');
   }
 
   enabled = true;
   private keys = new Set<string>();
   private actPressed = false;
   private interactPressed = false;
+  private interactLatched = false;
+  private instinctLatched = false;
+  private journalLatched = false;
 
   // Touch joystick
   private joyId: number | null = null;
@@ -49,6 +75,12 @@ export class Input {
   private bindKeyboard(): void {
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
+      if (k === 'tab') e.preventDefault();
+      if (!e.repeat) {
+        if (k === 'e') this.interactLatched = true;
+        if (k === 'q') this.instinctLatched = true;
+        if (k === 'tab' || k === 'j') this.journalLatched = true;
+      }
       this.keys.add(k);
       this.updateKeyboardMove();
     });

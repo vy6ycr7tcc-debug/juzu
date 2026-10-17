@@ -8,16 +8,35 @@ export interface HUDCallbacks {
   onToggleTimeOfDay: (tod: 'day' | 'dawn' | 'noon' | 'dusk' | 'night') => void;
 }
 
+export interface JournalEntry {
+  id: string;
+  title: string;
+  quechua: string;
+  body: string;
+}
+
 export class HUD {
   public root: HTMLElement;
   private titleScreenEl: HTMLElement;
   private hudEl: HTMLElement;
   private settingsModalEl: HTMLElement;
+  private journalModalEl: HTMLElement;
+  private journalListEl!: HTMLElement;
   private objectiveTextEl!: HTMLElement;
   private interactHintEl!: HTMLElement;
   private compassEl!: HTMLElement;
+  private instinctBadgeEl!: HTMLElement;
 
   public isTitleOpen = true;
+  public isJournalOpen = false;
+  private entries: JournalEntry[] = [
+    {
+      id: 'prologue',
+      title: 'Expedition Log I — Urubamba Gorge',
+      quechua: 'Qhapaq Ñan · The Royal Road',
+      body: 'Dr. Naira Quispe: Our ascent through the cloud forest has brought us to a surviving Q’eswachaka suspension bridge. A bronze Inti sun-mirror stands on the south cliff rim, aimed toward a carved monolith across the canyon.',
+    },
+  ];
 
   constructor(
     private audio: AudioEngine,
@@ -31,13 +50,16 @@ export class HUD {
     this.titleScreenEl = this.createTitleScreen();
     this.hudEl = this.createGameplayHUD();
     this.settingsModalEl = this.createSettingsModal();
+    this.journalModalEl = this.createJournalModal();
 
     this.root.appendChild(this.titleScreenEl);
     this.root.appendChild(this.hudEl);
     this.root.appendChild(this.settingsModalEl);
+    this.root.appendChild(this.journalModalEl);
 
     this.bindSettings();
     this.bindOfflineControls();
+    this.renderJournalEntries();
   }
 
   private createTitleScreen(): HTMLElement {
@@ -81,7 +103,7 @@ export class HUD {
         </div>
 
         <div style="font-size:11px;letter-spacing:0.05em;color:#9b9487;line-height:1.6;border-top:1px solid rgba(212,184,136,0.18);padding-top:16px;">
-          WASD Move · Space Jump · Shift Sprint · C Dive/Crouch · E Interact
+          WASD Move · Space Jump/Mantle · Shift Sprint · C Crouch · Q Survival Instinct · Tab Journal · E Interact
         </div>
       </div>
     `;
@@ -133,27 +155,113 @@ export class HUD {
 
     el.innerHTML = `
       <!-- Top Objective Banner -->
-      <div id="juzu-objective-wrap" style="position:absolute;top:20px;left:24px;max-width:440px;background:rgba(12,16,14,0.72);border-left:3px solid #c9a468;padding:10px 16px;border-radius:2px;box-shadow:0 4px 18px rgba(0,0,0,0.6);">
+      <div id="juzu-objective-wrap" style="position:absolute;top:20px;left:24px;max-width:440px;background:rgba(12,16,14,0.76);border-left:3px solid #c9a468;padding:10px 16px;border-radius:2px;box-shadow:0 4px 18px rgba(0,0,0,0.65);">
         <div style="font-size:10px;letter-spacing:0.25em;color:#c9a468;text-transform:uppercase;margin-bottom:4px;">Current Expedition Objective</div>
-        <div id="juzu-objective-text" style="font-size:13px;color:#f2ede4;line-height:1.45;">Cross the hanging bridge and read the carved Inca stele by the water [E].</div>
+        <div id="juzu-objective-text" style="font-size:13px;color:#f2ede4;line-height:1.45;">Align the bronze Inti sun-mirror on the south cliff [E] or cross the hanging bridge to the North Sanctuary.</div>
       </div>
 
       <!-- Compass Top-Center -->
-      <div id="juzu-compass" style="position:absolute;top:20px;left:50%;transform:translateX(-50%);padding:6px 16px;background:rgba(12,16,14,0.65);border:1px solid rgba(212,184,136,0.3);border-radius:20px;font-size:12px;letter-spacing:0.18em;color:#e6c896;">
-        N · 045° ANDES
+      <div id="juzu-compass" style="position:absolute;top:20px;left:50%;transform:translateX(-50%);padding:6px 16px;background:rgba(12,16,14,0.68);border:1px solid rgba(212,184,136,0.32);border-radius:20px;font-size:12px;letter-spacing:0.18em;color:#e6c896;">
+        N · 000° ANDES
+      </div>
+
+      <!-- Top-Right Field Controls Pill -->
+      <div style="position:absolute;top:20px;right:24px;display:flex;gap:8px;pointer-events:auto;">
+        <div id="juzu-instinct-badge" style="padding:6px 12px;background:rgba(12,16,14,0.72);border:1px solid rgba(212,184,136,0.3);border-radius:3px;font-size:11px;letter-spacing:0.1em;color:#d4b888;">[Q] Survival Instinct</div>
+        <button id="juzu-btn-hud-journal" style="padding:6px 12px;background:rgba(22,28,24,0.85);border:1px solid #c9a468;border-radius:3px;font-family:Georgia,serif;font-size:11px;letter-spacing:0.1em;color:#f2ece1;cursor:pointer;">📖 Journal [Tab]</button>
       </div>
 
       <!-- Interaction Hint Bottom-Center -->
-      <div id="juzu-interact-hint" style="display:none;position:absolute;bottom:42px;left:50%;transform:translateX(-50%);padding:8px 18px;background:rgba(14,20,16,0.92);border:1px solid #c9a468;border-radius:4px;font-size:13px;color:#ffd778;box-shadow:0 4px 20px rgba(0,0,0,0.75);">
-        [E] Read Carved Inca Stele
+      <div id="juzu-interact-hint" style="display:none;position:absolute;bottom:42px;left:50%;transform:translateX(-50%);padding:9px 20px;background:rgba(14,20,16,0.92);border:1px solid #c9a468;border-radius:4px;font-size:13px;color:#ffd778;box-shadow:0 4px 20px rgba(0,0,0,0.75);">
+        [E] Interact
       </div>
     `;
 
     this.objectiveTextEl = el.querySelector('#juzu-objective-text')!;
     this.interactHintEl = el.querySelector('#juzu-interact-hint')!;
     this.compassEl = el.querySelector('#juzu-compass')!;
+    this.instinctBadgeEl = el.querySelector('#juzu-instinct-badge')!;
+
+    el.querySelector('#juzu-btn-hud-journal')?.addEventListener('click', () => {
+      this.toggleJournal();
+    });
 
     return el;
+  }
+
+  private createJournalModal(): HTMLElement {
+    const el = document.createElement('div');
+    el.id = 'juzu-journal-modal';
+    el.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'display:none',
+      'align-items:center',
+      'justify-content:center',
+      'background:rgba(6, 10, 8, 0.82)',
+      'z-index:52',
+      'font-family:Georgia, serif',
+      'color:#f2ece1',
+    ].join(';');
+
+    el.innerHTML = `
+      <div style="width:min(560px, 92vw);background:rgba(24, 20, 16, 0.96);border:1px solid #c9a468;border-radius:4px;padding:26px 30px;box-shadow:0 12px 42px rgba(0,0,0,0.9);max-height:84vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(201,164,104,0.3);padding-bottom:12px;margin-bottom:18px;">
+          <div>
+            <div style="font-size:10px;letter-spacing:0.26em;color:#c9a468;text-transform:uppercase;">Dr. Naira Quispe · Archaeological Notes</div>
+            <h2 style="margin:4px 0 0 0;font-size:22px;letter-spacing:0.08em;color:#fdfaf2;font-weight:400;">EXPEDITION FIELD JOURNAL</h2>
+          </div>
+          <button id="juzu-journal-close" style="background:transparent;border:none;color:#d4b888;font-size:20px;cursor:pointer;">✕</button>
+        </div>
+        <div id="juzu-journal-entries" style="display:flex;flex-direction:column;gap:14px;"></div>
+      </div>
+    `;
+
+    this.journalListEl = el.querySelector('#juzu-journal-entries')!;
+    el.querySelector('#juzu-journal-close')?.addEventListener('click', () => {
+      this.toggleJournal(false);
+    });
+
+    return el;
+  }
+
+  public addJournalEntry(entry: JournalEntry): void {
+    if (this.entries.some((e) => e.id === entry.id)) return;
+    this.entries.unshift(entry);
+    this.renderJournalEntries();
+  }
+
+  private renderJournalEntries(): void {
+    if (!this.journalListEl) return;
+    this.journalListEl.innerHTML = this.entries
+      .map(
+        (e) => `
+        <div style="padding:12px 14px;background:rgba(14,12,10,0.68);border-left:3px solid #c9a468;border-radius:2px;">
+          <div style="font-size:10px;letter-spacing:0.18em;color:#c9a468;text-transform:uppercase;">${e.quechua}</div>
+          <div style="font-size:15px;color:#fdfaf2;margin:3px 0 6px 0;font-weight:bold;">${e.title}</div>
+          <div style="font-size:13px;color:#dcd4c6;line-height:1.5;">${e.body}</div>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  public toggleJournal(force?: boolean): void {
+    this.isJournalOpen = force !== undefined ? force : !this.isJournalOpen;
+    this.journalModalEl.style.display = this.isJournalOpen ? 'flex' : 'none';
+  }
+
+  public setInstinctActive(active: boolean): void {
+    if (!this.instinctBadgeEl) return;
+    if (active) {
+      this.instinctBadgeEl.style.borderColor = '#ffd778';
+      this.instinctBadgeEl.style.color = '#ffd778';
+      this.instinctBadgeEl.style.background = 'rgba(48, 38, 16, 0.88)';
+    } else {
+      this.instinctBadgeEl.style.borderColor = 'rgba(212,184,136,0.3)';
+      this.instinctBadgeEl.style.color = '#d4b888';
+      this.instinctBadgeEl.style.background = 'rgba(12,16,14,0.72)';
+    }
   }
 
   private createSettingsModal(): HTMLElement {
@@ -310,10 +418,8 @@ export class HUD {
     this.isTitleOpen = false;
     this.titleScreenEl.style.opacity = '0';
     this.titleScreenEl.style.pointerEvents = 'none';
-    setTimeout(() => {
-      this.titleScreenEl.style.display = 'none';
-      this.hudEl.style.display = 'block';
-    }, 850);
+    this.titleScreenEl.style.display = 'none';
+    this.hudEl.style.display = 'block';
   }
 
   public openSettings(): void {

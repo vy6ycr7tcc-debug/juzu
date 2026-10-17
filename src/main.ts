@@ -2,7 +2,7 @@ import './gpu/compat';
 import * as THREE from 'three/webgpu';
 import { LightRig } from './gpu/lightRig';
 import { Post } from './gpu/post';
-import { juzuFogNode, gpuUniforms } from './gpu/tsl';
+import { juzuFogNode, gpuUniforms, gradeUniforms } from './gpu/tsl';
 import { AdaptiveQuality, loadQualityConfig, MOBILE } from './core/quality';
 import { Input } from './core/input';
 import { AudioEngine } from './core/audio';
@@ -67,7 +67,7 @@ async function bootJuzu() {
 
   // 3. Scene, Camera, and Fog
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.15, 5000);
+  const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.15, 5000);
   scene.fogNode = juzuFogNode();
 
   // 4. Quality & Post Processing
@@ -104,10 +104,31 @@ async function bootJuzu() {
   const jungleLowlands = new JungleLowlandsRegion(scene);
   const paititi = new PaititiRegion(scene);
 
+  const allInteractables: THREE.Mesh[] = [
+    ...cloudForest.interactables,
+    ...highSierra.interactables,
+    ...jungleLowlands.interactables,
+    ...paititi.interactables,
+  ];
+
+  // Survival Instinct Objective Beacon Column
+  const beaconGeom = new THREE.CylinderGeometry(0.15, 0.45, 38, 12, 1, true);
+  beaconGeom.translate(0, 19, 0);
+  const beaconMat = new THREE.MeshBasicMaterial({
+    color: 0xffd25a,
+    transparent: true,
+    opacity: 0.0,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const instinctBeacon = new THREE.Mesh(beaconGeom, beaconMat);
+  instinctBeacon.visible = false;
+  scene.add(instinctBeacon);
+
   // 8. Player: Controller, Naira Model, FollowCamera
   let startPos = SPAWN.clone();
-  if (regionParam === 'highSierra') startPos.set(120, standAt(120, -170), -170);
-  else if (regionParam === 'jungleLowlands') startPos.set(-180, 2.3, 126);
+  if (regionParam === 'highSierra') startPos.set(120, standAt(120, -156), -156);
+  else if (regionParam === 'jungleLowlands') startPos.set(-180, standAt(-180, 118) + 2.2, 118);
   else if (regionParam === 'paititi') startPos.set(200, standAt(200, 168) + 0.9, 168);
 
   const controller = new Controller(startPos);
@@ -134,17 +155,25 @@ async function bootJuzu() {
   const hud = new HUD(audio, followCamera, {
     onSelectRegion: (r) => {
       let target = SPAWN.clone();
-      if (r === 'highSierra') target.set(120, standAt(120, -170), -170);
-      else if (r === 'jungleLowlands') target.set(-180, 2.3, 126);
-      else if (r === 'paititi') target.set(200, standAt(200, 168) + 0.9, 168);
+      if (r === 'highSierra') {
+        target.set(120, standAt(120, -156), -156);
+        hud.setObjective('Align the Intihuatana Gnomon Dial [E] with the Chakana Gate.');
+      } else if (r === 'jungleLowlands') {
+        target.set(-180, standAt(-180, 118) + 2.2, 118);
+        hud.setObjective('Turn the Ancient Bronze Sluice Wheel on the Quay [E] to lower the Cenote.');
+      } else if (r === 'paititi') {
+        target.set(200, standAt(200, 168) + 0.9, 168);
+        hud.setObjective('Approach the Golden Sun Disk Dais [E] to awaken the Plaza of the Sun.');
+      } else {
+        hud.setObjective('Align the bronze Inti sun-mirror on the south cliff [E] or cross the hanging bridge to the North Sanctuary.');
+      }
 
       controller.teleport(target);
       followCamera.teleport(target);
     },
     onBeginExpedition: () => {
-      // Pointer lock on canvas click during gameplay
       surface.addEventListener('click', () => {
-        if (!document.pointerLockElement) {
+        if (!document.pointerLockElement && !hud.isJournalOpen) {
           surface.requestPointerLock?.();
         }
       });
@@ -155,17 +184,52 @@ async function bootJuzu() {
     },
   });
 
-  // Handle Shot Mode
-  if (shotParam) {
+  // Dismiss legacy HTML boot splash so only the interactive HUD title screen is shown
+  const bootSplash = document.getElementById('title');
+  if (bootSplash) {
+    bootSplash.classList.add('hide');
+    setTimeout(() => {
+      bootSplash.style.display = 'none';
+    }, 600);
+  }
+
+  // Handle Deep-Linked Region or Shot Mode
+  if (urlParams.has('region') || urlParams.has('play') || shotParam) {
     hud.closeTitle();
-    if (shotParam === 'close') {
-      followCamera.dist = 2.4;
-      followCamera.pitch = 0.08;
-    } else if (shotParam === 'vista') {
-      followCamera.dist = 14.0;
-      followCamera.pitch = 0.38;
+    const loadingEl = document.getElementById('juzu-loading-screen');
+    if (loadingEl) {
+      loadingEl.style.opacity = '0';
+      loadingEl.style.display = 'none';
     }
   }
+  if (shotParam) {
+    if (shotParam === 'close') {
+      controller.heading = 0.24;
+      followCamera.dist = 1.95;
+      followCamera.pitch = 0.08;
+      followCamera.shoulderOffset = 0.0;
+    } else if (shotParam === 'vista') {
+      followCamera.dist = 11.5;
+      followCamera.pitch = 0.34;
+    }
+  }
+
+  // Time-of-Day quick hotkeys (1 = Dawn, 2 = Day, 3 = Dusk, 4 = Night)
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Digit1') {
+      setTimeOfDay('dawn');
+      lightRig.applyToD('dawn');
+    } else if (e.code === 'Digit2') {
+      setTimeOfDay('day');
+      lightRig.applyToD('day');
+    } else if (e.code === 'Digit3') {
+      setTimeOfDay('dusk');
+      lightRig.applyToD('dusk');
+    } else if (e.code === 'Digit4') {
+      setTimeOfDay('night');
+      lightRig.applyToD('night');
+    }
+  });
 
   // 11. Resize Handler
   const onResize = () => {
@@ -181,7 +245,22 @@ async function bootJuzu() {
   window.addEventListener('resize', onResize);
   onResize();
 
-  // 12. Main Animation Loop
+  // 12. Gameplay Puzzle & Survival Instinct State
+  let instinctTimer = 0;
+  let lastInstinctKey = false;
+  let lastJournalKey = false;
+  let lastInteractKey = false;
+  let stepAccumulator = 0;
+
+  let mirrorSolved = false;
+  let steleSolved = false;
+  let gnomonSolved = false;
+  let sluiceSolved = false;
+  let paititiSolved = false;
+
+  const activeBeaconPos = new THREE.Vector3(0, 4.5, -44);
+
+  // 13. Main Animation Loop
   let lastTime = performance.now();
   let totalTime = 0;
   let frameCount = 0;
@@ -193,23 +272,91 @@ async function bootJuzu() {
     totalTime += dt;
     frameCount++;
 
-    // Input & Camera
-    const look = input.resetLook();
-    followCamera.update(controller.pos, look, dt);
-    hud.updateCompass(followCamera.yaw);
+    // Toggle Field Journal [Tab / J]
+    const jKey = input.journal;
+    if (jKey && !lastJournalKey && !hud.isTitleOpen) {
+      hud.toggleJournal();
+    }
+    lastJournalKey = jKey;
+
+    // Trigger Tomb Raider Survival Instinct [Q]
+    const qKey = input.instinct;
+    if (qKey && !lastInstinctKey && !hud.isTitleOpen) {
+      instinctTimer = 4.0;
+      audio.playQuenaNote(587.33, 1.5);
+      audio.playCajon(0.35);
+    }
+    lastInstinctKey = qKey;
+
+    if (instinctTimer > 0) {
+      instinctTimer = Math.max(0, instinctTimer - dt);
+      const pulse = Math.sin(totalTime * 6.0) * 0.25 + 0.55;
+      const fade = Math.min(1, instinctTimer * 1.5);
+      hud.setInstinctActive(true);
+      gradeUniforms.sat.value = THREE.MathUtils.lerp(1.0, 0.72, fade);
+
+      instinctBeacon.visible = true;
+      instinctBeacon.position.copy(activeBeaconPos);
+      beaconMat.opacity = 0.28 * pulse * fade;
+
+      for (const mesh of allInteractables) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat && mat.emissive) {
+          mat.emissive.setHex(0xd4a017);
+          mat.emissiveIntensity = 0.65 * pulse * fade;
+        }
+      }
+    } else {
+      hud.setInstinctActive(false);
+      gradeUniforms.sat.value = 1.0;
+      instinctBeacon.visible = false;
+      for (const mesh of allInteractables) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat && mat.emissive && mat.emissiveIntensity < 0.5) {
+          mat.emissiveIntensity = 0;
+        }
+      }
+    }
 
     // Solidity BVH update for nearby solid stone geometry
     solidity.update(scene, controller.pos, dt);
 
     // Controller & Character
-    controller.update(input.move, input.boost, input.jump, followCamera.yaw, dt);
+    controller.update(
+      input.move,
+      input.boost,
+      input.jump,
+      followCamera.yaw,
+      dt,
+      input.crouch
+    );
+    if (controller.justLanded) {
+      followCamera.triggerLandingDip(controller.landingImpact);
+      audio.playFootstep(controller.getSurfaceType());
+    }
     naira.update(controller, dt);
 
-    // Footstep audio
-    if (controller.grounded && controller.speed > 0.5) {
-      if (Math.sin(totalTime * controller.speed * 2.8) > 0.95) {
-        audio.playFootstep(controller.pos.y < 0.2 ? 'water' : 'grass');
+    // Input & Over-the-Shoulder Camera
+    const look = input.resetLook();
+    followCamera.update(
+      controller.pos,
+      look,
+      dt,
+      controller.pose === 'run',
+      controller.crouching,
+      instinctTimer > 0
+    );
+    hud.updateCompass(followCamera.yaw);
+
+    // Surface-aware Footstep Audio
+    if (controller.grounded && controller.speed > 0.4) {
+      stepAccumulator += controller.speed * dt * 0.52;
+      if (stepAccumulator >= 1.0) {
+        stepAccumulator %= 1.0;
+        audio.playFootstep(controller.getSurfaceType());
       }
+    } else {
+      stepAccumulator = 0;
     }
 
     // World updates
@@ -217,18 +364,106 @@ async function bootJuzu() {
     water.update(dt, totalTime);
     sky.update(controller.pos, activeToD);
     foliage.update(totalTime);
+    cloudForest.update(totalTime);
     lightRig.update(controller.pos, camera.position);
 
-    // Context hint check near Stele at (3.5, 14)
-    const distToStele = Math.hypot(controller.pos.x - 3.5, controller.pos.z - 14);
-    if (distToStele < 3.2) {
-      hud.setInteractHint('[E] Read Carved Inca Stele');
-      if (input.interact) {
-        audio.playQuenaNote(440, 1.2);
-        hud.setObjective('The stele reveals: "Follow the mountain river to the High Sierra Intihuatana."');
+    // Interactive Archaeological Mechanisms & Stelae across the 4 Regions
+    const eTriggered = input.interact && !lastInteractKey;
+    lastInteractKey = input.interact;
+
+    const distMirror = Math.hypot(controller.pos.x - (-4.2), controller.pos.z - 3.8);
+    const distStele = Math.hypot(controller.pos.x - 0, controller.pos.z - (-44));
+    const distGnomon = Math.hypot(controller.pos.x - 120, controller.pos.z - (-165));
+    const distSluice = Math.hypot(controller.pos.x - (-180), controller.pos.z - 124.6);
+    const distPaititi = Math.hypot(controller.pos.x - 200, controller.pos.z - 180);
+
+    if (distMirror < 3.4 && !mirrorSolved) {
+      activeBeaconPos.set(-4.2, standAt(-4.2, 3.8), 3.8);
+      hud.setInteractHint('[E] Align Bronze Inti Sun-Mirror');
+      if (eTriggered) {
+        mirrorSolved = true;
+        cloudForest.alignSunMirror();
+        audio.playCajon(0.5);
+        audio.playQuenaNote(523.25, 1.6);
+        activeBeaconPos.set(0, standAt(0, -44), -44);
+        hud.setObjective('The solar beam strikes the North Sanctuary across the gorge! Cross the hanging bridge and read the Inca Stele [E].');
+        hud.addJournalEntry({
+          id: 'mirror',
+          title: 'Inti Solar Reflector',
+          quechua: 'Intipawan · Path of the Sun',
+          body: 'Rotating the polished bronze disc directed a concentrated beam of Andean sunlight across the Urubamba chasm, illuminating the gold Chakana seal on the far sanctuary stele.',
+        });
+      }
+    } else if (distStele < 3.8) {
+      hud.setInteractHint('[E] Decipher Carved Inca Stele');
+      if (eTriggered) {
+        steleSolved = true;
+        audio.playQuenaNote(659.25, 1.8);
+        hud.setObjective('Stele deciphered! Open [Tab] Journal to review notes or ascend to the High Sierra Intihuatana.');
+        hud.addJournalEntry({
+          id: 'stele',
+          title: 'Sanctuary Stele of the Cloud Forest',
+          quechua: 'Chakana Unanchaq · The Southern Cross Marker',
+          body: 'The relief carvings record the royal pilgrimage route from the Cloud Forest suspension bridge up to the High Sierra Intihuatana gnomon, through the Antisuyu cenote, to Golden Paititi.',
+        });
+      }
+    } else if (distGnomon < 4.2 && !gnomonSolved) {
+      activeBeaconPos.set(120, standAt(120, -165), -165);
+      hud.setInteractHint('[E] Align Intihuatana Solstice Gnomon');
+      if (eTriggered) {
+        gnomonSolved = true;
+        highSierra.alignIntihuatanaDial();
+        audio.playCajon(0.55);
+        audio.playQuenaNote(587.33, 1.8);
+        hud.setObjective('Solstice shadow aligned! The Chakana Gate keystone resonates with the high pass.');
+        hud.addJournalEntry({
+          id: 'intihuatana',
+          title: 'Intihuatana — Hitching Post of the Sun',
+          quechua: 'Inti Watana · Solar Observatory',
+          body: 'At 4,100 meters elevation, the carved granite prism casts an exact equinox shadow toward the double-jamb Chakana Gate, marking the astronomical bearing toward Antisuyu.',
+        });
+      }
+    } else if (distSluice < 3.8 && !sluiceSolved) {
+      activeBeaconPos.set(-180, standAt(-180, 124), 124.6);
+      hud.setInteractHint('[E] Turn Ancient Bronze Sluice Wheel');
+      if (eTriggered) {
+        sluiceSolved = true;
+        jungleLowlands.openCenoteSluice();
+        audio.playCajon(0.6);
+        audio.playQuenaNote(493.88, 1.8);
+        hud.setObjective('Subterranean sluice opened! The emerald cenote drains to reveal the Serpent Altar.');
+        hud.addJournalEntry({
+          id: 'cenote',
+          title: 'Hydraulic Sluice of Antisuyu',
+          quechua: 'Yaku Kamayuq · Master of Waters',
+          body: 'Turning the bronze capstan on the river quay opened an underground stone culvert, lowering the cenote water table and exposing the submerged Serpent Sanctuary.',
+        });
+      }
+    } else if (distPaititi < 6.0 && !paititiSolved) {
+      activeBeaconPos.set(200, standAt(200, 180), 180);
+      hud.setInteractHint('[E] Awaken Golden Sun Disk of Paititi');
+      if (eTriggered) {
+        paititiSolved = true;
+        paititi.awakenSunPlaza();
+        audio.playCajon(0.65);
+        audio.playQuenaNote(783.99, 2.2);
+        hud.setObjective('Paititi Awakened! The aqueduct channels fill the Plaza of the Sun. Review your complete Field Journal [Tab].');
+        hud.addJournalEntry({
+          id: 'paititi',
+          title: 'Paititi — The Plaza of the Sun',
+          quechua: 'Quri Kancha · Enclosure of Gold',
+          body: 'Mountain spring water now courses through the stone aqueduct into the Golden Sun Disk dais. We have found Paititi intact beneath the eastern cordillera.',
+        });
       }
     } else {
       hud.setInteractHint(null);
+      if (!steleSolved) {
+        activeBeaconPos.set(
+          mirrorSolved ? 0 : -4.2,
+          standAt(mirrorSolved ? 0 : -4.2, mirrorSolved ? -44 : 3.8),
+          mirrorSolved ? -44 : 3.8
+        );
+      }
     }
 
     // Render via TSL Post Pipeline
@@ -254,11 +489,16 @@ async function bootJuzu() {
     camera,
     controller,
     naira,
+    followCamera,
     lightRig,
     terrain,
     water,
     sky,
     foliage,
+    cloudForest,
+    highSierra,
+    jungleLowlands,
+    paititi,
     hud,
   };
   window.__juzuOffline = offlineManager;

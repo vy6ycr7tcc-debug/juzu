@@ -94,14 +94,12 @@ export class Solidity {
       if (dx * dx + dy * dy + dz * dz < R * R) this.near.push(f);
     }
     this.stats.near = this.near.length;
-    // nearest first, so the tree you are about to meet is the one grown now
-    let best: Found | null = null, bd = Infinity;
+    // Build BVH trees for all nearby solid meshes immediately so bridges/stairs never drop a frame
     for (const f of this.near) {
-      if (this.trees.has(f.mesh.geometry)) continue;
-      const d = f.c.distanceToSquared(at) - f.r * f.r;
-      if (d < bd) (bd = d), (best = f);
+      if (!this.trees.has(f.mesh.geometry)) {
+        this.tree(f.mesh.geometry);
+      }
     }
-    if (best) this.tree(best.mesh.geometry);
   }
 
   private tree(g: THREE.BufferGeometry): MeshBVH | null {
@@ -120,7 +118,11 @@ export class Solidity {
     const walk = (o: THREE.Object3D): void => {
       if (!o.visible || o.userData.passable) return;
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh && !(o as THREE.SkinnedMesh).isSkinnedMesh && isSolid(mesh.material)) {
+      if (
+        mesh.isMesh &&
+        !(o as THREE.SkinnedMesh).isSkinnedMesh &&
+        (mesh.userData.solid || isSolid(mesh.material))
+      ) {
         const g = mesh.geometry;
         if (g.attributes.position) {
           let c: THREE.Vector3, r: number;
@@ -152,7 +154,7 @@ export class Solidity {
       instanced mesh), with its tree. */
   private each(at: THREE.Vector3, reach: number, fn: (f: Found, m: THREE.Matrix4, t: MeshBVH) => void): void {
     for (const f of this.near) {
-      const t = this.trees.get(f.mesh.geometry);
+      const t = this.tree(f.mesh.geometry);
       if (!t) continue;
       const im = f.mesh as THREE.InstancedMesh;
       if (!im.isInstancedMesh) {
