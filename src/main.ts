@@ -252,24 +252,24 @@ async function bootJuzu() {
       followCamera.dist = 11.5;
       followCamera.pitch = 0.34;
     } else if (shotParam === 'waterfall') {
-      const px = 4.2;
-      const pz = 1.8;
-      controller.pos.set(px, standAt(px, pz), pz);
-      controller.heading = Math.PI * 0.85;
-      followCamera.yaw = -0.56;
-      followCamera.pitch = 0.02;
-      followCamera.dist = 3.6;
-      followCamera.shoulderOffset = 0.40;
+      const px = 6.0;
+      const pz = -16.0;
+      controller.pos.set(px, standAt(px, pz) + 0.1, pz);
+      controller.heading = Math.PI - 0.70;
+      followCamera.yaw = -0.70;
+      followCamera.pitch = -0.10;
+      followCamera.dist = 5.2;
+      followCamera.shoulderOffset = 0.38;
       followCamera.teleport(controller.pos);
     } else if (shotParam === 'gorge') {
-      const px = 4.2;
-      const pz = 1.8;
-      controller.pos.set(px, standAt(px, pz), pz);
-      controller.heading = Math.PI * 0.85;
-      followCamera.yaw = -0.56;
-      followCamera.pitch = -0.18;
-      followCamera.dist = 3.6;
-      followCamera.shoulderOffset = 0.40;
+      const px = 0.0;
+      const pz = 1.0;
+      controller.pos.set(px, standAt(px, pz) + 0.1, pz);
+      controller.heading = Math.PI;
+      followCamera.yaw = 0.0;
+      followCamera.pitch = -0.14;
+      followCamera.dist = 5.2;
+      followCamera.shoulderOffset = 0.28;
       followCamera.teleport(controller.pos);
     }
   }

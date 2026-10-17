@@ -895,7 +895,7 @@ export class CloudForestRegion {
     const wz = -29.5;
     fallsGroup.position.set(wx, -2.2, wz);
 
-    let pendingScans = 2;
+    let pendingScans = 4;
     const checkScansLoaded = () => {
       pendingScans--;
       if (pendingScans <= 0) {
@@ -1049,7 +1049,141 @@ export class CloudForestRegion {
       }
     );
 
-    // 3. Physical Cascading Waterfall Chute & Whitewater Foam
+    // 3. Photorealistic Scanned Granite Cliff Ledges (namaqualand_cliff_02)
+    gltfLoader.load(
+      '/juzu/models/scans/namaqualand_cliff_02.glb',
+      (gltf) => {
+        let ledgeGeom: THREE.BufferGeometry | null = null;
+        let ledgeMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !ledgeGeom) {
+            const mesh = child as THREE.Mesh;
+            ledgeGeom = mesh.geometry.clone();
+            ledgeMat = mesh.material as THREE.Material;
+            if (ledgeMat instanceof THREE.MeshStandardMaterial) {
+              ledgeMat.roughness = 0.90;
+              ledgeMat.metalness = 0.02;
+              if (ledgeMat.map) {
+                ledgeMat.map.colorSpace = THREE.SRGBColorSpace;
+                ledgeMat.map.anisotropy = 8;
+              }
+              if (ledgeMat.normalMap) {
+                ledgeMat.normalMap.anisotropy = 8;
+                ledgeMat.normalScale = new THREE.Vector2(1.35, 1.35);
+              }
+            }
+          }
+        });
+
+        if (ledgeGeom && ledgeMat) {
+          const ledgePlacements = [
+            // Waterfall upper crest shelf
+            { x: 3.5, y: 7.2, z: -6.5, sx: 0.85, sy: 0.9, sz: 0.85, ry: -1.25 },
+            // North canyon rim overlook
+            { x: -7.5, y: 6.8, z: -7.0, sx: 0.9, sy: 0.95, sz: 0.9, ry: 0.75 },
+            // South gorge high bluff
+            { x: -14.0, y: 4.5, z: 14.5, sx: 1.0, sy: 1.0, sz: 0.95, ry: 1.35 },
+            // North gorge upper terrace
+            { x: -16.5, y: 4.0, z: -16.0, sx: 1.0, sy: 1.05, sz: 1.0, ry: -1.1 },
+            // Hanging bridge south abutment shelf
+            { x: -24.5, y: 2.5, z: 8.5, sx: 0.95, sy: 0.9, sz: 0.9, ry: 0.82 },
+            // Hanging bridge north abutment shelf
+            { x: -25.0, y: 2.8, z: -9.5, sx: 0.95, sy: 0.95, sz: 0.9, ry: -0.92 },
+          ];
+
+          const ledgeInstMesh = new THREE.InstancedMesh(ledgeGeom, ledgeMat, ledgePlacements.length);
+          ledgeInstMesh.castShadow = true;
+          ledgeInstMesh.receiveShadow = true;
+
+          const dummy = new THREE.Object3D();
+          for (let i = 0; i < ledgePlacements.length; i++) {
+            const p = ledgePlacements[i];
+            dummy.position.set(p.x, p.y, p.z);
+            dummy.scale.set(p.sx, p.sy, p.sz);
+            dummy.rotation.set(0, p.ry, 0);
+            dummy.updateMatrix();
+            ledgeInstMesh.setMatrixAt(i, dummy.matrix);
+          }
+          ledgeInstMesh.instanceMatrix.needsUpdate = true;
+          fallsGroup.add(ledgeInstMesh);
+        }
+        checkScansLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[CloudForest] Could not load scanned cliff ledge, using fallback:', err);
+        checkScansLoaded();
+      }
+    );
+
+    // 4. Photorealistic Scanned Water-Worn Riverbed Shelves (coast_land_rocks_02)
+    gltfLoader.load(
+      '/juzu/models/scans/coast_land_rocks_02.glb',
+      (gltf) => {
+        let shelfGeom: THREE.BufferGeometry | null = null;
+        let shelfMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !shelfGeom) {
+            const mesh = child as THREE.Mesh;
+            shelfGeom = mesh.geometry.clone();
+            shelfMat = mesh.material as THREE.Material;
+            if (shelfMat instanceof THREE.MeshStandardMaterial) {
+              shelfMat.roughness = 0.82;
+              shelfMat.metalness = 0.02;
+              if (shelfMat.map) {
+                shelfMat.map.colorSpace = THREE.SRGBColorSpace;
+                shelfMat.map.anisotropy = 8;
+              }
+              if (shelfMat.normalMap) {
+                shelfMat.normalMap.anisotropy = 8;
+                shelfMat.normalScale = new THREE.Vector2(1.3, 1.3);
+              }
+            }
+          }
+        });
+
+        if (shelfGeom && shelfMat) {
+          const shelfPlacements = [
+            // Plunge pool basin rim where cascade pours into the river
+            { x: -2.0, y: -0.12, z: 2.5, sx: 1.1, sy: 0.75, sz: 1.1, ry: -0.7 },
+            // Upper river rapid shelf
+            { x: -8.5, y: -0.15, z: 7.2, sx: 1.25, sy: 0.7, sz: 1.3, ry: 0.35 },
+            // Mid-river gorge bedrock shelf
+            { x: -15.2, y: -0.18, z: 12.8, sx: 1.3, sy: 0.68, sz: 1.35, ry: 1.15 },
+            // Rapids shelf underneath the suspension bridge
+            { x: -21.8, y: -0.15, z: 2.0, sx: 1.4, sy: 0.72, sz: 1.4, ry: -0.45 },
+            // Downstream western gorge channel shelf
+            { x: -28.5, y: -0.20, z: -1.5, sx: 1.45, sy: 0.7, sz: 1.4, ry: 0.65 },
+          ];
+
+          const shelfInstMesh = new THREE.InstancedMesh(shelfGeom, shelfMat, shelfPlacements.length);
+          shelfInstMesh.castShadow = true;
+          shelfInstMesh.receiveShadow = true;
+
+          const dummy = new THREE.Object3D();
+          for (let i = 0; i < shelfPlacements.length; i++) {
+            const p = shelfPlacements[i];
+            dummy.position.set(p.x, p.y, p.z);
+            dummy.scale.set(p.sx, p.sy, p.sz);
+            dummy.rotation.set(0, p.ry, 0);
+            dummy.updateMatrix();
+            shelfInstMesh.setMatrixAt(i, dummy.matrix);
+          }
+          shelfInstMesh.instanceMatrix.needsUpdate = true;
+          fallsGroup.add(shelfInstMesh);
+        }
+        checkScansLoaded();
+      },
+      undefined,
+      (err) => {
+        console.warn('[CloudForest] Could not load scanned riverbed shelf, using fallback:', err);
+        checkScansLoaded();
+      }
+    );
+
+    // 5. Physical Cascading Waterfall Chute & Whitewater Foam
     const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
     waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
     waterNor.repeat.set(3, 12);
