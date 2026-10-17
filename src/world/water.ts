@@ -7,19 +7,19 @@ export class Water {
 
   constructor(scene: THREE.Scene) {
     const texLoader = new THREE.TextureLoader();
-    const rippleNor = texLoader.load('/juzu/assets/environment-textures/environment-planks-normal.jpg');
-    rippleNor.wrapS = rippleNor.wrapT = THREE.RepeatWrapping;
-    rippleNor.repeat.set(120, 120);
+    const waterNor = texLoader.load('/juzu/textures/water_nor.png');
+    waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
+    waterNor.repeat.set(80, 80);
 
-    // Realistic alpine water material
+    // Realistic Andean glacial river water material
     this.material = new THREE.MeshStandardMaterial({
-      color: 0x224a5a, // Deep clear alpine blue-green
-      roughness: 0.12,
-      metalness: 0.25,
+      color: 0x1d4d5a, // Deep clear Andean turquoise-blue river
+      roughness: 0.06,
+      metalness: 0.18,
       transparent: true,
       opacity: 0.88,
-      normalMap: rippleNor,
-      normalScale: new THREE.Vector2(0.35, 0.35),
+      normalMap: waterNor,
+      normalScale: new THREE.Vector2(0.45, 0.45),
     });
 
     const geom = new THREE.PlaneGeometry(6000, 6000, 1, 1);
@@ -33,8 +33,9 @@ export class Water {
 
   public update(dt: number, time: number): void {
     if (this.material.normalMap) {
-      this.material.normalMap.offset.x = (time * 0.04) % 1;
-      this.material.normalMap.offset.y = (time * 0.02) % 1;
+      // Natural downhill river current flow
+      this.material.normalMap.offset.x = (time * 0.03) % 1;
+      this.material.normalMap.offset.y = (time * 0.018) % 1;
     }
   }
 }
