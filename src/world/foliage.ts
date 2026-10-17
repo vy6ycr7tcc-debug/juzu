@@ -1,5 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { standAt, vnoise } from './terrain';
 
 function halton(index: number, base: number): number {
@@ -23,6 +25,7 @@ export class Foliage {
   private readonly TREE_COUNT = 620;
   private readonly GRASS_COUNT = 3200;
   private readonly ROCK_COUNT = 420;
+  public isLoaded = false;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Andean_Foliage';
@@ -141,6 +144,50 @@ export class Foliage {
     this.rockInstances.receiveShadow = true;
 
     this.populateFoliage();
+
+    // Ingest photorealistic scanned granite boulder (Poly Haven CC0 photogrammetry)
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+    gltfLoader.load(
+      '/juzu/models/scans/boulder_01.glb',
+      (gltf) => {
+        let scannedGeom: THREE.BufferGeometry | null = null;
+        let scannedMat: THREE.Material | null = null;
+
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
+            const mesh = child as THREE.Mesh;
+            scannedGeom = mesh.geometry.clone();
+            scannedMat = mesh.material as THREE.Material;
+            if (scannedMat instanceof THREE.MeshStandardMaterial) {
+              scannedMat.roughness = 0.88;
+              scannedMat.metalness = 0.02;
+              if (scannedMat.map) {
+                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
+                scannedMat.map.anisotropy = 8;
+              }
+              if (scannedMat.normalMap) {
+                scannedMat.normalMap.anisotropy = 8;
+                scannedMat.normalScale = new THREE.Vector2(1.25, 1.25);
+              }
+            }
+          }
+        });
+
+        if (scannedGeom && scannedMat) {
+          this.rockInstances.geometry.dispose();
+          this.rockInstances.geometry = scannedGeom;
+          this.rockInstances.material = scannedMat;
+          this.rockInstances.instanceMatrix.needsUpdate = true;
+        }
+        this.isLoaded = true;
+      },
+      undefined,
+      (err) => {
+        console.warn('[Foliage] Could not load scanned boulder, using fallback:', err);
+        this.isLoaded = true;
+      }
+    );
 
     this.group.add(this.trunkInstances);
     this.group.add(this.canopyInstances);
@@ -471,16 +518,19 @@ export class Foliage {
       const rDyZ = Math.abs(standAt(x, z + 1.5) - y);
       if (rDyX > 0.95 || rDyZ > 0.95) continue;
 
-      dummy.position.set(x, y - 0.34, z);
+      // Ground the photogrammetry boulder firmly: flat base (Y ~ -0.07m) embeds 0.16m into terrain
+      dummy.position.set(x, y - 0.16, z);
       dummy.rotation.set(
-        (k * 0.43) % 0.6,
+        Math.sin(k * 1.3) * 0.12,
         (k * 1.93) % (Math.PI * 2),
-        (k * 0.31) % 0.6
+        Math.cos(k * 1.7) * 0.12
       );
-      const sx = 0.72 + ((k * 29) % 45) * 0.028;
-      const sy = 0.58 + ((k * 17) % 35) * 0.022;
-      const sz = 0.72 + ((k * 31) % 45) * 0.028;
-      dummy.scale.set(sx, sy, sz);
+      const s = 1.0 + ((k * 29) % 45) * 0.024;
+      dummy.scale.set(
+        s * (0.92 + ((k * 11) % 17) * 0.01),
+        s * (0.88 + ((k * 13) % 15) * 0.015),
+        s * (0.92 + ((k * 19) % 17) * 0.01)
+      );
       dummy.updateMatrix();
 
       this.rockInstances.setMatrixAt(rockIdx++, dummy.matrix);
