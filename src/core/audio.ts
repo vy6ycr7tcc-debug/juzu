@@ -132,6 +132,84 @@ export class AudioEngine {
     whiteNoise.start();
   }
 
+  // Grapple throw whoosh sound effect
+  public playGrappleThrow(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(480, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.28);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1400, this.ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.28);
+
+    gain.gain.setValueAtTime(0.22, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.28);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.28);
+  }
+
+  // Bronze ring latch & solid hemp cordage engagement
+  public playGrappleLatch(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    // Resonant bronze bell chime
+    const bell = this.ctx.createOscillator();
+    const bellGain = this.ctx.createGain();
+    bell.type = 'sine';
+    bell.frequency.setValueAtTime(1180, this.ctx.currentTime);
+    bell.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.35);
+
+    bellGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+    bellGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
+
+    bell.connect(bellGain);
+    bellGain.connect(this.sfxGain);
+    bell.start();
+    bell.stop(this.ctx.currentTime + 0.35);
+
+    // Deep rope snap clack
+    const clack = this.ctx.createOscillator();
+    const clackGain = this.ctx.createGain();
+    clack.type = 'triangle';
+    clack.frequency.setValueAtTime(220, this.ctx.currentTime);
+    clack.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 0.15);
+
+    clackGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+    clackGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+
+    clack.connect(clackGain);
+    clackGain.connect(this.sfxGain);
+    clack.start();
+    clack.stop(this.ctx.currentTime + 0.15);
+  }
+
+  // Grapple release leap impulse
+  public playGrappleRelease(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(280, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(560, this.ctx.currentTime + 0.22);
+
+    gain.gain.setValueAtTime(0.24, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.22);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.22);
+  }
+
   private startAmbientMountainBreeze(): void {
     if (!this.ctx || !this.musicGain) return;
     // Continuous filtered noise simulating high mountain valley wind

@@ -168,6 +168,11 @@ export class Naira {
   private currentAction: THREE.AnimationAction | null = null;
   private currentPose: LocomotionPose = 'idle';
   private headBone: THREE.Object3D | null = null;
+  public rightHandBone: THREE.Object3D | null = null;
+  public rightForearmBone: THREE.Object3D | null = null;
+  public rightUpperArmBone: THREE.Object3D | null = null;
+  public leftUpperArmBone: THREE.Object3D | null = null;
+  public leftForearmBone: THREE.Object3D | null = null;
 
   // Articulated 5-segment hair braid for secondary pendulum motion
   private braidSegments: THREE.Object3D[] = [];
@@ -335,6 +340,19 @@ export class Naira {
       root.getObjectByName('DEF-shinL') || root.getObjectByName('DEF-shin.L');
     const rightShinBone =
       root.getObjectByName('DEF-shinR') || root.getObjectByName('DEF-shin.R');
+
+    const rightHandBone =
+      root.getObjectByName('DEF-handR') || root.getObjectByName('DEF-hand.R');
+    const rightUpperArmBone =
+      root.getObjectByName('DEF-upper_armR') || root.getObjectByName('DEF-upper_arm.R');
+    const leftUpperArmBone =
+      root.getObjectByName('DEF-upper_armL') || root.getObjectByName('DEF-upper_arm.L');
+
+    this.rightHandBone = rightHandBone || null;
+    this.rightForearmBone = rightForearmBone || null;
+    this.rightUpperArmBone = rightUpperArmBone || null;
+    this.leftUpperArmBone = leftUpperArmBone || null;
+    this.leftForearmBone = leftForearmBone || null;
 
     // Shared expedition tunic, Quechua weave, leather & brass materials
     const tunicClothMat = new THREE.MeshStandardMaterial({
@@ -903,20 +921,22 @@ export class Naira {
       Math.min(1, dt * 12)
     );
 
-    // 2. Forward Athletic Lean (Sprint / Uphill Slope / Mantle / Crouch / Dodge) + Turn Banking
+    // 2. Forward Athletic Lean (Sprint / Uphill Slope / Mantle / Crouch / Dodge / Grapple) + Turn Banking
     const uphillLean = THREE.MathUtils.clamp(controller.slopePitch * 0.22, -0.08, 0.18);
     const targetPitch =
-      (controller.mantling
-        ? 0.26
-        : controller.dodging
-          ? 0.34
-          : controller.crouching
-            ? 0.26
-            : controller.pose === 'run'
-              ? 0.11
-              : controller.pose === 'walk'
-                ? 0.045
-                : 0) + uphillLean;
+      controller.pose === 'grapple_swing'
+        ? THREE.MathUtils.clamp(-controller.vel.y * 0.045, -0.45, 0.45)
+        : (controller.mantling
+          ? 0.26
+          : controller.dodging
+            ? 0.34
+            : controller.crouching
+              ? 0.26
+              : controller.pose === 'run'
+                ? 0.11
+                : controller.pose === 'walk'
+                  ? 0.045
+                  : 0) + uphillLean;
     this.smoothSpinePitch = THREE.MathUtils.lerp(
       this.smoothSpinePitch,
       targetPitch,
@@ -942,7 +962,11 @@ export class Naira {
     const clampTurn = THREE.MathUtils.clamp(controller.turnRate, -8, 8);
     const restAngleX =
       0.28 +
-      (controller.pose === 'run' ? 0.36 : controller.pose === 'walk' ? 0.16 : 0) +
+      (controller.pose === 'run' || controller.pose === 'grapple_swing'
+        ? 0.38
+        : controller.pose === 'walk'
+          ? 0.16
+          : 0) +
       Math.max(0, this.smoothSpinePitch * 0.45);
     const strideBounce =
       controller.grounded && controller.speed > 0.2
@@ -973,7 +997,9 @@ export class Naira {
 
     // 4. Blend 9-State Locomotion Animations
     if (this.currentPose !== controller.pose) {
-      const nextAction = this.actions[controller.pose] || this.actions.idle;
+      const nextAction =
+        this.actions[controller.pose] ||
+        (controller.pose === 'grapple_swing' ? this.actions.jump : this.actions.idle);
       if (nextAction && this.currentAction && nextAction !== this.currentAction) {
         nextAction.reset();
         nextAction.enabled = true;
@@ -982,14 +1008,22 @@ export class Naira {
           nextAction.timeScale = Math.max(0.68, controller.speed / 2.35);
         } else if (controller.pose === 'run') {
           nextAction.timeScale = Math.max(0.88, controller.speed / 5.4);
-        } else if (controller.pose === 'jump_start' || controller.pose === 'jump_land') {
+        } else if (
+          controller.pose === 'jump_start' ||
+          controller.pose === 'jump_land' ||
+          controller.pose === 'grapple_swing'
+        ) {
           nextAction.timeScale = 1.35;
         } else {
           nextAction.timeScale = 1.0;
         }
 
         const fadeDur =
-          controller.pose === 'jump_start' || controller.pose === 'jump_land' ? 0.12 : 0.2;
+          controller.pose === 'jump_start' ||
+          controller.pose === 'jump_land' ||
+          controller.pose === 'grapple_swing'
+            ? 0.12
+            : 0.2;
         nextAction.crossFadeFrom(this.currentAction, fadeDur, true);
         nextAction.play();
         this.currentAction = nextAction;
@@ -1007,7 +1041,24 @@ export class Naira {
       this.mixer.update(dt);
     }
 
-    // 5. Post-Mixer Procedural Head Look-Direction Alignment (Naira subtly glances toward camera look direction)
+    // 5. Post-Mixer Procedural Grapple Arm Posing
+    if (controller.pose === 'grapple_swing') {
+      if (this.rightUpperArmBone) {
+        this.rightUpperArmBone.rotation.x = -1.65;
+        this.rightUpperArmBone.rotation.z = -0.42;
+      }
+      if (this.rightForearmBone) {
+        this.rightForearmBone.rotation.x = -0.35;
+      }
+      if (this.leftUpperArmBone) {
+        this.leftUpperArmBone.rotation.z = 0.65;
+      }
+      if (this.leftForearmBone) {
+        this.leftForearmBone.rotation.x = -0.75;
+      }
+    }
+
+    // 6. Post-Mixer Procedural Head Look-Direction Alignment
     if (this.headBone && camYaw !== undefined) {
       const camForwardYaw = camYaw + Math.PI;
       let diffYaw = (camForwardYaw - controller.heading) % (Math.PI * 2);
@@ -1020,5 +1071,15 @@ export class Naira {
       this.smoothHeadYaw = THREE.MathUtils.lerp(this.smoothHeadYaw, goalHeadYaw, Math.min(1, dt * 8));
       this.headBone.rotation.y += this.smoothHeadYaw;
     }
+  }
+
+  public getRightHandWorldPosition(out: THREE.Vector3): THREE.Vector3 {
+    if (this.rightHandBone) {
+      return this.rightHandBone.getWorldPosition(out);
+    }
+    if (this.rightForearmBone) {
+      return this.rightForearmBone.getWorldPosition(out).add(new THREE.Vector3(0, 0.25, 0));
+    }
+    return out.copy(this.root.position).add(new THREE.Vector3(0.25, 1.45, 0.2));
   }
 }

@@ -43,6 +43,15 @@ export class Input {
     return this.keys.has('tab') || this.keys.has('j');
   }
 
+  get grapple(): boolean {
+    if (!this.enabled) return false;
+    if (this.grappleLatched) {
+      this.grappleLatched = false;
+      return true;
+    }
+    return this.keys.has('f');
+  }
+
   enabled = true;
   private keys = new Set<string>();
   private actPressed = false;
@@ -50,6 +59,7 @@ export class Input {
   private interactLatched = false;
   private instinctLatched = false;
   private journalLatched = false;
+  private grappleLatched = false;
 
   // Touch joystick
   private joyId: number | null = null;
@@ -80,6 +90,7 @@ export class Input {
         if (k === 'e') this.interactLatched = true;
         if (k === 'q') this.instinctLatched = true;
         if (k === 'tab' || k === 'j') this.journalLatched = true;
+        if (k === 'f') this.grappleLatched = true;
       }
       this.keys.add(k);
       this.updateKeyboardMove();

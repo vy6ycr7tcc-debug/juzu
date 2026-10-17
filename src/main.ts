@@ -17,6 +17,8 @@ import { CloudForestRegion } from './world/regions/cloudForest';
 import { HighSierraRegion } from './world/regions/highSierra';
 import { JungleLowlandsRegion } from './world/regions/jungleLowlands';
 import { PaititiRegion } from './world/regions/paititi';
+import { GrappleManager } from './player/grapple';
+import { RoutesManager } from './world/routes';
 import { HUD } from './ui/hud';
 import { activeToD, setTimeOfDay, type TimeOfDay } from './world/fog';
 import { offlineManager } from './pwa/offline';
@@ -103,12 +105,19 @@ async function bootJuzu() {
   const highSierra = new HighSierraRegion(scene);
   const jungleLowlands = new JungleLowlandsRegion(scene);
   const paititi = new PaititiRegion(scene);
+  const grapple = new GrappleManager(scene);
+  const routes = new RoutesManager(scene, grapple);
+
+  const grappleRings = grapple.points
+    .map((p) => p.ringMesh)
+    .filter((m): m is THREE.Mesh => !!m);
 
   const allInteractables: THREE.Mesh[] = [
     ...cloudForest.interactables,
     ...highSierra.interactables,
     ...jungleLowlands.interactables,
     ...paititi.interactables,
+    ...grappleRings,
   ];
 
   // Survival Instinct Objective Beacon Column (Additive volumetric light shaft)
@@ -352,6 +361,52 @@ async function bootJuzu() {
     // Solidity BVH update for nearby solid stone geometry
     solidity.update(scene, controller.pos, dt);
 
+    // Grappling Hook Anchor Detection & Controls
+    const reachableAnchor = grapple.findReachableAnchor(
+      controller.pos,
+      followCamera.yaw,
+      !controller.grounded
+    );
+
+    const grappleInputTriggered = input.grapple;
+    const midAirJumpGrapple = !controller.grounded && input.jump && controller.vy < 2.5;
+
+    if (!controller.grappling) {
+      if (reachableAnchor) {
+        hud.setGrapplePrompt(true, `[F / Space] Swing · ${reachableAnchor.point.name}`);
+        if (grappleInputTriggered || midAirJumpGrapple) {
+          grapple.attach(reachableAnchor.point, controller.pos, controller.vel, followCamera.yaw);
+          controller.startGrapple(reachableAnchor.point.pos);
+          audio.playGrappleThrow();
+          audio.playGrappleLatch();
+        }
+      } else {
+        hud.setGrapplePrompt(false);
+      }
+    } else {
+      hud.setGrapplePrompt(true, '[Space / F] Release & Leap');
+      // Update pendulum kinematics
+      const gResult = grapple.update(dt, controller.pos, input.move, followCamera.yaw);
+      controller.pos.copy(gResult.pos);
+      controller.vel.copy(gResult.vel);
+
+      // Dynamic braided rope update from Naira's hand to the anchor ring
+      const handPos = naira.getRightHandWorldPosition(new THREE.Vector3());
+      grapple.updateRopeVisual(handPos);
+
+      // Detach check (Space or F releases with tangential launch impulse)
+      if (input.jump || grappleInputTriggered) {
+        const launchVel = grapple.detach();
+        controller.endGrapple(launchVel);
+        audio.playGrappleRelease();
+        audio.playQuenaNote(659.25, 0.45);
+      }
+    }
+
+    if (!controller.grappling && grapple.attached) {
+      grapple.detach();
+    }
+
     // Controller & Character
     controller.update(
       input.move,
@@ -537,6 +592,8 @@ async function bootJuzu() {
     highSierra,
     jungleLowlands,
     paititi,
+    grapple,
+    routes,
     hud,
   };
   window.__juzuOffline = offlineManager;

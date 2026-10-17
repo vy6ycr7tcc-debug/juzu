@@ -26,6 +26,8 @@ export class HUD {
   private interactHintEl!: HTMLElement;
   private compassEl!: HTMLElement;
   private instinctBadgeEl!: HTMLElement;
+  private grapplePromptEl!: HTMLElement;
+  private grappleTextEl!: HTMLElement;
 
   public isTitleOpen = true;
   public isJournalOpen = false;
@@ -103,7 +105,7 @@ export class HUD {
         </div>
 
         <div style="font-size:11px;letter-spacing:0.05em;color:#9b9487;line-height:1.6;border-top:1px solid rgba(212,184,136,0.18);padding-top:16px;">
-          WASD Move · Space Jump/Mantle · Shift Sprint · C Crouch · Q Survival Instinct · Tab Journal · E Interact
+          WASD Move · Space Jump/Mantle · F Grapple · Shift Sprint · C Crouch · Q Survival Instinct · Tab Journal · E Interact
         </div>
       </div>
     `;
@@ -171,6 +173,16 @@ export class HUD {
         <button id="juzu-btn-hud-journal" style="padding:6px 12px;background:rgba(22,28,24,0.85);border:1px solid #c9a468;border-radius:3px;font-family:Georgia,serif;font-size:11px;letter-spacing:0.1em;color:#f2ece1;cursor:pointer;">📖 Journal [Tab]</button>
       </div>
 
+      <!-- Grapple Swing Reticle & Prompt Center-Screen -->
+      <div id="juzu-grapple-prompt" style="display:none;position:absolute;top:44%;left:50%;transform:translate(-50%, -50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;">
+        <div style="width:38px;height:38px;border:2px solid #ffd778;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(255,215,120,0.85);background:rgba(20,16,10,0.45);">
+          <div style="width:12px;height:12px;background:#ffd778;border-radius:50%;"></div>
+        </div>
+        <div id="juzu-grapple-text" style="padding:4px 12px;background:rgba(12,16,14,0.88);border:1px solid #c9a468;border-radius:3px;font-size:11px;letter-spacing:0.12em;color:#fdfaf2;text-transform:uppercase;box-shadow:0 2px 10px rgba(0,0,0,0.7);">
+          [F / Space] Grapple Swing
+        </div>
+      </div>
+
       <!-- Interaction Hint Bottom-Center -->
       <div id="juzu-interact-hint" style="display:none;position:absolute;bottom:42px;left:50%;transform:translateX(-50%);padding:9px 20px;background:rgba(14,20,16,0.92);border:1px solid #c9a468;border-radius:4px;font-size:13px;color:#ffd778;box-shadow:0 4px 20px rgba(0,0,0,0.75);">
         [E] Interact
@@ -181,6 +193,8 @@ export class HUD {
     this.interactHintEl = el.querySelector('#juzu-interact-hint')!;
     this.compassEl = el.querySelector('#juzu-compass')!;
     this.instinctBadgeEl = el.querySelector('#juzu-instinct-badge')!;
+    this.grapplePromptEl = el.querySelector('#juzu-grapple-prompt')!;
+    this.grappleTextEl = el.querySelector('#juzu-grapple-text')!;
 
     el.querySelector('#juzu-btn-hud-journal')?.addEventListener('click', () => {
       this.toggleJournal();
@@ -261,6 +275,14 @@ export class HUD {
       this.instinctBadgeEl.style.borderColor = 'rgba(212,184,136,0.3)';
       this.instinctBadgeEl.style.color = '#d4b888';
       this.instinctBadgeEl.style.background = 'rgba(12,16,14,0.72)';
+    }
+  }
+
+  public setGrapplePrompt(visible: boolean, text = '[F / Space] Grapple Swing'): void {
+    if (!this.grapplePromptEl) return;
+    this.grapplePromptEl.style.display = visible ? 'flex' : 'none';
+    if (this.grappleTextEl && text) {
+      this.grappleTextEl.textContent = text;
     }
   }
 

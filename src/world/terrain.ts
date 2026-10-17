@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { withFog } from '../gpu/tsl';
+import { getRouteInfluence } from './routeData';
 
 export const WATER_Y = 0;
 export const WORLD_R = 3000;
@@ -49,9 +50,9 @@ const PEAKS = [
   { x: -68, z: -28, r: 46, h: 58, sharp: 1.4 },
   { x: 72, z: -24, r: 48, h: 64, sharp: 1.4 },
   { x: -85, z: -95, r: 68, h: 92, sharp: 1.3 },
-  { x: 88, z: -105, r: 72, h: 98, sharp: 1.3 },
+  { x: 108, z: -88, r: 62, h: 94, sharp: 1.35 },
   { x: -5, z: -118, r: 62, h: 86, sharp: 1.35 },
-  { x: -95, z: 45, r: 65, h: 68, sharp: 1.4 },
+  { x: -118, z: 24, r: 58, h: 68, sharp: 1.4 },
   { x: 98, z: 52, r: 65, h: 72, sharp: 1.4 },
   // High Sierra Cordillera (framing the Intihuatana Sanctuary at 120, -180)
   { x: 42, z: -248, r: 66, h: 112, sharp: 1.25 },
@@ -136,6 +137,12 @@ export function rawHeight(x: number, z: number): number {
   const ptDist = Math.hypot(x - 200, z - 185);
   if (ptDist < 105) {
     h = THREE.MathUtils.lerp(h, 24.0, smooth(90, 38, ptDist));
+  }
+
+  // 9. Inter-Region Mountain Traversal Routes & Chasm Gorges (Qhapaq Ñan)
+  const route = getRouteInfluence(x, z);
+  if (route.trailFactor > 0) {
+    h = THREE.MathUtils.lerp(h, route.targetH, route.trailFactor);
   }
 
   return h;
@@ -302,8 +309,19 @@ export class Terrain {
       let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope);
       let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope);
 
-      // Worn stone-and-earth expedition footpath along the sanctuary trail
-      if (vz > -48 && vz < 16 && Math.abs(vx) < 2.8 && vy > 3.5) {
+      // Worn stone-and-earth expedition footpath along the sanctuary trail & inter-region routes
+      const rInf = getRouteInfluence(vx, vz);
+      if (rInf.trailFactor > 0 && !rInf.isChasm && vy > 1.2) {
+        const trailT = rInf.trailFactor * 0.72;
+        r = THREE.MathUtils.lerp(r, 0.90, trailT);
+        g = THREE.MathUtils.lerp(g, 0.82, trailT);
+        b = THREE.MathUtils.lerp(b, 0.68, trailT);
+      } else if (rInf.isChasm && rInf.trailFactor > 0) {
+        const chasmDark = rInf.trailFactor * 0.65;
+        r = THREE.MathUtils.lerp(r, 0.32, chasmDark);
+        g = THREE.MathUtils.lerp(g, 0.30, chasmDark);
+        b = THREE.MathUtils.lerp(b, 0.28, chasmDark);
+      } else if (vz > -48 && vz < 16 && Math.abs(vx) < 2.8 && vy > 3.5) {
         const trailT = (1.0 - Math.abs(vx) / 2.8) * slope * 0.55;
         r = THREE.MathUtils.lerp(r, 0.88, trailT);
         g = THREE.MathUtils.lerp(g, 0.78, trailT);

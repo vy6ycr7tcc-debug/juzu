@@ -11,7 +11,8 @@ export type LocomotionPose =
   | 'jump_land'
   | 'swim'
   | 'swim_idle'
-  | 'interact';
+  | 'interact'
+  | 'grapple_swing';
 
 const WALK_SPEED = 2.75;
 const RUN_SPEED = 6.65;
@@ -29,6 +30,7 @@ export class Controller {
   swimming = false;
   crouching = false;
   mantling = false;
+  grappling = false;
   dodging = false;
   justJumped = false;
   justLanded = false;
@@ -37,6 +39,8 @@ export class Controller {
   slopePitch = 0;
   pose: LocomotionPose = 'idle';
   speed = 0;
+  grappleAnchorPos = new THREE.Vector3();
+  grappleSwingProgress = 0;
 
   private airTime = 0;
   private mantleTimer = 0;
@@ -94,6 +98,29 @@ export class Controller {
     }
   }
 
+  public startGrapple(anchorPos: THREE.Vector3): void {
+    this.grappling = true;
+    this.grounded = false;
+    this.mantling = false;
+    this.crouching = false;
+    this.dodging = false;
+    this.grappleAnchorPos.copy(anchorPos);
+    this.pose = 'grapple_swing';
+  }
+
+  public endGrapple(launchVel?: THREE.Vector3): void {
+    this.grappling = false;
+    if (launchVel) {
+      this.vel.copy(launchVel);
+      this.speed = Math.hypot(launchVel.x, launchVel.z);
+      if (this.speed > 0.1) {
+        this.heading = Math.atan2(launchVel.x, launchVel.z);
+      }
+    }
+    this.airTime = 0.05;
+    this.pose = 'jump';
+  }
+
   public update(
     inputMove: { x: number; y: number },
     isBoost: boolean,
@@ -129,6 +156,31 @@ export class Controller {
         this.vel.y = 0;
         this.justLanded = true;
         this.landingImpact = 3.5;
+        this.landingTimer = 0.22;
+      }
+      return;
+    }
+
+    // Handle active athletic Grapple Rope Swing
+    if (this.grappling) {
+      this.grounded = false;
+      this.pose = 'grapple_swing';
+      const horizSpeed = Math.hypot(this.vel.x, this.vel.z);
+      if (horizSpeed > 0.4) {
+        const targetHeading = Math.atan2(this.vel.x, this.vel.z);
+        let dHeading = (targetHeading - this.heading) % (Math.PI * 2);
+        if (dHeading > Math.PI) dHeading -= Math.PI * 2;
+        if (dHeading < -Math.PI) dHeading += Math.PI * 2;
+        this.heading += dHeading * Math.min(1, dt * 10);
+      }
+      this.speed = horizSpeed;
+      const groundH = this.getGroundAt(this.pos.x, this.pos.z, this.pos.y);
+      if (this.pos.y <= groundH + 0.15 && this.vel.y < 0) {
+        this.pos.y = groundH;
+        this.endGrapple();
+        this.grounded = true;
+        this.justLanded = true;
+        this.landingImpact = Math.min(8, Math.abs(this.vel.y));
         this.landingTimer = 0.22;
       }
       return;
