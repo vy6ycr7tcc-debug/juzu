@@ -29,7 +29,8 @@ export class JungleLowlandsRegion {
         normalMap: crackNor,
         normalScale: new THREE.Vector2(1.0, 1.0),
         roughnessMap: crackArm,
-        color: 0x627057,
+        color: 0x78846c,
+        vertexColors: true,
         roughness: 0.9,
         metalness: 0.05,
       })
@@ -46,7 +47,8 @@ export class JungleLowlandsRegion {
         map: rockDiff,
         normalMap: rockNor,
         normalScale: new THREE.Vector2(1.0, 1.0),
-        color: 0x3b443a,
+        color: 0x4b564a,
+        vertexColors: true,
         roughness: 0.52,
         metalness: 0.12,
       })

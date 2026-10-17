@@ -29,7 +29,8 @@ export class HighSierraRegion {
         normalMap: stoneNor,
         normalScale: new THREE.Vector2(1.0, 1.0),
         roughnessMap: stoneArm,
-        color: 0x9e9584,
+        color: 0xa49b8a,
+        vertexColors: true,
         roughness: 0.82,
         metalness: 0.05,
       })
@@ -46,7 +47,8 @@ export class HighSierraRegion {
         map: rockDiff,
         normalMap: rockNor,
         normalScale: new THREE.Vector2(1.0, 1.0),
-        color: 0x7a746a,
+        color: 0x827b70,
+        vertexColors: true,
         roughness: 0.78,
         metalness: 0.08,
       })

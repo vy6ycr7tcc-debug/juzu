@@ -52,31 +52,33 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
   const getBoneRegionColor = (bName: string): [number, number, number] => {
     const n = bName.toLowerCase();
     // 1. Head & Hair: crown, scalp, and back of head get rich espresso hair color; face gets warm Andean skin
-    if (n.includes('head')) {
+    if (n.includes('head') || n.includes('neck')) {
       return [0.76, 0.53, 0.38];
     }
-    if (
-      n.includes('neck') ||
-      n.includes('forearm') ||
-      n.includes('f_') ||
-      n.includes('thumb')
-    ) {
+    if (n.includes('f_') || n.includes('thumb')) {
       return [0.76, 0.53, 0.38];
     }
-    // 2. Fingerless leather climbing gloves on palms/wrists
+    // 2. Fingerless leather climbing gloves / wrist wraps
     if (n.includes('hand')) {
-      return [0.30, 0.20, 0.14];
+      return [0.28, 0.19, 0.13];
     }
-    // 3. Tomb Raider teal-slate expedition field top & rolled upper sleeves
-    if (n.includes('spine') || n.includes('shoulder') || n.includes('upper_arm')) {
-      return [0.27, 0.39, 0.38];
+    // 3. Weathered slate-teal woven Andean tunic & 3/4 sleeves (spine, hips, pelvis, shoulders, upper arms, upper forearms)
+    if (
+      n.includes('spine') ||
+      n.includes('hips') ||
+      n.includes('pelvis') ||
+      n.includes('shoulder') ||
+      n.includes('upper_arm') ||
+      n.includes('forearm')
+    ) {
+      return [0.21, 0.30, 0.31];
     }
     // 4. Laced dark cordovan mountaineering boots
     if (n.includes('foot') || n.includes('toe')) {
-      return [0.20, 0.13, 0.09];
+      return [0.18, 0.12, 0.08];
     }
-    // 5. Rugged charcoal-earth cargo expedition trousers (hips, thighs, shins)
-    return [0.26, 0.23, 0.19];
+    // 5. Rugged dark olive-umber cargo expedition trousers (thighs, shins)
+    return [0.23, 0.21, 0.17];
   };
 
   const nrmAttr = geometry.attributes.normal;
@@ -332,44 +334,61 @@ export class Naira {
 
       // Sculpted crown hair dome positioned on back/top of skull so front face stays 100% open
       const hairCap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.114, 18, 16),
+        new THREE.SphereGeometry(0.116, 18, 16),
         darkHairMat
       );
-      hairCap.scale.set(0.92, 1.02, 1.04);
-      hairCap.position.set(0, 0.146, -0.026);
+      hairCap.scale.set(0.94, 1.04, 1.06);
+      hairCap.position.set(0, 0.146, -0.024);
       headGroup.add(hairCap);
 
-      // Articulated 3-segment physics braid chain attached at nape (0, 0.06, -0.11)
+      // Crown side-braid ridges wrapping back toward the nape
+      for (const side of [-1, 1]) {
+        const crownPlait = new THREE.Mesh(
+          new THREE.TorusGeometry(0.095, 0.014, 8, 16, Math.PI * 0.65),
+          darkHairMat
+        );
+        crownPlait.position.set(side * 0.032, 0.152, -0.015);
+        crownPlait.rotation.y = Math.PI * 0.5 + side * 0.25;
+        crownPlait.rotation.x = 0.35;
+        headGroup.add(crownPlait);
+      }
+
+      // Articulated 5-segment woven braid plait attached at nape (-0.038, 0.055, -0.105) resting over left-back
       const tieMat = new THREE.MeshStandardMaterial({
-        color: 0xba3228,
-        roughness: 0.6,
-        metalness: 0.1,
+        color: 0xa83224,
+        roughness: 0.65,
+        metalness: 0.05,
       });
 
       this.braidSegments = [];
       let parentPivot: THREE.Object3D = headGroup;
-      const segLengths = [0.15, 0.15, 0.14];
-      const segRadii = [0.024, 0.020, 0.015];
+      const segLengths = [0.095, 0.095, 0.09, 0.085, 0.08];
+      const segRadii = [0.034, 0.031, 0.028, 0.024, 0.019];
 
-      for (let s = 0; s < 3; s++) {
+      for (let s = 0; s < segLengths.length; s++) {
         const pivot = new THREE.Group();
         if (s === 0) {
-          pivot.position.set(0, 0.065, -0.105);
+          pivot.position.set(-0.048, 0.068, -0.118);
         } else {
           pivot.position.set(0, -segLengths[s - 1], 0);
         }
         const segLen = segLengths[s];
-        const segMesh = new THREE.Mesh(
-          new THREE.CapsuleGeometry(segRadii[s], segLen * 0.7, 6, 8),
-          darkHairMat
-        );
-        segMesh.position.set(0, -segLen * 0.5, 0);
-        segMesh.castShadow = true;
-        pivot.add(segMesh);
+        // Double-lobed woven plait knot per segment
+        for (const lobe of [-0.008, 0.008]) {
+          const knot = new THREE.Mesh(
+            new THREE.SphereGeometry(segRadii[s] * 0.88, 8, 8),
+            darkHairMat
+          );
+          knot.scale.set(0.95, 1.38, 0.85);
+          knot.position.set(lobe, -segLen * 0.45, 0);
+          knot.rotation.z = lobe > 0 ? 0.28 : -0.28;
+          knot.castShadow = true;
+          pivot.add(knot);
+        }
 
-        if (s === 2) {
-          const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.026, 10), tieMat);
-          tie.position.set(0, -segLen * 0.78, 0);
+        if (s === segLengths.length - 1) {
+          const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.020, 0.026, 10), tieMat);
+          tie.position.set(0, -segLen * 0.72, 0);
           pivot.add(tie);
         }
 
@@ -380,153 +399,347 @@ export class Naira {
 
       // Quechua woven headband fitted snugly to oval skull width (0.76 X scale)
       const bandMesh = new THREE.Mesh(
-        new THREE.TorusGeometry(0.116, 0.013, 8, 24),
-        new THREE.MeshStandardMaterial({ map: weaveTex, color: 0xd47a38, roughness: 0.7 })
+        new THREE.TorusGeometry(0.116, 0.011, 8, 24),
+        new THREE.MeshStandardMaterial({ map: weaveTex, color: 0xb85232, roughness: 0.75 })
       );
       bandMesh.rotation.x = Math.PI / 2 - 0.15;
       bandMesh.scale.set(0.76, 0.96, 1.0);
       bandMesh.position.set(0, 0.155, 0.002);
       headGroup.add(bandMesh);
 
-      // Brass Expedition Goggles resting on brow
-      const brassMat = new THREE.MeshStandardMaterial({
-        color: 0xc89842,
-        metalness: 0.88,
-        roughness: 0.3,
-      });
-      const glassMat = new THREE.MeshStandardMaterial({
-        color: 0x162830,
-        roughness: 0.12,
-        metalness: 0.85,
-      });
-      const goggleGroup = new THREE.Group();
-      goggleGroup.position.set(0, 0.172, 0.104);
-      goggleGroup.rotation.x = -0.18;
-
-      for (const side of [-0.042, 0.042]) {
-        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.006, 8, 16), brassMat);
-        rim.position.set(side, 0, 0);
-        const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.023, 0.023, 0.005, 14), glassMat);
-        lens.rotation.x = Math.PI / 2;
-        lens.position.set(side, 0, 0);
-        goggleGroup.add(rim, lens);
-      }
-      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.006, 0.006), brassMat);
-      goggleGroup.add(bridge);
-      headGroup.add(goggleGroup);
-
       headBone.add(headGroup);
     }
 
-    // 2. Neck: Field Cowl / Neckerchief
+    // Shared expedition tunic, trim, leather & brass materials
+    const tunicClothMat = new THREE.MeshStandardMaterial({
+      map: canvasTex,
+      color: 0x364d4f, // Weathered slate-teal woven Andean tunic
+      roughness: 0.84,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    const trimWeaveMat = new THREE.MeshStandardMaterial({
+      map: weaveTex,
+      color: 0x9e3a26, // Red-ochre geometric embroidered border
+      roughness: 0.78,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    const harnessLeatherMat = new THREE.MeshStandardMaterial({
+      map: leatherTex,
+      color: 0x4a2f1d, // Rich saddle-brown weathered leather
+      roughness: 0.58,
+      metalness: 0.08,
+    });
+    const buckleBrassMat = new THREE.MeshStandardMaterial({
+      color: 0xc49a45,
+      metalness: 0.88,
+      roughness: 0.3,
+    });
+
+    // 2. Neck: Woven Red-Ochre Tunic Collar (replaces oversized donut)
     if (neckBone) {
-      const cowlMat = new THREE.MeshStandardMaterial({
-        map: canvasTex,
-        color: 0x7a3428, // Warm rust-red expedition scarf
-        roughness: 0.8,
-      });
-      const cowl = new THREE.Mesh(new THREE.TorusGeometry(0.078, 0.026, 8, 20), cowlMat);
-      cowl.rotation.x = Math.PI / 2;
-      cowl.position.set(0, 0.02, 0.008);
-      cowl.castShadow = true;
-      neckBone.add(cowl);
-    }
-
-    // 3. Waist: Traditional Andean Woven Sash (Chumpi) & Leather Utility Belt
-    if (hipsBone) {
-      const sashMat = new THREE.MeshStandardMaterial({
-        map: weaveTex,
-        color: 0xb54026,
-        roughness: 0.72,
-      });
-      const sash = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.148, 0.158, 0.075, 24),
-        sashMat
+      const collar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.068, 0.082, 0.048, 20, 1, true),
+        trimWeaveMat
       );
-      sash.scale.set(1.02, 1.0, 0.78);
-      sash.position.set(0, 0.04, 0.005);
+      collar.scale.set(0.95, 1.0, 0.88);
+      collar.position.set(0, 0.018, 0.004);
+      collar.castShadow = true;
+      neckBone.add(collar);
+    }
+
+    // 3. Waist & Pelvis: Contoured Slate-Teal Tunic Bodice + Skirt + Red-Ochre Geometric Hem + Leather Belt & Pouches
+    // Completely covers the segmented Mannequin_2 waist/hip/pelvis sockets just like ref_character_gear!
+    if (hipsBone) {
+      const hipsGroup = new THREE.Group();
+
+      // Fitted slate-teal woven tunic waist bodice covering the lower spine/waist seam above the belt
+      const waistBodice = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.142, 0.148, 0.24, 24, 2, true),
+        tunicClothMat
+      );
+      waistBodice.scale.set(1.04, 1.0, 0.77);
+      waistBodice.position.set(0, 0.15, 0.002);
+      waistBodice.castShadow = true;
+      waistBodice.receiveShadow = true;
+      hipsGroup.add(waistBodice);
+
+      // Flared woven tunic skirt covering hips and upper thighs
+      const skirtGeom = new THREE.CylinderGeometry(0.145, 0.205, 0.29, 24, 4, true);
+      const skirt = new THREE.Mesh(skirtGeom, tunicClothMat);
+      skirt.scale.set(1.04, 1.0, 0.78);
+      skirt.position.set(0, -0.055, 0.004);
+      skirt.castShadow = true;
+      skirt.receiveShadow = true;
+      hipsGroup.add(skirt);
+
+      // Embroidered red-ochre geometric hem border at bottom of tunic skirt
+      const hemGeom = new THREE.CylinderGeometry(0.202, 0.212, 0.052, 24, 1, true);
+      const hem = new THREE.Mesh(hemGeom, trimWeaveMat);
+      hem.scale.set(1.045, 1.0, 0.785);
+      hem.position.set(0, -0.18, 0.004);
+      hem.castShadow = true;
+      hipsGroup.add(hem);
+
+      // Woven waist sash (chumpi) under leather utility belt
+      const sash = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.148, 0.154, 0.068, 24),
+        trimWeaveMat
+      );
+      sash.scale.set(1.03, 1.0, 0.77);
+      sash.position.set(0, 0.055, 0.004);
       sash.castShadow = true;
-      hipsBone.add(sash);
-    }
+      hipsGroup.add(sash);
 
-    // 4. Right Thigh: Tomb Raider Leather Artifact Satchel & Strap
-    if (rightThighBone) {
-      const satchelMat = new THREE.MeshStandardMaterial({
-        map: leatherTex,
-        color: 0x3e2818,
-        roughness: 0.6,
-        metalness: 0.08,
-      });
-      const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.11), satchelMat);
-      pouch.position.set(-0.095, 0.16, 0.01);
-      pouch.castShadow = true;
-      rightThighBone.add(pouch);
-    }
+      // Contoured Brown Leather Expedition Belt + Brass Buckle + Side Utility Pouches
+      const belt = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.152, 0.156, 0.036, 24),
+        harnessLeatherMat
+      );
+      belt.scale.set(1.04, 1.0, 0.78);
+      belt.position.set(0, 0.055, 0.004);
+      belt.castShadow = true;
+      hipsGroup.add(belt);
 
-    // 5. Back: Leather Expedition Pack, Shoulder Harness Straps, Quena Flute & Climbing Ice-Axe
-    if (chestBone) {
-      const packGroup = new THREE.Group();
-      const packMat = new THREE.MeshStandardMaterial({
-        map: leatherTex,
-        color: 0x4a3220,
-        roughness: 0.62,
-        metalness: 0.1,
-      });
+      const beltBuckle = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.042, 0.016), buckleBrassMat);
+      beltBuckle.position.set(0, 0.055, 0.122);
+      hipsGroup.add(beltBuckle);
 
-      // Clean leather shoulder harness straps over left & right shoulders
-      for (const side of [-1, 1]) {
-        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.030, 0.24, 0.11), packMat);
-        strap.position.set(side * 0.086, 0.03, -0.065);
-        strap.castShadow = true;
-        packGroup.add(strap);
+      // Hip leather utility pouches (left & right-rear as in ref_character_gear)
+      for (const pSpec of [
+        { x: 0.135, y: 0.015, z: -0.045, ry: -0.35 },
+        { x: -0.142, y: 0.01, z: 0.025, ry: 0.25 },
+      ]) {
+        const hipPouch = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.095, 0.085), harnessLeatherMat);
+        hipPouch.position.set(pSpec.x, pSpec.y, pSpec.z);
+        hipPouch.rotation.y = pSpec.ry;
+        hipPouch.castShadow = true;
+        hipsGroup.add(hipPouch);
       }
 
-      const packBody = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.31, 0.13), packMat);
-      packBody.position.set(0, -0.02, -0.15);
+      hipsBone.add(hipsGroup);
+    }
+
+    // 4. Right Thigh: Secondary Leather Holster Strap
+    if (rightThighBone) {
+      const thighStrap = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.082, 0.078, 0.024, 16),
+        harnessLeatherMat
+      );
+      thighStrap.position.set(0, 0.16, 0);
+      rightThighBone.add(thighStrap);
+    }
+
+    // 5. Torso & Back: Tunic Shoulder Mantle, Crossed Leather X-Harness, Olive Canvas Rucksack,
+    // Top Rolled Bedroll, Coiled Hemp Rope, Steel Climbing Pickaxe & Curved Recurve Bow + Arrow Quiver
+    if (chestBone) {
+      const packGroup = new THREE.Group();
+
+      // Contoured Tunic Shoulder Mantle / Yoke covering the segmented Mannequin_2 shoulder & chest seams
+      const shoulderYoke = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.168, 0.152, 0.21, 24),
+        tunicClothMat
+      );
+      shoulderYoke.scale.set(1.22, 1.0, 0.74);
+      shoulderYoke.position.set(0, 0.025, -0.005);
+      shoulderYoke.castShadow = true;
+      shoulderYoke.receiveShadow = true;
+      packGroup.add(shoulderYoke);
+
+      // Crossed Brown Leather Chest & Back X-Harness Straps with Brass Buckle
+      for (const diag of [-1, 1]) {
+        const backStrap = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.28, 0.014), harnessLeatherMat);
+        backStrap.position.set(0, 0.02, -0.114);
+        backStrap.rotation.z = diag * 0.58;
+        backStrap.castShadow = true;
+        packGroup.add(backStrap);
+
+        const shoulderStrap = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.08, 0.14), harnessLeatherMat);
+        shoulderStrap.position.set(diag * 0.095, 0.125, -0.035);
+        shoulderStrap.castShadow = true;
+        packGroup.add(shoulderStrap);
+      }
+      const xBuckle = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.028, 0.018), buckleBrassMat);
+      xBuckle.position.set(0.025, 0.01, -0.118);
+      xBuckle.rotation.z = 0.58;
+      packGroup.add(xBuckle);
+
+      // Weathered Olive-Khaki Canvas Expedition Rucksack (positioned on right-center back so hair braid shows on left)
+      const rucksackCanvasMat = new THREE.MeshStandardMaterial({
+        map: canvasTex,
+        color: 0x6b624b, // Authentic weathered field-khaki canvas
+        roughness: 0.86,
+        metalness: 0.02,
+      });
+
+      const packOffsetX = 0.035;
+      const packZ = -0.168;
+
+      // Main sculpted canvas rucksack body + rounded top flap + lower front pocket + side pockets
+      const packBody = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.26, 0.115), rucksackCanvasMat);
+      packBody.position.set(packOffsetX, -0.015, packZ);
       packBody.castShadow = true;
+      packBody.receiveShadow = true;
       packGroup.add(packBody);
 
-      const flap = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.11, 0.14), packMat);
-      flap.position.set(0, 0.09, -0.15);
-      packGroup.add(flap);
+      const topFlap = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.215, 14), rucksackCanvasMat);
+      topFlap.rotation.z = Math.PI / 2;
+      topFlap.scale.set(1.0, 1.0, 0.85);
+      topFlap.position.set(packOffsetX, 0.105, packZ - 0.005);
+      topFlap.castShadow = true;
+      packGroup.add(topFlap);
 
-      const buckleMat = new THREE.MeshStandardMaterial({
-        color: 0xc89d42,
-        metalness: 0.85,
-        roughness: 0.35,
+      const frontPocket = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.042), rucksackCanvasMat);
+      frontPocket.position.set(packOffsetX, -0.065, packZ - 0.068);
+      frontPocket.castShadow = true;
+      packGroup.add(frontPocket);
+
+      // Two vertical brown leather cinch straps with brass buckles down the rucksack face
+      for (const sx of [-0.055, 0.055]) {
+        const vStrap = new THREE.Mesh(new THREE.BoxGeometry(0.020, 0.27, 0.052), harnessLeatherMat);
+        vStrap.position.set(packOffsetX + sx, -0.01, packZ - 0.052);
+        packGroup.add(vStrap);
+
+        const bkl = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.026, 0.012), buckleBrassMat);
+        bkl.position.set(packOffsetX + sx, 0.025, packZ - 0.082);
+        packGroup.add(bkl);
+      }
+
+      // Top Rolled Blanket / Bedroll strapped horizontally above the rucksack with 2 leather rings
+      const bedrollMat = new THREE.MeshStandardMaterial({
+        map: canvasTex,
+        color: 0x7c7258,
+        roughness: 0.88,
+        metalness: 0.01,
       });
-      const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), buckleMat);
-      buckle.position.set(0, 0.04, -0.225);
-      packGroup.add(buckle);
+      const topBedroll = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.25, 16), bedrollMat);
+      topBedroll.rotation.z = Math.PI / 2;
+      topBedroll.position.set(packOffsetX, 0.168, packZ);
+      topBedroll.castShadow = true;
+      packGroup.add(topBedroll);
 
-      // Cane Quena Flute strapped diagonally across pack
-      const fluteMat = new THREE.MeshStandardMaterial({
-        color: 0xd4a76a,
-        roughness: 0.45,
-        metalness: 0.05,
+      // Spiral end-cap detail & 2 leather cinch straps on top bedroll
+      for (const bx of [-0.065, 0.065]) {
+        const rollStrap = new THREE.Mesh(
+          new THREE.TorusGeometry(0.054, 0.007, 8, 16),
+          harnessLeatherMat
+        );
+        rollStrap.rotation.y = Math.PI / 2;
+        rollStrap.position.set(packOffsetX + bx, 0.168, packZ);
+        packGroup.add(rollStrap);
+      }
+
+      // Coiled Hemp Climbing Rope hanging on the left side of the rucksack
+      const ropeMat = new THREE.MeshStandardMaterial({
+        map: weaveTex,
+        color: 0x8f7d5d,
+        roughness: 0.9,
+        metalness: 0.0,
       });
-      const flute = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.40, 10), fluteMat);
-      flute.position.set(0.04, 0.0, -0.225);
-      flute.rotation.z = 0.55;
-      packGroup.add(flute);
+      for (let r = 0; r < 4; r++) {
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(0.056, 0.012, 8, 16), ropeMat);
+        coil.rotation.y = Math.PI / 2 + 0.18;
+        coil.position.set(packOffsetX - 0.112 - r * 0.008, 0.005, packZ - 0.005);
+        coil.castShadow = true;
+        packGroup.add(coil);
+      }
 
-      // Tomb Raider Steel Climbing Ice-Axe strapped to left side of pack
+      // Forged Steel Mountaineering Climbing Axe strapped to the rucksack face
       const steelMat = new THREE.MeshStandardMaterial({
-        color: 0xb8c2cc,
-        metalness: 0.9,
-        roughness: 0.28,
+        color: 0xb8c4ce,
+        metalness: 0.92,
+        roughness: 0.26,
       });
-      const axeShaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.011, 0.012, 0.44, 8),
-        new THREE.MeshStandardMaterial({ color: 0x8a3324, roughness: 0.5 })
+      const woodShaftMat = new THREE.MeshStandardMaterial({
+        color: 0x6e482b,
+        roughness: 0.68,
+      });
+      const gripWrapMat = new THREE.MeshStandardMaterial({
+        color: 0x221d1a,
+        roughness: 0.85,
+      });
+
+      const axeGroup = new THREE.Group();
+      axeGroup.position.set(packOffsetX - 0.035, -0.02, packZ - 0.095);
+      axeGroup.rotation.z = -0.14;
+
+      const axeShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.010, 0.34, 8), woodShaftMat);
+      axeShaft.castShadow = true;
+      axeGroup.add(axeShaft);
+
+      const axeGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.012, 0.12, 8), gripWrapMat);
+      axeGrip.position.y = -0.11;
+      axeGroup.add(axeGrip);
+
+      // Curved steel pick blade & rear adze
+      const pickCurve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(-0.045, 0.155, 0),
+        new THREE.Vector3(0.025, 0.168, 0),
+        new THREE.Vector3(0.125, 0.128, 0)
       );
-      axeShaft.position.set(-0.125, -0.02, -0.16);
-      axeShaft.rotation.z = -0.15;
-      const axePick = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.16, 6), steelMat);
-      axePick.rotation.z = Math.PI * 0.58;
-      axePick.position.set(-0.06, 0.19, 0);
-      axeShaft.add(axePick);
-      packGroup.add(axeShaft);
+      const pickBlade = new THREE.Mesh(new THREE.TubeGeometry(pickCurve, 10, 0.009, 6, false), steelMat);
+      pickBlade.scale.set(1.0, 1.0, 0.45);
+      pickBlade.castShadow = true;
+      axeGroup.add(pickBlade);
+
+      packGroup.add(axeGroup);
+
+      // Curved Wooden Recurve Bow + Taut Bowstring + Leather Quiver with 4 Fletched Arrows on Right Side
+      const bowWoodMat = new THREE.MeshStandardMaterial({
+        color: 0x785334,
+        roughness: 0.58,
+        metalness: 0.04,
+      });
+      const bowCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0.155, -0.18, packZ + 0.02),
+        new THREE.Vector3(0.135, -0.04, packZ - 0.01),
+        new THREE.Vector3(0.145, 0.12, packZ - 0.02),
+        new THREE.Vector3(0.125, 0.28, packZ - 0.01),
+        new THREE.Vector3(0.155, 0.42, packZ + 0.02),
+      ]);
+      const bowLimb = new THREE.Mesh(new THREE.TubeGeometry(bowCurve, 20, 0.010, 7, false), bowWoodMat);
+      bowLimb.castShadow = true;
+      packGroup.add(bowLimb);
+
+      // Taut bowstring connecting the recurved tips
+      const stringGeom = new THREE.CylinderGeometry(0.0018, 0.0018, 0.59, 4);
+      const stringMat = new THREE.MeshBasicMaterial({ color: 0xd8ceb8 });
+      const bowString = new THREE.Mesh(stringGeom, stringMat);
+      bowString.position.set(0.105, 0.12, packZ + 0.015);
+      bowString.rotation.z = -0.14;
+      packGroup.add(bowString);
+
+      // Leather Quiver + 4 Fletched Arrows angled over right shoulder
+      const quiverGroup = new THREE.Group();
+      quiverGroup.position.set(0.145, 0.04, packZ + 0.015);
+      quiverGroup.rotation.z = -0.26;
+
+      const quiverTube = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.032, 0.026, 0.24, 12),
+        harnessLeatherMat
+      );
+      quiverTube.castShadow = true;
+      quiverGroup.add(quiverTube);
+
+      const featherMat = new THREE.MeshStandardMaterial({
+        color: 0x9c7850,
+        roughness: 0.85,
+        side: THREE.DoubleSide,
+      });
+      for (let a = 0; a < 4; a++) {
+        const arrowShaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0035, 0.0035, 0.28, 6),
+          bowWoodMat
+        );
+        arrowShaft.position.set((a - 1.5) * 0.009, 0.14, (a % 2) * 0.008);
+        arrowShaft.rotation.z = (a - 1.5) * 0.04;
+        const fletch = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.055, 0.002), featherMat);
+        fletch.position.y = 0.11;
+        arrowShaft.add(fletch);
+        quiverGroup.add(arrowShaft);
+      }
+      packGroup.add(quiverGroup);
 
       chestBone.add(packGroup);
     }
@@ -599,9 +812,10 @@ export class Naira {
 
     for (let i = 0; i < this.braidSegments.length; i++) {
       const seg = this.braidSegments[i];
-      const w = (i + 1) * 0.42;
-      seg.rotation.x = this.braidAngleX * w;
-      seg.rotation.z = this.braidAngleZ * w;
+      const w = (i + 1) * 0.36;
+      // Negative X rotation tilts -Y (down) toward -Z (backward over collar & rucksack bedroll)
+      seg.rotation.x = -this.braidAngleX * w;
+      seg.rotation.z = -0.12 + this.braidAngleZ * w;
     }
 
     // 4. Blend locomotion animations

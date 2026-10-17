@@ -505,7 +505,7 @@ async function bootJuzu() {
     // Signal ready for Playwright shots
     const loadingScreen = document.getElementById('juzu-loading-screen');
     const loadingDismissed = !loadingScreen || loadingScreen.style.display === 'none';
-    if (frameCount > 30 && naira.modelRoot && loadingDismissed && !window.__shotReady) {
+    if (frameCount > 6 && naira.modelRoot && loadingDismissed && !window.__shotReady) {
       window.__shotReady = true;
     }
   }

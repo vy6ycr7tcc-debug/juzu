@@ -20,9 +20,9 @@ export class Foliage {
   private canopyInstances: THREE.InstancedMesh;
   private grassInstances: THREE.InstancedMesh;
   private rockInstances: THREE.InstancedMesh;
-  private readonly TREE_COUNT = 420;
-  private readonly GRASS_COUNT = 950;
-  private readonly ROCK_COUNT = 260;
+  private readonly TREE_COUNT = 620;
+  private readonly GRASS_COUNT = 3200;
+  private readonly ROCK_COUNT = 420;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Andean_Foliage';
@@ -55,7 +55,7 @@ export class Foliage {
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
     rockNor.repeat.set(2, 2);
 
-    // 1. Gnarled Multi-Limb Polylepis Trunk + Canopy Cards
+    // 1. Gnarled Multi-Limb Polylepis Trunk + Volumetric Canopy Crowns
     const trunkGeom = this.buildGnarledTrunkGeometry();
     const canopyGeom = this.buildCanopyClusterGeometry();
 
@@ -63,17 +63,17 @@ export class Foliage {
       map: barkDiff,
       normalMap: barkNor,
       normalScale: new THREE.Vector2(1.1, 1.1),
-      color: 0x8c6e54, // Warm flaky Polylepis reddish-brown bark
+      color: 0x6e5642, // Rich weathered Polylepis bark
       roughness: 0.88,
-      metalness: 0.03,
+      metalness: 0.02,
     });
 
     const canopyMat = new THREE.MeshStandardMaterial({
       map: canopyTex,
-      alphaTest: 0.32,
+      alphaTest: 0.22,
       side: THREE.DoubleSide,
       vertexColors: true,
-      roughness: 0.78,
+      roughness: 0.76,
       metalness: 0.02,
     });
 
@@ -89,10 +89,10 @@ export class Foliage {
     const grassGeom = this.buildFernRosetteGeometry();
     const grassMat = new THREE.MeshStandardMaterial({
       map: fernTex,
-      alphaTest: 0.30,
+      alphaTest: 0.24,
       side: THREE.DoubleSide,
       vertexColors: true,
-      roughness: 0.84,
+      roughness: 0.82,
       metalness: 0.02,
     });
 
@@ -125,34 +125,40 @@ export class Foliage {
   private buildGnarledTrunkGeometry(): THREE.BufferGeometry {
     const parts: THREE.BufferGeometry[] = [];
 
-    // Main twisted trunk
-    const main = new THREE.CylinderGeometry(0.18, 0.44, 4.4, 7, 6);
-    main.translate(0, 2.2, 0);
+    // Main twisted trunk with flared buttress root base
+    const main = new THREE.CylinderGeometry(0.22, 0.56, 4.8, 8, 7);
+    main.translate(0, 2.4, 0);
     const pos = main.attributes.position;
     for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
       const y = pos.getY(i);
-      const t = y / 4.4;
-      const bendX = Math.sin(t * Math.PI * 1.3) * 0.34;
-      const bendZ = Math.cos(t * Math.PI * 1.1) * 0.22 - 0.22;
-      pos.setX(i, pos.getX(i) + bendX);
-      pos.setZ(i, pos.getZ(i) + bendZ);
+      const z = pos.getZ(i);
+      const t = y / 4.8;
+      // Flared root buttresses near base (t < 0.22)
+      const rootFlare = t < 0.22 ? 1.0 + Math.pow(1.0 - t / 0.22, 2) * 0.45 * Math.abs(Math.sin(Math.atan2(z, x) * 3)) : 1.0;
+      const bendX = Math.sin(t * Math.PI * 1.35) * 0.38;
+      const bendZ = Math.cos(t * Math.PI * 1.15) * 0.26 - 0.26;
+      pos.setX(i, x * rootFlare + bendX);
+      pos.setZ(i, z * rootFlare + bendZ);
     }
     main.computeVertexNormals();
     parts.push(main);
 
-    // 3 spreading upper limbs
+    // 5 spreading primary and secondary boughs
     const branches = [
-      { rx: 0.48, rz: 0.42, ry: 0.2, y: 3.4, len: 2.3, rTop: 0.08, rBot: 0.18 },
-      { rx: -0.44, rz: 0.36, ry: 2.3, y: 3.7, len: 2.1, rTop: 0.07, rBot: 0.16 },
-      { rx: 0.38, rz: -0.52, ry: 4.2, y: 3.9, len: 2.0, rTop: 0.07, rBot: 0.15 },
+      { rx: 0.52, rz: 0.46, ry: 0.2, y: 3.3, len: 2.6, rTop: 0.09, rBot: 0.21 },
+      { rx: -0.48, rz: 0.40, ry: 1.9, y: 3.6, len: 2.4, rTop: 0.08, rBot: 0.19 },
+      { rx: 0.42, rz: -0.54, ry: 3.5, y: 3.8, len: 2.3, rTop: 0.08, rBot: 0.18 },
+      { rx: -0.38, rz: -0.44, ry: 4.9, y: 4.1, len: 2.1, rTop: 0.07, rBot: 0.16 },
+      { rx: 0.22, rz: 0.28, ry: 1.1, y: 4.3, len: 1.9, rTop: 0.07, rBot: 0.15 },
     ];
     for (const b of branches) {
-      const limb = new THREE.CylinderGeometry(b.rTop, b.rBot, b.len, 5, 2);
+      const limb = new THREE.CylinderGeometry(b.rTop, b.rBot, b.len, 6, 3);
       limb.translate(0, b.len * 0.5, 0);
       limb.rotateX(b.rx);
       limb.rotateZ(b.rz);
       limb.rotateY(b.ry);
-      limb.translate(0.12, b.y, 0);
+      limb.translate(0.14, b.y, 0);
       limb.computeVertexNormals();
       parts.push(limb);
     }
@@ -162,43 +168,71 @@ export class Foliage {
 
   private buildCanopyClusterGeometry(): THREE.BufferGeometry {
     const cards: THREE.BufferGeometry[] = [];
-    // Crown centers matching the 3 upper limbs + central crown
+    // 6 overlapping multi-tier bough crowns for a lush, full cloud-forest silhouette
     const crowns = [
-      { x: 0.0, y: 5.4, z: 0.0, r: 2.5 },
-      { x: 1.15, y: 4.6, z: 0.85, r: 2.2 },
-      { x: -1.1, y: 4.8, z: 0.75, r: 2.1 },
-      { x: 0.25, y: 5.0, z: -1.15, r: 2.1 },
+      { x: 0.0, y: 6.1, z: 0.0, r: 3.1 },
+      { x: 1.55, y: 5.1, z: 1.05, r: 2.7 },
+      { x: -1.45, y: 5.3, z: 0.95, r: 2.6 },
+      { x: 0.35, y: 5.5, z: -1.55, r: 2.6 },
+      { x: -1.25, y: 5.6, z: -1.15, r: 2.4 },
+      { x: 1.15, y: 4.5, z: -0.65, r: 2.3 },
     ];
 
     let seed = 0;
     for (const c of crowns) {
-      for (let k = 0; k < 4; k++) {
+      // 1. Inner 3D Leaf-Cluster Volume Dome (indexed SphereGeometry matching PlaneGeometry) so the tree crown is never see-through edge-on
+      const dome = new THREE.SphereGeometry(c.r * 0.58, 9, 7);
+      const dPos = dome.attributes.position;
+      const dUv = dome.attributes.uv;
+      const dColors = new Float32Array(dPos.count * 3);
+      for (let i = 0; i < dPos.count; i++) {
+        let dx = dPos.getX(i);
+        let dy = dPos.getY(i);
+        let dz = dPos.getZ(i);
+        const n = 0.84 + 0.32 * vnoise(dx * 1.8 + c.x, dz * 1.8 + c.z);
+        dx *= n * 1.18;
+        dy *= n * 0.68;
+        dz *= n * 1.18;
+        dPos.setXYZ(i, dx, dy, dz);
+        dUv.setXY(i, (dx / c.r) + 0.5, (dz / c.r) + 0.5);
+
+        // Warm sunlit olive-emerald crown top vs deep mossy forest-shadow underside
+        const sunT = THREE.MathUtils.clamp((dy / (c.r * 0.5)) * 0.5 + 0.55, 0.0, 1.0);
+        dColors[i * 3] = THREE.MathUtils.lerp(0.16, 0.54, sunT);
+        dColors[i * 3 + 1] = THREE.MathUtils.lerp(0.26, 0.72, sunT);
+        dColors[i * 3 + 2] = THREE.MathUtils.lerp(0.12, 0.34, sunT);
+      }
+      dome.setAttribute('color', new THREE.BufferAttribute(dColors, 3));
+      dome.translate(c.x, c.y, c.z);
+      dome.computeVertexNormals();
+      cards.push(dome);
+
+      // 2. Outer Feathered Botanical Leaf Cards around the dome for crisp alpha-tested leaf silhouettes
+      for (let k = 0; k < 5; k++) {
         seed++;
-        const card = new THREE.PlaneGeometry(c.r, c.r, 2, 2);
-        // Parabolic umbrella curve for volume
+        const card = new THREE.PlaneGeometry(c.r * 1.25, c.r * 1.25, 2, 2);
         const p = card.attributes.position;
         const colors = new Float32Array(p.count * 3);
         for (let i = 0; i < p.count; i++) {
           const lx = p.getX(i);
           const ly = p.getY(i);
-          const d2 = (lx * lx + ly * ly) / (c.r * c.r * 0.5);
-          p.setZ(i, -d2 * 0.38);
+          const d2 = (lx * lx + ly * ly) / (c.r * c.r * 0.65);
+          p.setZ(i, -d2 * 0.42);
 
-          // Inner-crown AO vs sunlit outer tips
-          const ao = THREE.MathUtils.clamp(0.58 + (ly / c.r + 0.5) * 0.45 + d2 * 0.12, 0.48, 1.12);
-          colors[i * 3] = ao * 0.96;
-          colors[i * 3 + 1] = ao * 1.02;
-          colors[i * 3 + 2] = ao * 0.88;
+          const sunT = THREE.MathUtils.clamp(0.45 + (ly / c.r) * 0.55, 0.15, 1.0);
+          colors[i * 3] = THREE.MathUtils.lerp(0.20, 0.62, sunT);
+          colors[i * 3 + 1] = THREE.MathUtils.lerp(0.32, 0.80, sunT);
+          colors[i * 3 + 2] = THREE.MathUtils.lerp(0.14, 0.38, sunT);
         }
         card.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-        card.rotateX(0.35 + (k % 2) * 0.55);
-        card.rotateY((k * Math.PI) / 4 + seed * 0.6);
-        card.rotateZ((seed % 3 - 1) * 0.25);
+        card.rotateX(0.32 + (k % 2) * 0.58);
+        card.rotateY((k * Math.PI * 2) / 5 + seed * 0.5);
+        card.rotateZ(((seed % 3) - 1) * 0.22);
         card.translate(
-          c.x + Math.cos(seed * 1.7) * 0.35,
-          c.y + (k - 1.5) * 0.28,
-          c.z + Math.sin(seed * 1.7) * 0.35
+          c.x + Math.cos(seed * 1.7) * (c.r * 0.22),
+          c.y + (k - 2.0) * 0.24,
+          c.z + Math.sin(seed * 1.7) * (c.r * 0.22)
         );
         card.computeVertexNormals();
         cards.push(card);
@@ -210,23 +244,27 @@ export class Foliage {
 
   private buildFernRosetteGeometry(): THREE.BufferGeometry {
     const fronds: THREE.BufferGeometry[] = [];
-    for (let i = 0; i < 3; i++) {
-      const plane = new THREE.PlaneGeometry(1.45, 1.25, 2, 2);
-      plane.translate(0, 0.58, 0);
+    const frondCount = 6;
+    for (let i = 0; i < frondCount; i++) {
+      const plane = new THREE.PlaneGeometry(1.55, 1.35, 2, 3);
+      plane.translate(0, 0.62, 0);
       const p = plane.attributes.position;
       const colors = new Float32Array(p.count * 3);
       for (let v = 0; v < p.count; v++) {
         const vy = p.getY(v);
-        const t = THREE.MathUtils.clamp(vy / 1.2, 0, 1);
-        // Arch outward at top
-        p.setZ(v, p.getZ(v) + t * t * 0.24);
-        const shade = 0.55 + t * 0.52;
-        colors[v * 3] = shade;
-        colors[v * 3 + 1] = shade * 1.04;
-        colors[v * 3 + 2] = shade * 0.92;
+        const t = THREE.MathUtils.clamp(vy / 1.35, 0, 1);
+        // Arch gracefully outward like real Cyathea tree-fern fronds
+        p.setZ(v, t * t * 0.48);
+        p.setY(v, vy * (1.0 - t * 0.16));
+
+        const shade = 0.36 + t * 0.58;
+        colors[v * 3] = shade * 0.78;
+        colors[v * 3 + 1] = shade * 1.05;
+        colors[v * 3 + 2] = shade * 0.56;
       }
       plane.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      plane.rotateY((i * Math.PI) / 3);
+      plane.rotateX(0.26 + (i % 2) * 0.18);
+      plane.rotateY((i * Math.PI * 2) / frondCount + (i % 2) * 0.2);
       plane.computeVertexNormals();
       fronds.push(plane);
     }
@@ -255,9 +293,9 @@ export class Foliage {
 
       // Top-surface moss tint vs dark granite underside
       const moss = THREE.MathUtils.clamp((y + 0.2) / 1.2, 0, 1);
-      colors[i * 3] = THREE.MathUtils.lerp(0.42, 0.46, moss);
-      colors[i * 3 + 1] = THREE.MathUtils.lerp(0.40, 0.58, moss);
-      colors[i * 3 + 2] = THREE.MathUtils.lerp(0.37, 0.36, moss);
+      colors[i * 3] = THREE.MathUtils.lerp(0.32, 0.38, moss);
+      colors[i * 3 + 1] = THREE.MathUtils.lerp(0.32, 0.52, moss);
+      colors[i * 3 + 2] = THREE.MathUtils.lerp(0.28, 0.26, moss);
     }
 
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -266,16 +304,19 @@ export class Foliage {
   }
 
   private isInClearZone(x: number, z: number): boolean {
-    // Bridge & Gorge Sanctuary Spine (x in -7.5..7.5, z in -52..16)
-    if (Math.abs(x) < 7.5 && z > -52 && z < 16) return true;
-    // South Spawn Camp clearing
-    if (Math.hypot(x, z - 10) < 9.5) return true;
-    // High Sierra Intihuatana & Chakana Gate courtyard + approach
-    if (Math.hypot(x - 120, z - (-172)) < 25) return true;
-    // Jungle Lowlands Quay, Arches & Cenote spine
-    if (Math.abs(x - (-180)) < 13 && z > 114 && z < 190) return true;
-    // Paititi Plaza of the Sun
-    if (Math.hypot(x - 200, z - 180) < 30) return true;
+    // Narrow central walkway spine on Bridge & Gateways (x in -4.2..4.2, z in -48..14)
+    if (Math.abs(x) < 4.2 && z > -48 && z < 14) return true;
+    // Immediate South Spawn & Campfire circle
+    if (Math.hypot(x - 1.2, z - 10.5) < 5.8) return true;
+    // Immediate Inti Sun-Mirror plinth
+    if (Math.hypot(x - (-4.2), z - 3.8) < 3.2) return true;
+    // High Sierra central aisle between spawn and Intihuatana/Chakana Gate
+    if (Math.abs(x - 120) < 6.5 && z > -186 && z < -150) return true;
+    // Jungle Lowlands central causeway & Cenote pool
+    if (Math.abs(x - (-180)) < 6.2 && z > 120 && z < 185) return true;
+    // Paititi central red-sandstone Plaza floor
+    if (Math.hypot(x - 200, z - 180) < 23.5) return true;
+    if (Math.abs(x - 200) < 5.5 && z > 152 && z < 185) return true;
     return false;
   }
 
@@ -283,61 +324,61 @@ export class Foliage {
     const dummy = new THREE.Object3D();
     const color = new THREE.Color();
 
-    // 1. Distribute Polylepis & Rainforest Trees across the valley & four regional hubs using Halton sampling
+    // Regional hubs: tighter framing rings around each sanctuary + broader valley coverage
     const hubs = [
-      { cx: 0, cz: -15, span: 155, weight: 0.55 },     // Cloud Forest Canyon & Flanking Slopes
-      { cx: 120, cz: -180, span: 95, weight: 0.15 },   // High Sierra Timberline
-      { cx: -180, cz: 145, span: 105, weight: 0.18 },  // Antisuyu Rainforest
-      { cx: 200, cz: 180, span: 95, weight: 0.12 },    // Paititi Outskirts
+      { cx: 0, cz: -38, span: 36, weight: 0.18 },       // Cloud Forest North Sanctuary Framing Grove
+      { cx: 0, cz: 10, span: 38, weight: 0.18 },        // Cloud Forest South Camp & Gorge Rim Grove
+      { cx: 0, cz: -15, span: 135, weight: 0.22 },      // Cloud Forest Valley Slopes
+      { cx: 120, cz: -172, span: 48, weight: 0.14 },    // High Sierra Intihuatana Sanctuary Grove
+      { cx: -180, cz: 152, span: 46, weight: 0.16 },    // Antisuyu Jungle Lowlands Rainforest
+      { cx: 200, cz: 185, span: 54, weight: 0.12 },     // Paititi Sacred Amphitheater Rim
     ];
 
-    let treeIdx = 0;
-    for (let i = 1; i <= this.TREE_COUNT * 2 && treeIdx < this.TREE_COUNT; i++) {
-      const u = halton(i, 2);
-      const v = halton(i, 3);
-      const w = halton(i, 5);
-
-      let hub = hubs[0];
+    const pickHub = (w: number) => {
       let acc = 0;
       for (const h of hubs) {
         acc += h.weight;
-        if (w <= acc) {
-          hub = h;
-          break;
-        }
+        if (w <= acc) return h;
       }
+      return hubs[0];
+    };
+
+    // 1. Distribute Polylepis & Rainforest Trees
+    let treeIdx = 0;
+    for (let i = 1; i <= this.TREE_COUNT * 3 && treeIdx < this.TREE_COUNT; i++) {
+      const u = halton(i, 2);
+      const v = halton(i, 3);
+      const w = halton(i, 5);
+      const hub = pickHub(w);
 
       const x = hub.cx + (u * 2 - 1) * hub.span;
       const z = hub.cz + (v * 2 - 1) * hub.span;
 
       if (this.isInClearZone(x, z)) continue;
+      if (Math.abs(z + 17) < 13.5 && Math.abs(x) < 60) continue;
 
       const y = standAt(x, z);
-      // Keep above water level and below snowy alpine timberline (46m)
-      if (y < 1.2 || y > 46.0) continue;
+      if (y < 0.8 || y > 48.0) continue;
 
-      // Check local slope so trees don't float on steep canyon cliffs or inside the river gorge
-      if (Math.abs(z + 17) < 15.5) continue;
       const dyX = Math.abs(standAt(x + 1.5, z) - y);
       const dyZ = Math.abs(standAt(x, z + 1.5) - y);
-      if (dyX > 0.88 || dyZ > 0.88) continue;
+      if (dyX > 1.15 || dyZ > 1.15) continue;
 
-      dummy.position.set(x, y - 0.15, z);
+      dummy.position.set(x, y - 0.18, z);
       dummy.rotation.set(
         ((i % 7) - 3) * 0.025,
         (i * 2.39996) % (Math.PI * 2),
         ((i % 5) - 2) * 0.025
       );
-      const s = 0.82 + ((i * 37) % 45) * 0.016;
-      dummy.scale.set(s, s * (0.88 + ((i * 13) % 25) * 0.012), s);
+      const s = 0.85 + ((i * 37) % 45) * 0.018;
+      dummy.scale.set(s, s * (0.9 + ((i * 13) % 25) * 0.012), s);
       dummy.updateMatrix();
 
       this.trunkInstances.setMatrixAt(treeIdx, dummy.matrix);
       this.canopyInstances.setMatrixAt(treeIdx, dummy.matrix);
 
-      // Subtle per-tree foliage hue/value variation
       const tone = 0.82 + ((i * 19) % 30) * 0.012;
-      color.setRGB(tone * 0.95, tone * 1.02, tone * 0.88);
+      color.setRGB(tone * 0.94, tone * 1.04, tone * 0.86);
       this.canopyInstances.setColorAt(treeIdx, color);
 
       treeIdx++;
@@ -348,26 +389,33 @@ export class Foliage {
     this.canopyInstances.instanceMatrix.needsUpdate = true;
     if (this.canopyInstances.instanceColor) this.canopyInstances.instanceColor.needsUpdate = true;
 
-    // 2. Distribute Cyathea Ferns & Ichu Grass Rosettes
+    // 2. Distribute Cyathea Ferns & Ichu Grass Rosettes across ALL 4 regions & trail edges
     let grassIdx = 0;
     for (let j = 1; j <= this.GRASS_COUNT * 2 && grassIdx < this.GRASS_COUNT; j++) {
       const u = halton(j + 300, 2);
       const v = halton(j + 300, 3);
-      const x = (u * 2 - 1) * 145;
-      const z = -15 + (v * 2 - 1) * 145;
+      const w = halton(j + 300, 5);
+      const hub = pickHub(w);
 
-      if (Math.abs(x) < 3.2 && z > -46 && z < 14) continue;
-      if (Math.abs(z + 17) < 15.5) continue;
+      const x = hub.cx + (u * 2 - 1) * (hub.span * 0.88);
+      const z = hub.cz + (v * 2 - 1) * (hub.span * 0.88);
+
+      // Keep the immediate 2.2m center of footpaths clear while lining the trail edges & ruins with ferns!
+      if (Math.abs(x) < 2.2 && z > -45 && z < 14) continue;
+      if (Math.hypot(x - 3.2, z - 8.8) < 2.4) continue;
+      if (Math.abs(z + 17) < 13.5 && Math.abs(x) < 55) continue;
+      if (Math.hypot(x - 200, z - 180) < 22.5) continue;
+      if (Math.abs(x - (-180)) < 2.6 && z > 122 && z < 182) continue;
 
       const y = standAt(x, z);
-      if (y < 0.8 || y > 40.0) continue;
+      if (y < 0.5 || y > 44.0) continue;
 
       const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
-      if (dy > 0.78) continue;
+      if (dy > 1.05) continue;
 
       dummy.position.set(x, y - 0.08, z);
       dummy.rotation.set(0, (j * 1.618) % (Math.PI * 2), 0);
-      const s = 0.65 + ((j * 23) % 45) * 0.016;
+      const s = 0.72 + ((j * 23) % 45) * 0.018;
       dummy.scale.set(s, s, s);
       dummy.updateMatrix();
 
@@ -376,33 +424,36 @@ export class Foliage {
     this.grassInstances.count = grassIdx;
     this.grassInstances.instanceMatrix.needsUpdate = true;
 
-    // 3. Distribute Displaced Mossy Crag Boulders along gorge rims, plateaus, and ruins
+    // 3. Distribute Displaced Mossy Crag Boulders along gorge rims, trail edges, and all 4 regions
     let rockIdx = 0;
     for (let k = 1; k <= this.ROCK_COUNT * 3 && rockIdx < this.ROCK_COUNT; k++) {
       const u = halton(k + 900, 2);
       const v = halton(k + 900, 3);
-      const x = (u * 2 - 1) * 150;
-      const z = -18 + (v * 2 - 1) * 150;
+      const w = halton(k + 900, 5);
+      const hub = pickHub(w);
+
+      const x = hub.cx + (u * 2 - 1) * hub.span;
+      const z = hub.cz + (v * 2 - 1) * hub.span;
 
       if (this.isInClearZone(x, z)) continue;
-      if (Math.abs(z + 17) < 15.0) continue;
+      if (Math.abs(z + 17) < 12.5 && Math.abs(x) < 55) continue;
 
       const y = standAt(x, z);
-      if (y < 1.2 || y > 38.0) continue;
+      if (y < 0.5 || y > 44.0) continue;
 
       const rDyX = Math.abs(standAt(x + 1.5, z) - y);
       const rDyZ = Math.abs(standAt(x, z + 1.5) - y);
-      if (rDyX > 0.72 || rDyZ > 0.72) continue;
+      if (rDyX > 0.95 || rDyZ > 0.95) continue;
 
-      dummy.position.set(x, y - 0.32, z);
+      dummy.position.set(x, y - 0.34, z);
       dummy.rotation.set(
         (k * 0.43) % 0.6,
         (k * 1.93) % (Math.PI * 2),
         (k * 0.31) % 0.6
       );
-      const sx = 0.75 + ((k * 29) % 50) * 0.032;
-      const sy = 0.65 + ((k * 17) % 40) * 0.025;
-      const sz = 0.75 + ((k * 31) % 50) * 0.032;
+      const sx = 0.72 + ((k * 29) % 45) * 0.028;
+      const sy = 0.58 + ((k * 17) % 35) * 0.022;
+      const sz = 0.72 + ((k * 31) % 45) * 0.028;
       dummy.scale.set(sx, sy, sz);
       dummy.updateMatrix();
 

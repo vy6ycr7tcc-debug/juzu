@@ -30,6 +30,7 @@ export class PaititiRegion {
         normalScale: new THREE.Vector2(0.95, 0.95),
         roughnessMap: blockArm,
         color: 0xc8bfaf,
+        vertexColors: true,
         roughness: 0.72,
         metalness: 0.04,
       })
@@ -130,12 +131,34 @@ export class PaititiRegion {
     totemPillar.receiveShadow = true;
     plazaGroup.add(totemPillar);
 
-    const sunTotem = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.24, 24), goldMat);
+    const sunTotem = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.24, 28), goldMat);
     sunTotem.rotation.x = Math.PI / 2;
     sunTotem.position.set(0, 3.15, 0);
     sunTotem.castShadow = true;
     plazaGroup.add(sunTotem);
     this.interactables.push(sunTotem);
+
+    // 16-ray engraved Inti solar relief + central embossed Sun-God face medallion on both faces of the Sun Totem
+    for (const fz of [-0.125, 0.125]) {
+      const innerRing = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.04, 8, 24), goldMat);
+      innerRing.position.set(0, 3.15, fz);
+      plazaGroup.add(innerRing);
+
+      for (let r = 0; r < 16; r++) {
+        const ang = (r / 16) * Math.PI * 2;
+        const rayLen = r % 2 === 0 ? 0.38 : 0.28;
+        const ray = new THREE.Mesh(new THREE.ConeGeometry(0.075, rayLen, 4), goldMat);
+        const rad = 0.58 + rayLen * 0.45;
+        ray.position.set(Math.cos(ang) * rad, 3.15 + Math.sin(ang) * rad, fz);
+        ray.rotation.z = ang - Math.PI / 2;
+        plazaGroup.add(ray);
+      }
+
+      const sunFace = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 12), goldMat);
+      sunFace.scale.set(1.0, 1.0, 0.28);
+      sunFace.position.set(0, 3.15, fz);
+      plazaGroup.add(sunFace);
+    }
 
     const sunHalo = new THREE.Mesh(new THREE.TorusGeometry(1.42, 0.08, 8, 24), goldMat);
     sunHalo.position.set(0, 3.15, 0);
@@ -149,11 +172,19 @@ export class PaititiRegion {
       plazaGroup.add(ray);
     }
 
-    // Flanking Ceremonial Fire Braziers on Stepped Stone Pedestals
-    const flameMat = new THREE.MeshBasicMaterial({
-      color: 0xffaa28,
+    // Flanking Ceremonial Fire Braziers on Stepped Stone Pedestals (organic multi-lobed ovoid flames, no sharp pyramid cones)
+    const emberMat = new THREE.MeshBasicMaterial({ color: 0xff5214 });
+    const outerFlameMat = new THREE.MeshBasicMaterial({
+      color: 0xff7a18,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.46,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const innerFlameMat = new THREE.MeshBasicMaterial({
+      color: 0xffd255,
+      transparent: true,
+      opacity: 0.58,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -169,9 +200,22 @@ export class PaititiRegion {
       bowl.castShadow = true;
       plazaGroup.add(bowl);
 
-      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.95, 8, 1, true), flameMat);
-      flame.position.set(sx, 3.05, -4.5);
-      plazaGroup.add(flame);
+      const coalBed = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), emberMat);
+      coalBed.scale.set(1.0, 0.25, 1.0);
+      coalBed.position.set(sx, 2.70, -4.5);
+      plazaGroup.add(coalBed);
+
+      for (const lobe of [
+        { dx: 0.0, dz: 0.0, r: 0.26, sy: 1.55, mat: outerFlameMat },
+        { dx: 0.09, dz: -0.06, r: 0.20, sy: 1.45, mat: outerFlameMat },
+        { dx: -0.09, dz: 0.06, r: 0.20, sy: 1.40, mat: outerFlameMat },
+        { dx: 0.0, dz: 0.0, r: 0.16, sy: 1.35, mat: innerFlameMat },
+      ]) {
+        const flame = new THREE.Mesh(new THREE.SphereGeometry(lobe.r, 10, 8), lobe.mat);
+        flame.scale.set(0.85, lobe.sy, 0.85);
+        flame.position.set(sx + lobe.dx, 2.86, -4.5 + lobe.dz);
+        plazaGroup.add(flame);
+      }
     }
 
     // Flanking Stepped Ushnu Pyramid Wings on East and West edges of the Plaza

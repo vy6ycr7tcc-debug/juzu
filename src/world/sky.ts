@@ -1,10 +1,10 @@
 import * as THREE from 'three/webgpu';
 import { activeToD, sunDirection, TOD_PRESETS, type TimeOfDay } from './fog';
-import { T, type N, hash3 } from '../gpu/tsl';
+import { T, type N, hash3, vnoise, gpuUniforms } from '../gpu/tsl';
 
 const {
   cameraProjectionMatrix, clamp, dot, float, floor, Fn, max, mix, modelViewMatrix,
-  normalize, positionLocal, pow, smoothstep, uniform, varying, vec3, vec4,
+  normalize, positionLocal, pow, smoothstep, uniform, varying, vec2, vec3, vec4,
 } = T;
 
 export class Sky {
@@ -46,6 +46,15 @@ export class Sky {
       const sunGlow = pow(sunDot, 120).mul(1.5);
       const sunDisk = smoothstep(0.9992, 0.9998, sunDot).mul(4);
       sky.addAssign(this.uSunColor.mul(sunGlow.add(sunDisk)));
+
+      // High-altitude Andean cumulus & cirrus cloud layer projected on sky dome
+      const cloudProj = d.xz.div(max(h.add(0.14), 0.14)).mul(1.85).add(vec2(gpuUniforms.time.mul(0.008), gpuUniforms.time.mul(0.004)));
+      const c1 = vnoise(cloudProj);
+      const c2 = vnoise(cloudProj.mul(2.45).add(vec2(7.3, -4.1)));
+      const cloudFbm = c1.mul(0.65).add(c2.mul(0.35));
+      const cloudMask = smoothstep(0.47, 0.76, cloudFbm).mul(smoothstep(0.03, 0.22, h)).mul(float(1.0).sub(float(this.uNightMix).mul(0.75)));
+      const cloudLit = mix(vec3(0.76, 0.80, 0.86), vec3(1.02, 0.98, 0.92), smoothstep(0.52, 0.78, c1).add(pow(sunDot, 6).mul(0.35)));
+      sky.assign(mix(sky, cloudLit, cloudMask.mul(0.68)));
 
       // High-altitude Andean starfield at night
       const starCell = floor(d.mul(180));

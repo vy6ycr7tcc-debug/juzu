@@ -277,8 +277,8 @@ export class Terrain {
       // Moss crevices on mid-slope rock faces
       const mossCrevice = THREE.MathUtils.clamp((ny - 0.35) / 0.35, 0, 1) * (1 - slope) * detailNoise;
 
-      // High altitude snow-capped cordillera factor (snow settles on flatter upper ledges > 52m)
-      const snow = THREE.MathUtils.clamp((vy - 52) / 38, 0, 1) * THREE.MathUtils.clamp((ny - 0.42) / 0.35, 0, 1);
+      // High altitude snow-capped cordillera factor (snow settles on upper alpine ledges & couloirs > 36m)
+      const snow = THREE.MathUtils.clamp((vy - 36 + detailNoise * 6) / 22, 0, 1) * THREE.MathUtils.clamp((ny - 0.16) / 0.34, 0, 1);
 
       // Riverbank wet dark slate & cobbles near water line
       const riverbank = THREE.MathUtils.clamp((vy - 0.4) / 2.2, 0, 1);
@@ -292,9 +292,13 @@ export class Terrain {
       const grassG = 0.52 + detailNoise * 0.14;
       const grassB = 0.24 + detailNoise * 0.08;
 
-      let r = THREE.MathUtils.lerp(rockR, grassR, slope);
-      let g = THREE.MathUtils.lerp(rockG, grassG, slope);
-      let b = THREE.MathUtils.lerp(rockB, grassB, slope);
+      // Above 28m, transition vegetation into rugged high-alpine stone & scree before snowline
+      const alpineRockMask = THREE.MathUtils.clamp((vy - 28) / 14, 0, 1);
+      const effectiveSlope = slope * (1 - alpineRockMask * 0.78);
+
+      let r = THREE.MathUtils.lerp(rockR, grassR, effectiveSlope);
+      let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope);
+      let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope);
 
       // Darken damp river canyon stone along the gorge waterline
       r = THREE.MathUtils.lerp(0.22, r, riverbank);
@@ -302,9 +306,9 @@ export class Terrain {
       b = THREE.MathUtils.lerp(0.21, b, riverbank);
 
       // Glaciated alpine snow on high cordillera peaks
-      r = THREE.MathUtils.lerp(r, 0.90, snow);
-      g = THREE.MathUtils.lerp(g, 0.93, snow);
-      b = THREE.MathUtils.lerp(b, 0.98, snow);
+      r = THREE.MathUtils.lerp(r, 0.92, snow);
+      g = THREE.MathUtils.lerp(g, 0.95, snow);
+      b = THREE.MathUtils.lerp(b, 0.99, snow);
 
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
