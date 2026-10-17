@@ -115,13 +115,21 @@ export class Terrain {
     meadowNor.wrapS = meadowNor.wrapT = THREE.RepeatWrapping;
     meadowNor.repeat.set(16, 16);
 
+    const meadowArm = texLoader.load('/juzu/textures/meadow_arm.jpg');
+    meadowArm.wrapS = meadowArm.wrapT = THREE.RepeatWrapping;
+    meadowArm.repeat.set(16, 16);
+
     this.material = new THREE.MeshStandardMaterial({
-      color: 0x5a6a42, // Rich Andean valley green-earth
-      roughness: 0.88,
-      metalness: 0.05,
+      color: 0xffffff,
+      vertexColors: true,
+      roughness: 0.86,
+      metalness: 0.04,
       map: meadowTex,
       normalMap: meadowNor,
       normalScale: new THREE.Vector2(0.85, 0.85),
+      roughnessMap: meadowArm,
+      aoMap: meadowArm,
+      aoMapIntensity: 0.5,
       flatShading: false,
     });
   }
@@ -183,6 +191,47 @@ export class Terrain {
     }
 
     geom.computeVertexNormals();
+
+    // Natural Andean PBR Slope & Altitude Shading
+    const normAttr = geom.attributes.normal;
+    const colors = new Float32Array(posAttr.count * 3);
+
+    for (let i = 0; i < posAttr.count; i++) {
+      const vy = posAttr.getY(i);
+      const ny = normAttr.getY(i);
+
+      // Slope factor: 1 = flat Andean valley/terrace, 0 = steep granite cliff
+      const slope = THREE.MathUtils.clamp((ny - 0.65) / 0.25, 0, 1);
+
+      // High altitude snow-capped massif factor
+      const snow = THREE.MathUtils.clamp((vy - 65) / 90, 0, 1) * slope;
+
+      // Riverbank wet gravel/sand factor near water line
+      const riverbank = THREE.MathUtils.clamp((vy - 0.2) / 1.8, 0, 1);
+
+      // Base blend: steep rocky cliff (grey-granite) vs flat valley (rich Andean green)
+      let r = THREE.MathUtils.lerp(0.50, 0.56, slope);
+      let g = THREE.MathUtils.lerp(0.48, 0.70, slope);
+      let b = THREE.MathUtils.lerp(0.44, 0.38, slope);
+
+      // Darken damp silt and gravel along river edge
+      r = THREE.MathUtils.lerp(0.38, r, riverbank);
+      g = THREE.MathUtils.lerp(0.35, g, riverbank);
+      b = THREE.MathUtils.lerp(0.30, b, riverbank);
+
+      // Cold alpine snow on elevated ridge tops
+      r = THREE.MathUtils.lerp(r, 0.92, snow);
+      g = THREE.MathUtils.lerp(g, 0.94, snow);
+      b = THREE.MathUtils.lerp(b, 0.98, snow);
+
+      colors[i * 3] = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
+    }
+
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    // Assign uv2 for aoMap support
+    geom.setAttribute('uv2', geom.attributes.uv);
 
     const mesh = new THREE.Mesh(geom, this.material);
     mesh.position.set(originX, 0, originZ);
