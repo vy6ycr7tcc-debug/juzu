@@ -102,10 +102,10 @@ export class TouchControls {
     actionCluster.id = 'juzu-touch-action-cluster';
     actionCluster.style.cssText = `
       position: absolute;
-      bottom: 24px;
-      right: 20px;
-      width: 220px;
-      height: 180px;
+      bottom: 20px;
+      right: 14px;
+      width: 204px;
+      height: 168px;
       pointer-events: none;
     `;
 
@@ -164,8 +164,8 @@ export class TouchControls {
       'juzu-btn-jump',
       '▲',
       'JUMP',
-      64,
-      'right: 8px; bottom: 8px;',
+      62,
+      'right: 6px; bottom: 6px;',
       'radial-gradient(circle, #384e36 0%, #1e281e 100%)',
       '#75caa0'
     );
@@ -183,8 +183,8 @@ export class TouchControls {
       'juzu-btn-fire',
       '💥',
       'FIRE',
-      60,
-      'right: 12px; bottom: 92px;',
+      56,
+      'right: 8px; bottom: 84px;',
       'radial-gradient(circle, #682622 0%, #38120e 100%)',
       '#f06856'
     );
@@ -200,8 +200,8 @@ export class TouchControls {
       'juzu-btn-interact',
       '✋',
       'ACTION',
-      58,
-      'right: 88px; bottom: 12px;',
+      54,
+      'right: 78px; bottom: 10px;',
       'radial-gradient(circle, #343e46 0%, #1a2228 100%)',
       '#e0a830'
     );
@@ -218,8 +218,8 @@ export class TouchControls {
       'juzu-btn-aim',
       '🎯',
       'AIM',
-      48,
-      'right: 88px; bottom: 92px;',
+      46,
+      'right: 76px; bottom: 80px;',
       'radial-gradient(circle, #2a343a 0%, #141a20 100%)',
       'rgba(212, 160, 40, 0.65)'
     );
@@ -236,7 +236,7 @@ export class TouchControls {
       '▼',
       'CROUCH',
       44,
-      'right: 160px; bottom: 18px;',
+      'right: 144px; bottom: 16px;',
       'radial-gradient(circle, #222a30 0%, #10161a 100%)',
       'rgba(212, 160, 40, 0.45)'
     );
@@ -303,7 +303,11 @@ export class TouchControls {
     const handleTouchStart = (e: TouchEvent) => {
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        const isLeftZone = t.clientX < window.innerWidth * 0.48;
+        const target = e.target as HTMLElement;
+        const isButton = target && target.closest('#juzu-touch-action-cluster, #juzu-mobile-top-bar, button');
+        if (isButton) continue;
+
+        const isLeftZone = t.clientX < window.innerWidth * 0.44;
 
         if (isLeftZone) {
           // Left half touch: Anchor floating joystick under the thumb
@@ -321,10 +325,8 @@ export class TouchControls {
             this.handleJoyMove(t.clientX, t.clientY);
           }
         } else {
-          // Right half touch: Camera swipe look (if not clicking an interactive action button)
-          const target = e.target as HTMLElement;
-          const isButton = target && target.closest('#juzu-touch-action-cluster, #juzu-mobile-top-bar, button');
-          if (!isButton && this.lookTouchId === null) {
+          // Right half touch: Camera swipe look
+          if (this.lookTouchId === null) {
             this.lookTouchId = t.identifier;
             this.lastLookPos = { x: t.clientX, y: t.clientY };
           }
@@ -422,15 +424,18 @@ export class TouchControls {
 
     this.joyKnobEl.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
 
-    // Map deflection to movement vector (normalized)
-    const norm = clampedDist / this.maxRadius;
-    const moveX = knobX / this.maxRadius;
-    const moveY = -(knobY / this.maxRadius); // Inverted Y: up on stick is forward
+    // Map deflection to movement vector with a smooth analog response and 0.06 deadzone
+    const rawRatio = clampedDist / this.maxRadius;
+    const deadzone = 0.06;
+    const norm = rawRatio < deadzone ? 0 : (rawRatio - deadzone) / (1 - deadzone);
+
+    const moveX = clampedDist > 0 ? (knobX / clampedDist) * norm : 0;
+    const moveY = clampedDist > 0 ? -(knobY / clampedDist) * norm : 0; // Inverted Y: up on stick is forward
 
     this.input.setVirtualMove(moveX, moveY);
 
-    // Auto-sprint past 75% deflection
-    if (norm > 0.75) {
+    // Auto-sprint past 84% deflection
+    if (norm > 0.84) {
       this.input.setVirtualBoost(true);
     } else {
       this.input.setVirtualBoost(false);
