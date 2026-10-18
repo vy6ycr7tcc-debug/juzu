@@ -22,17 +22,32 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: page_errors.append(str(e)))
 
     print("1. Loading http://127.0.0.1:5173/juzu/ in REAL WebKit...")
-    page.goto("http://127.0.0.1:5173/juzu/", wait_until="load", timeout=30000)
+    page.goto("http://127.0.0.1:5173/juzu/", wait_until="commit", timeout=30000)
+
+    # Capture initial loading screen with reload button
+    time.sleep(0.3)
+    page.screenshot(path=str(OUT_DIR / "webkit_loading_screen_reload.png"), timeout=30000)
+    print("Captured webkit_loading_screen_reload.png")
 
     # Wait for scene ready
     page.wait_for_function("Boolean(window.__juzuSceneReady)", timeout=15000)
     print("Scene ready in WebKit!")
 
     time.sleep(0.5)
-    page.screenshot(path=str(OUT_DIR / "webkit_title_screen.png"), timeout=30000)
-    print("Captured webkit_title_screen.png")
+    page.screenshot(path=str(OUT_DIR / "webkit_title_screen_reload.png"), timeout=30000)
+    print("Captured webkit_title_screen_reload.png")
 
-    print("2. Tapping '✦ Begin Expedition ✦' in WebKit...")
+    print("2. Opening Settings modal to verify Purge Cache button...")
+    page.click("#juzu-btn-title-settings")
+    time.sleep(0.4)
+    page.screenshot(path=str(OUT_DIR / "webkit_settings_modal_reload.png"), timeout=30000)
+    print("Captured webkit_settings_modal_reload.png")
+
+    print("Closing Settings modal...")
+    page.click("#juzu-settings-done")
+    time.sleep(0.3)
+
+    print("3. Tapping '✦ Begin Expedition ✦' in WebKit...")
     page.click("#juzu-btn-begin")
     time.sleep(0.6)
 
@@ -47,7 +62,7 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT_DIR / "webkit_gameplay_active.png"), timeout=30000)
     print("Captured webkit_gameplay_active.png")
 
-    print("3. Moving forward via virtual joystick in WebKit...")
+    print("4. Moving forward via virtual joystick in WebKit...")
     page.evaluate("() => window.__juzuEngine.input.setVirtualMove(0, 1)")
     page.evaluate('''() => new Promise(resolve => {
         let f = 0;

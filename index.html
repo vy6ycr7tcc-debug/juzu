@@ -63,7 +63,10 @@
       <div style="width:240px;height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;position:relative;margin-bottom:12px;border:1px solid rgba(212,184,136,0.25);">
         <div id="juzu-loading-bar" style="width:25%;height:100%;background:linear-gradient(90deg, #caa05b, #ffd988);transition:width 0.2s ease;"></div>
       </div>
-      <div id="juzu-loading-status" style="font-size:11px;letter-spacing:0.08em;color:#9b9487;">Loading Andean Terrain · 25%</div>
+      <div id="juzu-loading-status" style="font-size:11px;letter-spacing:0.08em;color:#9b9487;margin-bottom:16px;">Loading Andean Terrain · 25%</div>
+      <button id="juzu-btn-reload-latest" onclick="window.__juzuForceUpdateAndReload(event)" style="background:rgba(24,32,26,0.85);border:1px solid rgba(212,184,136,0.5);color:#e6c896;padding:8px 18px;border-radius:20px;font-size:11px;letter-spacing:0.08em;font-family:Georgia,serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,0.6);pointer-events:auto;transition:transform 0.15s ease, background 0.15s ease;">
+        <span style="font-size:13px;">🔄</span><span>Load Latest Version (Clear Cache)</span>
+      </button>
     </div>
 
     <canvas id="gl"></canvas>
@@ -80,11 +83,47 @@
         }
       };
 
+      window.__juzuForceUpdateAndReload = function(e) {
+        if (e) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        var btn = document.getElementById('juzu-btn-reload-latest');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span style="font-size:13px;">⏳</span><span>Purging cache & fetching latest...</span>';
+          btn.style.opacity = '0.75';
+        }
+        var status = document.getElementById('juzu-loading-status');
+        if (status) status.textContent = 'Purging cache & fetching latest build...';
+
+        var swPromise = ('serviceWorker' in navigator)
+          ? navigator.serviceWorker.getRegistrations().then(function(regs) {
+              return Promise.all(regs.map(function(r) { return r.unregister(); }));
+            }).catch(function() {})
+          : Promise.resolve();
+
+        var cachePromise = ('caches' in window)
+          ? caches.keys().then(function(keys) {
+              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+            }).catch(function() {})
+          : Promise.resolve();
+
+        Promise.all([swPromise, cachePromise]).then(function() {
+          var cleanUrl = window.location.origin + window.location.pathname;
+          window.location.replace(cleanUrl + '?v=' + Date.now());
+        }).catch(function() {
+          var cleanUrl = window.location.origin + window.location.pathname;
+          window.location.replace(cleanUrl + '?v=' + Date.now());
+        });
+      };
+
       // Tap-to-dismiss safety: tapping screen after 2.5s or when ready dismisses immediately
       var startTime = Date.now();
       var loadingEl = document.getElementById('juzu-loading-screen');
       if (loadingEl) {
-        loadingEl.addEventListener('click', function() {
+        loadingEl.addEventListener('click', function(e) {
+          if (e && e.target && e.target.closest('#juzu-btn-reload-latest')) return;
           if (window.__juzuSceneReady || window.__juzuReady || (Date.now() - startTime > 2500)) {
             window.__juzuDismissLoading();
           }
