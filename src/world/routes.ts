@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { createIncaBlock } from './masonry';
+import { createIncaBlock, createIncaAshlarMaterial } from './masonry';
 import { solid } from './solidity';
 import { standAt } from './terrain';
 import type { GrappleManager } from '../player/grapple';
@@ -25,18 +25,7 @@ export class RoutesManager {
   private buildPhysicalRouteStructures(): void {
     // Shared PBR materials
     const texLoader = new THREE.TextureLoader();
-    const stoneTex = texLoader.load('/juzu/assets/environment-textures/environment-stonework.jpeg');
-    stoneTex.wrapS = stoneTex.wrapT = THREE.RepeatWrapping;
-    stoneTex.repeat.set(2, 2);
-
-    const stoneMat = solid(
-      new THREE.MeshStandardMaterial({
-        map: stoneTex,
-        roughness: 0.82,
-        metalness: 0.05,
-        color: 0x908c82,
-      })
-    );
+    const stoneMat = solid(createIncaAshlarMaterial(texLoader));
 
     const timberMat = solid(
       new THREE.MeshStandardMaterial({
@@ -184,7 +173,7 @@ export class RoutesManager {
               const sz = THREE.MathUtils.lerp(pt.z, nextPt.z, u);
               const sy = standAt(sx, sz);
 
-              const step = new THREE.Mesh(createIncaBlock(2.8, 0.42, 1.1, 0.04), stoneMat);
+              const step = new THREE.Mesh(createIncaBlock(2.8, 0.42, 1.1, 0.04, 1.2, s + i * 17), stoneMat);
               step.position.set(sx, sy + 0.18, sz);
               step.rotation.y = stepRot;
               step.castShadow = true;
