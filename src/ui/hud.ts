@@ -105,6 +105,9 @@ export class HUD {
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
           <button id="juzu-btn-toggle-chapters" style="padding:6px 14px;background:rgba(22,28,24,0.85);color:#dcd4c6;border:1px solid #6b5c46;border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:11px;letter-spacing:0.06em;">Select Chapter</button>
+          <button id="juzu-btn-title-reload" style="padding:6px 14px;background:rgba(22,28,24,0.85);color:#e6c896;border:1px solid rgba(212,184,136,0.45);border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:11px;letter-spacing:0.06em;display:inline-flex;align-items:center;gap:4px;">
+            <span>🔄</span><span>Load Latest</span>
+          </button>
           <button id="juzu-btn-title-offline" style="padding:6px 14px;background:rgba(22,28,24,0.85);color:#dcd4c6;border:1px solid #6b5c46;border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:11px;letter-spacing:0.06em;display:inline-flex;align-items:center;gap:4px;">
             <span>📥</span><span id="juzu-title-offline-text">Offline Mode</span>
           </button>
@@ -121,6 +124,11 @@ export class HUD {
         ${controlsHint}
       </div>
     `;
+
+    el.querySelector('#juzu-btn-title-reload')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      HUD.forceReloadLatest();
+    });
 
     const startExpedition = () => {
       this.closeTitle();
@@ -144,9 +152,10 @@ export class HUD {
         if (
           target.closest('#juzu-btn-toggle-chapters') ||
           target.closest('#juzu-chapter-list') ||
+          target.closest('#juzu-btn-title-reload') ||
           target.closest('#juzu-btn-title-offline') ||
           target.closest('#juzu-btn-title-settings') ||
-          target.closest('#juzu-settings-modal')
+          target.closest('#juzu-settings-menu')
         ) {
           return;
         }
@@ -382,6 +391,20 @@ export class HUD {
           </div>
         </div>
 
+        <!-- Version & Cache Reset -->
+        <div style="margin-bottom:20px;padding:12px 14px;background:rgba(12,16,14,0.6);border:1px solid rgba(212,184,136,0.22);border-radius:3px;">
+          <div style="font-size:12px;letter-spacing:0.15em;color:#e6c896;text-transform:uppercase;margin-bottom:8px;font-weight:bold;">Version & Cache Reset</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:13px;color:#dcd4c6;font-weight:bold;">Load Latest Build</div>
+              <div style="font-size:11px;color:#9b9487;margin-top:2px;">Purge all cached scripts, shaders, workers and reload newest version.</div>
+            </div>
+            <button id="juzu-btn-settings-reload-latest" style="padding:7px 16px;background:rgba(36,44,38,0.9);color:#e6c896;border:1px solid rgba(212,184,136,0.5);border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;">
+              <span>🔄</span><span>Purge Cache & Reload</span>
+            </button>
+          </div>
+        </div>
+
         <div style="display:flex;justify-content:flex-end;">
           <button id="juzu-settings-done" style="padding:8px 22px;background:#384836;color:#fdfaf2;border:1px solid #c9a468;cursor:pointer;font-family:Georgia,serif;font-size:13px;">Done</button>
         </div>
@@ -390,6 +413,9 @@ export class HUD {
 
     el.querySelector('#juzu-settings-close-x')?.addEventListener('click', () => this.closeSettings());
     el.querySelector('#juzu-settings-done')?.addEventListener('click', () => this.closeSettings());
+    el.querySelector('#juzu-btn-settings-reload-latest')?.addEventListener('click', () => {
+      HUD.forceReloadLatest();
+    });
 
     return el;
   }
@@ -508,4 +534,22 @@ export class HUD {
       this.compassEl.textContent = `${heading} · ${pad}${deg}° ANDES`;
     }
   }
+
+  public static async forceReloadLatest(): Promise<void> {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (err) {
+      console.warn('Cache purge notice:', err);
+    }
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.location.replace(cleanUrl + '?v=' + Date.now());
+  }
 }
+
