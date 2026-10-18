@@ -44,6 +44,9 @@ class OfflineManager {
       this.registration = await navigator.serviceWorker.register('/juzu/sw.js', {
         scope: '/juzu/',
       });
+      try {
+        await this.registration.update();
+      } catch {}
 
       // Handle worker ready or update
       if (this.registration.installing) {
