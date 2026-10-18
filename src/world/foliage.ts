@@ -21,15 +21,9 @@ export class Foliage {
   private grassInstances: THREE.InstancedMesh;
   private rockInstances: THREE.InstancedMesh;
   private rootInstances: THREE.InstancedMesh;
-  private flowerInstances: THREE.InstancedMesh;
-  private shrubInstances: THREE.InstancedMesh;
-  private anthuriumInstances: THREE.InstancedMesh;
   private readonly TREE_COUNT = 620;
   private readonly GRASS_COUNT = 3200;
   private readonly ROCK_COUNT = 420;
-  private readonly FLOWER_COUNT = 1400;
-  private readonly SHRUB_COUNT = 240;
-  private readonly ANTHURIUM_COUNT = 480;
   public isLoaded = false;
 
   constructor(scene: THREE.Scene) {
@@ -158,34 +152,6 @@ export class Foliage {
     this.rockInstances.castShadow = true;
     this.rockInstances.receiveShadow = true;
 
-    const flowerGeom = new THREE.PlaneGeometry(0.7, 0.7, 1, 1);
-    const flowerMat = new THREE.MeshStandardMaterial({
-      color: 0xdbcf48,
-      roughness: 0.75,
-      side: THREE.DoubleSide,
-    });
-    this.flowerInstances = new THREE.InstancedMesh(flowerGeom, flowerMat, this.FLOWER_COUNT);
-    this.flowerInstances.receiveShadow = true;
-
-    const shrubGeom = new THREE.SphereGeometry(0.8, 6, 6);
-    const shrubMat = new THREE.MeshStandardMaterial({
-      color: 0x3d4a2c,
-      roughness: 0.85,
-    });
-    this.shrubInstances = new THREE.InstancedMesh(shrubGeom, shrubMat, this.SHRUB_COUNT);
-    this.shrubInstances.castShadow = true;
-    this.shrubInstances.receiveShadow = true;
-
-    const anthuriumGeom = new THREE.PlaneGeometry(0.85, 0.85, 1, 1);
-    const anthuriumMat = new THREE.MeshStandardMaterial({
-      color: 0x2e4a28,
-      roughness: 0.70,
-      side: THREE.DoubleSide,
-    });
-    this.anthuriumInstances = new THREE.InstancedMesh(anthuriumGeom, anthuriumMat, this.ANTHURIUM_COUNT);
-    this.anthuriumInstances.castShadow = true;
-    this.anthuriumInstances.receiveShadow = true;
-
     this.populateFoliage();
 
     this.group.add(this.trunkInstances);
@@ -193,9 +159,6 @@ export class Foliage {
     this.group.add(this.grassInstances);
     this.group.add(this.rockInstances);
     this.group.add(this.rootInstances);
-    this.group.add(this.flowerInstances);
-    this.group.add(this.shrubInstances);
-    this.group.add(this.anthuriumInstances);
 
     this.isLoaded = true;
   }
@@ -557,135 +520,6 @@ export class Foliage {
     }
     this.rockInstances.count = rockIdx;
     this.rockInstances.instanceMatrix.needsUpdate = true;
-
-    // 4. Distribute Celandine Flowering Mountain Ground Cover along trail edges, clearings, and rocks
-    let flowerIdx = 0;
-    for (let f = 1; f <= this.FLOWER_COUNT * 2 && flowerIdx < this.FLOWER_COUNT; f++) {
-      const u = halton(f + 1500, 2);
-      const v = halton(f + 1500, 3);
-      const w = halton(f + 1500, 5);
-      const hub = pickHub(w);
-
-      const x = hub.cx + (u * 2 - 1) * (hub.span * 0.92);
-      const z = hub.cz + (v * 2 - 1) * (hub.span * 0.92);
-
-      // Keep footpath center, camera frustum and spawn clear while populating sides and borders
-      if (Math.abs(x) < 3.8 && z > -48 && z < 22) continue;
-      if (Math.hypot(x - 0.5, z - 11.5) < 8.5) continue;
-      if (Math.hypot(x - 1.2, z - 10.5) < 3.2) continue; // campfire clearing
-      if (Math.abs(z + 17) < 13.0 && Math.abs(x) < 55) continue;
-      if (Math.hypot(x - 200, z - 180) < 22.0) continue;
-      if (Math.abs(x - (-180)) < 2.5 && z > 122 && z < 182) continue;
-
-      const y = standAt(x, z);
-      if (y < 0.5 || y > 44.0) continue;
-
-      const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
-      if (dy > 1.1) continue;
-
-      dummy.position.set(x, y - 0.02, z);
-      dummy.rotation.set(
-        Math.sin(f * 0.8) * 0.06,
-        (f * 2.39996) % (Math.PI * 2),
-        Math.cos(f * 0.8) * 0.06
-      );
-      const s = 1.1 + ((f * 19) % 35) * 0.02;
-      dummy.scale.set(s, s * 0.95, s);
-      dummy.updateMatrix();
-
-      this.flowerInstances.setMatrixAt(flowerIdx++, dummy.matrix);
-    }
-    this.flowerInstances.count = flowerIdx;
-    this.flowerInstances.instanceMatrix.needsUpdate = true;
-
-    // 5. Distribute Subalpine Mountain Shrubs on slope transitions and forest perimeters
-    let shrubIdx = 0;
-    for (let sIdx = 1; sIdx <= this.SHRUB_COUNT * 3 && shrubIdx < this.SHRUB_COUNT; sIdx++) {
-      const u = halton(sIdx + 3000, 2);
-      const v = halton(sIdx + 3000, 3);
-      const w = halton(sIdx + 3000, 5);
-      const hub = pickHub(w);
-
-      const x = hub.cx + (u * 2 - 1) * hub.span;
-      const z = hub.cz + (v * 2 - 1) * hub.span;
-
-      if (this.isInClearZone(x, z)) continue;
-      if (Math.abs(z + 17) < 13.0 && Math.abs(x) < 55) continue;
-
-      const y = standAt(x, z);
-      if (y < 0.6 || y > 45.0) continue;
-
-      const dy = Math.hypot(standAt(x + 1.2, z) - y, standAt(x, z + 1.2) - y);
-      if (dy > 1.2) continue;
-
-      dummy.position.set(x, y - 0.06, z);
-      dummy.rotation.set(
-        Math.sin(sIdx * 0.6) * 0.08,
-        (sIdx * 1.93) % (Math.PI * 2),
-        Math.cos(sIdx * 0.6) * 0.08
-      );
-      const s = 0.95 + ((sIdx * 23) % 40) * 0.02;
-      dummy.scale.set(s, s * 0.92, s);
-      dummy.updateMatrix();
-
-      this.shrubInstances.setMatrixAt(shrubIdx++, dummy.matrix);
-    }
-    this.shrubInstances.count = shrubIdx;
-    this.shrubInstances.instanceMatrix.needsUpdate = true;
-
-    // 6. Distribute Scanned Anthurium Broadleaf Understory Clusters
-    // Focus in humid riparian zones (Urubamba river gorge margins, waterfall glade, mossy rock bases, moist jungle clearings)
-    let anthuriumIdx = 0;
-    for (let a = 1; a <= this.ANTHURIUM_COUNT * 3 && anthuriumIdx < this.ANTHURIUM_COUNT; a++) {
-      const u = halton(a + 4500, 2);
-      const v = halton(a + 4500, 3);
-      const w = halton(a + 4500, 5);
-
-      let x: number;
-      let z: number;
-
-      // 60% of anthuriums grow in the Cloud Forest river gorge / waterfall mist corridor
-      if (a % 10 < 6) {
-        x = (u * 2 - 1) * 48;
-        const riverZ = -17.0 + Math.sin(x * 0.018) * 6.5;
-        const sideSign = (a % 2 === 0) ? 1 : -1;
-        const offset = 5.5 + v * 12.0;
-        z = riverZ + sideSign * offset;
-      } else {
-        // 40% across other moist glades (Cloud Forest glades, Jungle Lowlands around -180, 148, Paititi around 200, 180)
-        const hub = pickHub(w);
-        x = hub.cx + (u * 2 - 1) * (hub.span * 0.85);
-        z = hub.cz + (v * 2 - 1) * (hub.span * 0.85);
-      }
-
-      // Avoid blocking footpath centers, campfires, bridge spans, or camera frustum
-      if (Math.abs(x) < 3.8 && z > -48 && z < 22) continue;
-      if (Math.hypot(x - 0.5, z - 11.5) < 8.5) continue;
-      if (Math.hypot(x - 1.2, z - 10.5) < 3.0) continue;
-      if (Math.hypot(x - 0, z - (-46)) < 16.0) continue; // North Sanctuary inner courtyard
-      if (Math.abs(z + 17) < 3.5 && Math.abs(x) < 45) continue; // In water deep channel
-
-      const y = standAt(x, z);
-      if (y < 0.2 || y > 38.0) continue; // Prefer humid lower elevations
-
-      const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
-      if (dy > 1.15) continue; // Not on vertical dropoffs
-
-      // Firm grounding: base embeds ~0.04m into soil
-      dummy.position.set(x, y - 0.04, z);
-      dummy.rotation.set(
-        Math.sin(a * 1.1) * 0.05,
-        (a * 2.39996) % (Math.PI * 2),
-        Math.cos(a * 1.3) * 0.05
-      );
-      const s = 1.05 + ((a * 31) % 40) * 0.018;
-      dummy.scale.set(s, s * 0.96, s);
-      dummy.updateMatrix();
-
-      this.anthuriumInstances.setMatrixAt(anthuriumIdx++, dummy.matrix);
-    }
-    this.anthuriumInstances.count = anthuriumIdx;
-    this.anthuriumInstances.instanceMatrix.needsUpdate = true;
   }
 
   public update(_time: number): void {

@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { triplanarTextures, texture, float, positionWorld, normalWorld, vertexColor } from 'three/tsl';
 import { withFog } from '../gpu/tsl';
 import { getRouteInfluence } from './routeData';
 import { MOBILE } from '../core/quality';
@@ -160,7 +161,7 @@ export function standAt(x: number, z: number): number {
 export class Terrain {
   public group = new THREE.Group();
   private chunks = new Map<string, THREE.Mesh>();
-  private material: THREE.MeshStandardMaterial;
+  private material: THREE.MeshStandardNodeMaterial;
   private readonly CHUNK_SIZE = 64;
   private readonly CHUNK_RES = MOBILE ? 32 : 44;
   private lastChunkX = NaN;
@@ -189,7 +190,12 @@ export class Terrain {
     const groundAO = texLoader.load('/juzu/textures/scans/rocky_trail_ao_2k.webp');
     groundAO.wrapS = groundAO.wrapT = THREE.RepeatWrapping;
 
-    this.material = new THREE.MeshStandardMaterial({
+    const cliffTex = texLoader.load('/juzu/textures/scans/cliff_side_diffuse_2k.webp');
+    cliffTex.colorSpace = THREE.SRGBColorSpace;
+    cliffTex.anisotropy = 8;
+    cliffTex.wrapS = cliffTex.wrapT = THREE.RepeatWrapping;
+
+    this.material = new THREE.MeshStandardNodeMaterial({
       color: 0xf6f0e6,
       vertexColors: true,
       roughness: 0.82,
@@ -202,6 +208,15 @@ export class Terrain {
       aoMapIntensity: 0.95,
       flatShading: false,
     });
+
+    this.material.colorNode = triplanarTextures(
+      texture(cliffTex),
+      texture(groundTex),
+      texture(cliffTex),
+      float(0.12),
+      positionWorld,
+      normalWorld
+    ).mul(vertexColor());
   }
 
   public update(playerPos: THREE.Vector3): void {
@@ -302,27 +317,10 @@ export class Terrain {
       const ny = normAttr.getY(i);
       const nz = normAttr.getZ(i);
 
-      // Stochastic dual-frequency UV perturbation: completely breaks repeating tile patterns
-      const nU = vnoise(vx * 0.032 + 11.2, vz * 0.032 - 7.8) * 3.2;
-      const nV = vnoise(vx * 0.032 - 14.3, vz * 0.032 + 22.1) * 3.2;
-      const isSteepCliff = ny < 0.62;
-
-      let uCoord: number;
-      let vCoord: number;
-
-      if (isSteepCliff) {
-        // Triplanar vertical cliff projection: maps texture horizontally along rock face & vertically with height
-        const dominantX = Math.abs(nx) > Math.abs(nz);
-        const horizDist = dominantX ? vz : vx;
-        uCoord = (horizDist + nU * 0.45) * 0.16;
-        vCoord = (vy + nV * 0.45) * 0.20;
-      } else {
-        // High-altitude alpine soil & rocky plateau with dual-angle noise warping
-        const tileScale = 0.14;
-        uCoord = (vx + nU) * tileScale;
-        vCoord = (vz + nV) * tileScale;
-      }
-
+      // Continuous planar UV projection across the terrain grid
+      const tileScale = 0.12;
+      const uCoord = vx * tileScale;
+      const vCoord = vz * tileScale;
       uvAttr.setXY(i, uCoord, vCoord);
 
       // Micro-noise, macro-soil patches & horizontal rock strata banding
