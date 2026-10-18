@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-const CACHE_CORE = 'juzu-core-v2';
-const CACHE_ASSETS = 'juzu-assets-v2';
+const CACHE_CORE = 'juzu-core-v3';
+const CACHE_ASSETS = 'juzu-assets-v3';
 const PRECACHE_ASSETS: string[] = ['__PRECACHE_ASSETS__'];
 
 const CORE_SHELL: string[] = [
@@ -48,21 +48,22 @@ self.addEventListener('fetch', (event: any) => {
 
   const url = new URL(req.url);
 
-  // Navigation requests: try cache first or network with offline index.html fallback
+  // Navigation requests: NETWORK-FIRST so code updates deploy immediately to all users
   if (req.mode === 'navigate') {
     event.respondWith(
-      caches.match(req).then((cached) => {
-        if (cached) return cached;
-        return fetch(req)
-          .then((res) => {
-            if (res && res.status === 200) {
-              const copy = res.clone();
-              caches.open(CACHE_CORE).then((c) => c.put(req, copy));
-            }
-            return res;
-          })
-          .catch(() => caches.match('/juzu/index.html'));
-      })
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE_CORE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          return (await caches.match('/juzu/index.html')) || (await caches.match('/juzu/'));
+        })
     );
     return;
   }

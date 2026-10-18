@@ -706,10 +706,8 @@ async function bootJuzu() {
 
     // Signal ready and dismiss pre-bootstrap loading screen once 3D world is ready
     if (
-      frameCount > 6 &&
-      naira.isLoaded &&
-      (foliage.isLoaded || frameCount > 40) &&
-      (cloudForest.isLoaded || frameCount > 60)
+      frameCount > 2 &&
+      naira.isLoaded
     ) {
       window.__juzuSceneReady = true;
       if (typeof (window as any).__juzuDismissLoading === 'function') {

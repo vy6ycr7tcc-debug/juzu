@@ -80,27 +80,59 @@
         }
       };
 
-      // Tap-to-dismiss safety: tapping screen after ready dismisses immediately
+      // Tap-to-dismiss safety: tapping screen after 2.5s or when ready dismisses immediately
+      var startTime = Date.now();
       var loadingEl = document.getElementById('juzu-loading-screen');
       if (loadingEl) {
         loadingEl.addEventListener('click', function() {
-          if (window.__juzuSceneReady) window.__juzuDismissLoading();
+          if (window.__juzuSceneReady || window.__juzuReady || (Date.now() - startTime > 2500)) {
+            window.__juzuDismissLoading();
+          }
         });
       }
 
-      // Dismiss loading screen as soon as 3D scene, character, and foliage are fully ready
-      var checkReady = setInterval(function() {
+      // Smooth active progress bar animation
+      var bar = document.getElementById('juzu-loading-bar');
+      var status = document.getElementById('juzu-loading-status');
+      var progress = 25;
+      var dismissed = false;
+
+      var progressTimer = setInterval(function() {
+        if (dismissed) return;
         if (window.__juzuSceneReady) {
-          clearInterval(checkReady);
-          var bar = document.getElementById('juzu-loading-bar');
-          var status = document.getElementById('juzu-loading-status');
+          dismissed = true;
+          clearInterval(progressTimer);
           if (bar) bar.style.width = '100%';
           if (status) status.textContent = 'Expedition Ready';
           setTimeout(function() {
             window.__juzuDismissLoading();
           }, 150);
+          return;
         }
-      }, 40);
+
+        // Active animated progression
+        if (progress < 92) {
+          progress += Math.random() * 9 + 4;
+          if (progress > 92) progress = 92;
+          if (bar) bar.style.width = Math.round(progress) + '%';
+          if (status) {
+            if (progress < 45) status.textContent = 'Loading Andean Terrain · ' + Math.round(progress) + '%';
+            else if (progress < 75) status.textContent = 'Calibrating Atmosphere & Lighting · ' + Math.round(progress) + '%';
+            else status.textContent = 'Assembling Expedition Gear · ' + Math.round(progress) + '%';
+          }
+        }
+
+        // Safety fallback: if engine is booted for > 4.5s, dismiss loading screen
+        if (Date.now() - startTime > 4500 && window.__juzuReady) {
+          dismissed = true;
+          clearInterval(progressTimer);
+          if (bar) bar.style.width = '100%';
+          if (status) status.textContent = 'Expedition Ready';
+          setTimeout(function() {
+            window.__juzuDismissLoading();
+          }, 100);
+        }
+      }, 90);
     </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
