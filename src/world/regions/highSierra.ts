@@ -11,6 +11,7 @@ export class HighSierraRegion {
   private texLoader = new THREE.TextureLoader();
   private gnomonColumn?: THREE.Mesh;
   private gateSealMat?: THREE.MeshStandardMaterial;
+  private scansLoaded = false;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Region_HighSierra';
@@ -495,6 +496,15 @@ export class HighSierraRegion {
       }
     });
 
+  }
+
+  public loadScannedAssets(): void {
+    if (this.scansLoaded) return;
+    this.scansLoaded = true;
+
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
     // 6. High-Relief Crag Pinnacles (coast_land_rocks_04.glb - 75k tris scan)
     gltfLoader.load('/juzu/models/scans/coast_land_rocks_04.glb', (gltf) => {
       let rockGeom: THREE.BufferGeometry | null = null;
@@ -534,35 +544,44 @@ export class HighSierraRegion {
       }
     });
 
-    // 7. Subalpine Mountain Trees with Canopy (tree_small_02.glb - 75k tris scan)
+    // 7. Subalpine Mountain Trees with Canopy (tree_small_02.glb - InstancedMesh)
     gltfLoader.load('/juzu/models/scans/tree_small_02.glb', (gltf) => {
-      const treeModel = gltf.scene;
-      treeModel.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh) {
+      let treeGeom: THREE.BufferGeometry | null = null;
+      let treeMat: THREE.Material | null = null;
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && !treeGeom) {
           const mesh = child as THREE.Mesh;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          if (mesh.material instanceof THREE.MeshStandardMaterial && mesh.material.map) {
-            mesh.material.map.colorSpace = THREE.SRGBColorSpace;
+          treeGeom = mesh.geometry;
+          treeMat = mesh.material as THREE.Material;
+          if (treeMat instanceof THREE.MeshStandardMaterial && treeMat.map) {
+            treeMat.map.colorSpace = THREE.SRGBColorSpace;
           }
         }
       });
-      const treeSpawns = [
-        { x: 104, z: -152, s: 1.1, ry: 0.4 },
-        { x: 136, z: -152, s: 1.0, ry: 1.9 },
-        { x: 96, z: -175, s: 1.25, ry: -0.7 },
-        { x: 144, z: -175, s: 1.15, ry: 2.8 },
-        { x: 100, z: -202, s: 1.2, ry: 1.1 },
-        { x: 140, z: -202, s: 1.3, ry: -2.3 },
-      ];
-      treeSpawns.forEach((ts) => {
-        const treeInstance = treeModel.clone(true);
-        const ty = standAt(ts.x, ts.z);
-        treeInstance.position.set(ts.x, ty - 0.2, ts.z);
-        treeInstance.scale.set(ts.s, ts.s, ts.s);
-        treeInstance.rotation.y = ts.ry;
-        this.group.add(treeInstance);
-      });
+      if (treeGeom && treeMat) {
+        const treeSpawns = [
+          { x: 104, z: -152, s: 1.1, ry: 0.4 },
+          { x: 136, z: -152, s: 1.0, ry: 1.9 },
+          { x: 96, z: -175, s: 1.25, ry: -0.7 },
+          { x: 144, z: -175, s: 1.15, ry: 2.8 },
+          { x: 100, z: -202, s: 1.2, ry: 1.1 },
+          { x: 140, z: -202, s: 1.3, ry: -2.3 },
+        ];
+        const treeInst = new THREE.InstancedMesh(treeGeom, treeMat, treeSpawns.length);
+        treeInst.castShadow = true;
+        treeInst.receiveShadow = true;
+        const dummy = new THREE.Object3D();
+        treeSpawns.forEach((ts, idx) => {
+          const ty = standAt(ts.x, ts.z);
+          dummy.position.set(ts.x, ty - 0.2, ts.z);
+          dummy.scale.set(ts.s, ts.s, ts.s);
+          dummy.rotation.y = ts.ry;
+          dummy.updateMatrix();
+          treeInst.setMatrixAt(idx, dummy.matrix);
+        });
+        treeInst.instanceMatrix.needsUpdate = true;
+        this.group.add(treeInst);
+      }
     });
   }
 }

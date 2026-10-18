@@ -163,6 +163,7 @@ function applyAnatomicalUVsAndColors(skinnedMesh: THREE.SkinnedMesh): void {
 export class Naira {
   public root = new THREE.Group();
   public modelRoot: THREE.Object3D | null = null;
+  public isLoaded = false;
   private mixer: THREE.AnimationMixer | null = null;
   private actions: Partial<Record<LocomotionPose, THREE.AnimationAction>> = {};
   private currentAction: THREE.AnimationAction | null = null;
@@ -205,15 +206,15 @@ export class Naira {
     fabricTex.wrapS = fabricTex.wrapT = THREE.RepeatWrapping;
     fabricTex.repeat.set(4, 4);
 
-    // 2. 2K Weathered Field Canvas for Expedition Rucksack & Bedroll
-    const canvasTex = texLoader.load('/juzu/assets/character-textures/character-canvas.jpeg');
+    // 2. Weathered Field Canvas for Expedition Rucksack & Bedroll (Optimized WebP)
+    const canvasTex = texLoader.load('/juzu/assets/character-textures/character-canvas_1k.webp');
     canvasTex.colorSpace = THREE.SRGBColorSpace;
     canvasTex.anisotropy = 8;
     canvasTex.wrapS = canvasTex.wrapT = THREE.RepeatWrapping;
     canvasTex.repeat.set(1, 1);
 
-    // 3. 2K Saddle-Brown Weathered Leather for Harnesses, Bracers, Belt & Quiver
-    const leatherTex = texLoader.load('/juzu/assets/character-textures/character-leather.jpeg');
+    // 3. Saddle-Brown Weathered Leather for Harnesses, Bracers, Belt & Quiver (Optimized WebP)
+    const leatherTex = texLoader.load('/juzu/assets/character-textures/character-leather_1k.webp');
     leatherTex.colorSpace = THREE.SRGBColorSpace;
     leatherTex.anisotropy = 8;
     leatherTex.wrapS = leatherTex.wrapT = THREE.RepeatWrapping;
@@ -289,6 +290,7 @@ export class Naira {
           this.actions.idle.play();
           this.currentAction = this.actions.idle;
         }
+        this.isLoaded = true;
       },
       undefined,
       (err) => {

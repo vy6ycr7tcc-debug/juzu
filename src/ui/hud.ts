@@ -124,8 +124,12 @@ export class HUD {
 
     const startExpedition = () => {
       this.closeTitle();
-      this.audio.resume();
-      this.audio.playQuenaNote(523.25, 1.8);
+      try {
+        this.audio.resume();
+        this.audio.playQuenaNote(523.25, 1.8);
+      } catch (err) {
+        console.warn('Audio start notice:', err);
+      }
       this.callbacks.onBeginExpedition();
     };
 
