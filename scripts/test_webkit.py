@@ -12,7 +12,8 @@ with sync_playwright() as p:
         viewport={"width": 393, "height": 852},
         user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
         is_mobile=True,
-        has_touch=True
+        has_touch=True,
+        bypass_csp=True
     )
     page = ctx.new_page()
 
@@ -62,16 +63,32 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT_DIR / "webkit_gameplay_active.png"), timeout=30000)
     print("Captured webkit_gameplay_active.png")
 
-    print("4. Moving forward via virtual joystick in WebKit for 150 frames (approx 15-20 steps)...")
-    page.evaluate("() => window.__juzuEngine.input.setVirtualMove(0, 1)")
+    print("4. Testing analog walking (45% deflection) in WebKit...")
+    page.evaluate("() => window.__juzuEngine.input.setVirtualMove(0, 0.45)")
     page.evaluate('''() => new Promise(resolve => {
         let f = 0;
         function step() {
             f++;
-            if (f >= 150) {
-                resolve();
-                return;
-            }
+            if (f >= 50) { resolve(); return; }
+            requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+    })''')
+
+    analog_state = page.evaluate("""() => ({
+        speed: window.__juzuEngine?.controller?.speed,
+        pose: window.__juzuEngine?.controller?.pose,
+        anim: window.__juzuEngine?.naira?.currentAction?.getClip()?.name,
+    })""")
+    print("Analog gentle walk state (speed should be modulated ~1.2-1.8 m/s):", analog_state)
+
+    print("5. Moving forward full walk (100% deflection) in WebKit...")
+    page.evaluate("() => window.__juzuEngine.input.setVirtualMove(0, 1.0)")
+    page.evaluate('''() => new Promise(resolve => {
+        let f = 0;
+        function step() {
+            f++;
+            if (f >= 100) { resolve(); return; }
             requestAnimationFrame(step);
         }
         requestAnimationFrame(step);
@@ -85,10 +102,35 @@ with sync_playwright() as p:
         grounded: window.__juzuEngine?.controller?.grounded,
         surface: window.__juzuEngine?.controller?.getSurfaceType()
     })""")
-    print("State during extended movement in WebKit:", move_state)
-
+    print("Full walk state in WebKit:", move_state)
     page.screenshot(path=str(OUT_DIR / "webkit_gameplay_moving.png"), timeout=30000)
     print("Captured webkit_gameplay_moving.png")
+
+    print("6. Simulating right-side touch camera swipe look...")
+    # Swipe right-to-left on right side of screen
+    page.touchscreen.tap(320, 400)
+    page.evaluate("""() => {
+      // Send smooth look swipe
+      window.__juzuEngine.input.lookX += 120;
+    }""")
+    page.evaluate('''() => new Promise(resolve => {
+        let f = 0;
+        function step() {
+            f++;
+            if (f >= 20) { resolve(); return; }
+            requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+    })''')
+
+    cam_state = page.evaluate("""() => ({
+        yaw: window.__juzuEngine?.followCamera?.yaw,
+        targetYaw: window.__juzuEngine?.followCamera?.targetYaw,
+        pitch: window.__juzuEngine?.followCamera?.pitch,
+    })""")
+    print("Camera state after smoothed swipe in WebKit:", cam_state)
+    page.screenshot(path=str(OUT_DIR / "webkit_gameplay_turned.png"), timeout=30000)
+    print("Captured webkit_gameplay_turned.png")
 
     page.evaluate("() => window.__juzuEngine.input.setVirtualMove(0, 0)")
 

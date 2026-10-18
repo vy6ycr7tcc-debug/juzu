@@ -61,6 +61,9 @@ function pwaAssetsPlugin(): Plugin {
 
 export default defineConfig({
   base: '/juzu/',
+  server: {
+    cors: true,
+  },
   build: {
     target: 'esnext',
     outDir: 'dist',

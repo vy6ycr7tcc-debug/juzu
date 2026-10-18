@@ -5,6 +5,8 @@ import { solidity } from '../world/solidity';
 export class FollowCamera {
   yaw = 0;
   pitch = 0.12;
+  targetYaw = 0;
+  targetPitch = 0.12;
   baseDist = 5.2;
   dist = 5.2;
   shoulderOffset = 0.38;
@@ -20,6 +22,8 @@ export class FollowCamera {
   public invertY = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
+    this.targetYaw = this.yaw;
+    this.targetPitch = this.pitch;
     this.currentPos.set(0, 4.2, 11.5);
   }
 
@@ -42,11 +46,15 @@ export class FollowCamera {
     isGrounded: boolean = true,
     isAiming: boolean = false
   ): void {
-    // 1. Process look inputs
+    // 1. Process look inputs with smooth interpolation to eliminate touch/mouse micro-jitter
     const sens = 0.0022 * this.sensitivity;
-    this.yaw -= lookDelta.x * sens;
+    this.targetYaw -= lookDelta.x * sens;
     const dy = (this.invertY ? -lookDelta.y : lookDelta.y) * sens;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + dy, -0.32, 1.15);
+    this.targetPitch = THREE.MathUtils.clamp(this.targetPitch + dy, -0.32, 1.15);
+
+    const lookBlend = Math.min(1, dt * 26);
+    this.yaw = THREE.MathUtils.lerp(this.yaw, this.targetYaw, lookBlend);
+    this.pitch = THREE.MathUtils.lerp(this.pitch, this.targetPitch, lookBlend);
 
     // 2. Landing spring dip
     this.landingDipVel += (-this.landingDip * 42 - this.landingDipVel * 9.5) * dt;
@@ -164,6 +172,8 @@ export class FollowCamera {
   }
 
   public teleport(pos: THREE.Vector3): void {
+    this.targetYaw = this.yaw;
+    this.targetPitch = this.pitch;
     const rightX = Math.cos(this.yaw);
     const rightZ = -Math.sin(this.yaw);
     const activeShoulder =

@@ -47,7 +47,9 @@ export class Input {
   public setVirtualMove(x: number, y: number): void {
     const len = Math.hypot(x, y);
     if (len > 0) {
-      this.virtualMove = { x: x / len, y: y / len };
+      // Preserve analog deflection while clamping maximum magnitude to 1.0
+      const scale = len > 1.0 ? 1.0 / len : 1.0;
+      this.virtualMove = { x: x * scale, y: y * scale };
     } else {
       this.virtualMove = null;
     }
@@ -75,7 +77,7 @@ export class Input {
   }
 
   get boost(): boolean {
-    return this.enabled && (this.keys.has('shift') || this.joyRun > 0.5 || this.virtualBoost);
+    return this.enabled && (this.keys.has('shift') || this.virtualBoost);
   }
 
   get jump(): boolean {
@@ -131,14 +133,6 @@ export class Input {
   private journalLatched = false;
   private grappleLatched = false;
 
-  // Touch joystick
-  private joyId: number | null = null;
-  private joyCenter = { x: 0, y: 0 };
-  private joyR = 56;
-  private joyRun = 0;
-
-  // Touch look
-  private lookId: number | null = null;
   private lookLast = { x: 0, y: 0 };
   private isMouseDown = false;
 
@@ -195,7 +189,6 @@ export class Input {
       this.move.y = this.virtualMove.y;
       return;
     }
-    if (this.joyId !== null) return; // Touch joystick takes precedence
     let x = 0;
     let y = 0;
     if (this.keys.has('w') || this.keys.has('arrowup')) y += 1;
@@ -248,74 +241,6 @@ export class Input {
       },
       { passive: true }
     );
-
-    // Touch events for mobile
-    this.surface.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse') return;
-      const isLeft = e.clientX < window.innerWidth * 0.45;
-      if (isLeft && this.joyId === null) {
-        // Start virtual joystick
-        this.joyId = e.pointerId;
-        this.joyCenter.x = e.clientX;
-        this.joyCenter.y = e.clientY;
-        if (this.joyEl) {
-          this.joyEl.style.display = 'block';
-          this.joyEl.style.left = `${e.clientX - 56}px`;
-          this.joyEl.style.top = `${e.clientY - 56}px`;
-        }
-      } else if (!isLeft && this.lookId === null) {
-        // Start touch look
-        this.lookId = e.pointerId;
-        this.lookLast.x = e.clientX;
-        this.lookLast.y = e.clientY;
-      }
-    });
-
-    this.surface.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'mouse') return;
-      if (e.pointerId === this.joyId) {
-        const dx = e.clientX - this.joyCenter.x;
-        const dy = e.clientY - this.joyCenter.y;
-        const dist = Math.hypot(dx, dy);
-        const norm = dist > 0 ? Math.min(dist, this.joyR) : 0;
-        const angle = Math.atan2(dy, dx);
-
-        const kx = Math.cos(angle) * norm;
-        const ky = Math.sin(angle) * norm;
-
-        if (this.knobEl) {
-          this.knobEl.style.transform = `translate(${kx}px, ${ky}px)`;
-        }
-
-        this.move.x = kx / this.joyR;
-        this.move.y = -ky / this.joyR;
-        this.joyRun = norm / this.joyR;
-      } else if (e.pointerId === this.lookId) {
-        const dx = e.clientX - this.lookLast.x;
-        const dy = e.clientY - this.lookLast.y;
-        this.lookLast.x = e.clientX;
-        this.lookLast.y = e.clientY;
-        this.lookX += dx;
-        this.lookY += dy;
-      }
-    });
-
-    const endTouch = (e: PointerEvent) => {
-      if (e.pointerId === this.joyId) {
-        this.joyId = null;
-        this.move.x = 0;
-        this.move.y = 0;
-        this.joyRun = 0;
-        if (this.knobEl) this.knobEl.style.transform = 'translate(0px, 0px)';
-        if (this.joyEl) this.joyEl.style.display = 'none';
-        this.updateKeyboardMove();
-      } else if (e.pointerId === this.lookId) {
-        this.lookId = null;
-      }
-    };
-
-    this.surface.addEventListener('pointerup', endTouch);
-    this.surface.addEventListener('pointercancel', endTouch);
 
     if (this.actionBtn) {
       this.actionBtn.addEventListener('pointerdown', () => {
