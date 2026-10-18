@@ -84,13 +84,13 @@
       var loadingEl = document.getElementById('juzu-loading-screen');
       if (loadingEl) {
         loadingEl.addEventListener('click', function() {
-          if (window.__juzuReady) window.__juzuDismissLoading();
+          if (window.__juzuSceneReady) window.__juzuDismissLoading();
         });
       }
 
-      // Dismiss loading screen as soon as ready
+      // Dismiss loading screen as soon as 3D scene, character, and foliage are fully ready
       var checkReady = setInterval(function() {
-        if (window.__juzuReady) {
+        if (window.__juzuSceneReady) {
           clearInterval(checkReady);
           var bar = document.getElementById('juzu-loading-bar');
           var status = document.getElementById('juzu-loading-status');

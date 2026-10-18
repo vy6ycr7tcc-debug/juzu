@@ -153,9 +153,16 @@ export class Input {
   }
 
   private bindKeyboard(): void {
+    const normalizeKey = (e: KeyboardEvent): string => {
+      if (e.code && e.code.startsWith('Key')) {
+        return e.code.slice(3).toLowerCase();
+      }
+      return e.key.toLowerCase();
+    };
+
     window.addEventListener('keydown', (e) => {
-      const k = e.key.toLowerCase();
-      if (k === 'tab') e.preventDefault();
+      const k = normalizeKey(e);
+      if (e.key.toLowerCase() === 'tab') e.preventDefault();
       if (!e.repeat) {
         if (k === 'e') this.interactLatched = true;
         if (k === 'q') this.instinctLatched = true;
@@ -167,7 +174,7 @@ export class Input {
     });
 
     window.addEventListener('keyup', (e) => {
-      const k = e.key.toLowerCase();
+      const k = normalizeKey(e);
       this.keys.delete(k);
       this.updateKeyboardMove();
     });

@@ -31,9 +31,11 @@ import { TouchControls } from './ui/touchControls';
 declare global {
   interface Window {
     __juzuReady?: boolean;
+    __juzuSceneReady?: boolean;
     __shotReady?: boolean;
     __juzuEngine?: any;
     __juzuOffline?: any;
+    __juzuDismissLoading?: () => void;
   }
 }
 
@@ -43,7 +45,11 @@ async function bootJuzu() {
   const shotParam = urlParams.get('shot');
   const todParam = (urlParams.get('tod') || 'day') as TimeOfDay;
   const regionParam = urlParams.get('region') || 'cloudForest';
-  const forceWebGL = urlParams.has('webgl');
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const forceWebGL = urlParams.has('webgl') || isIOS || isSafari || !navigator.gpu;
 
   if (todParam) {
     setTimeOfDay(todParam);
@@ -125,6 +131,9 @@ async function bootJuzu() {
   const highSierra = new HighSierraRegion(scene);
   const jungleLowlands = new JungleLowlandsRegion(scene);
   const paititi = new PaititiRegion(scene);
+  if (regionParam === 'highSierra') {
+    highSierra.loadScannedAssets();
+  }
   const grapple = new GrappleManager(scene);
   const routes = new RoutesManager(scene, grapple);
 
@@ -200,6 +209,7 @@ async function bootJuzu() {
     onSelectRegion: (r) => {
       let target = SPAWN.clone();
       if (r === 'highSierra') {
+        highSierra.loadScannedAssets();
         target.set(120, standAt(120, -154), -154);
         controller.heading = Math.PI;
         followCamera.yaw = 0;
@@ -229,8 +239,10 @@ async function bootJuzu() {
         (window as any).__juzuDismissLoading();
       }
       surface.addEventListener('click', () => {
-        if (!document.pointerLockElement && !hud.isJournalOpen) {
-          surface.requestPointerLock?.();
+        if (!MOBILE && !document.pointerLockElement && !hud.isJournalOpen) {
+          try {
+            surface.requestPointerLock?.();
+          } catch {}
         }
       });
     },
@@ -305,11 +317,6 @@ async function bootJuzu() {
   // Handle Deep-Linked Region or Shot Mode
   if (urlParams.has('region') || urlParams.has('play') || shotParam) {
     hud.closeTitle();
-    const loadingEl = document.getElementById('juzu-loading-screen');
-    if (loadingEl) {
-      loadingEl.style.opacity = '0';
-      loadingEl.style.display = 'none';
-    }
   }
   if (shotParam) {
     if (shotParam === 'close') {
@@ -548,6 +555,11 @@ async function bootJuzu() {
     minimap.update(controller.pos, controller.heading);
     expeditionMenu.update(controller.pos, controller.heading);
 
+    // Lazy-load High Sierra heavy scanned assets (trees & rocks) if approaching region
+    if (Math.hypot(controller.pos.x - 120, controller.pos.z - (-165)) < 160) {
+      highSierra.loadScannedAssets();
+    }
+
     const look = input.resetLook();
     followCamera.update(
       controller.pos,
@@ -695,10 +707,11 @@ async function bootJuzu() {
     // Signal ready and dismiss pre-bootstrap loading screen once 3D world is ready
     if (
       frameCount > 6 &&
-      naira.modelRoot &&
-      foliage.isLoaded &&
-      cloudForest.isLoaded
+      naira.isLoaded &&
+      (foliage.isLoaded || frameCount > 40) &&
+      (cloudForest.isLoaded || frameCount > 60)
     ) {
+      window.__juzuSceneReady = true;
       if (typeof (window as any).__juzuDismissLoading === 'function') {
         (window as any).__juzuDismissLoading();
       }

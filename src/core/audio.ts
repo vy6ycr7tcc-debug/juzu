@@ -37,10 +37,14 @@ export class AudioEngine {
   }
 
   public resume(): void {
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    } else {
-      this.initCtx();
+    try {
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      } else {
+        this.initCtx();
+      }
+    } catch (e) {
+      console.warn('Audio resume error:', e);
     }
   }
 

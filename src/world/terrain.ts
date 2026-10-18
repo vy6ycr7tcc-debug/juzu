@@ -401,7 +401,7 @@ export class Terrain {
     const mesh = new THREE.Mesh(geom, this.material);
     mesh.position.set(originX, 0, originZ);
     mesh.receiveShadow = true;
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     return mesh;
   }
 }
