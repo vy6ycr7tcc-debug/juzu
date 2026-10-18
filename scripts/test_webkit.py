@@ -62,13 +62,13 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT_DIR / "webkit_gameplay_active.png"), timeout=30000)
     print("Captured webkit_gameplay_active.png")
 
-    print("4. Moving forward via virtual joystick in WebKit...")
+    print("4. Moving forward via virtual joystick in WebKit for 150 frames (approx 15-20 steps)...")
     page.evaluate("() => window.__juzuEngine.input.setVirtualMove(0, 1)")
     page.evaluate('''() => new Promise(resolve => {
         let f = 0;
         function step() {
             f++;
-            if (f >= 30) {
+            if (f >= 150) {
                 resolve();
                 return;
             }
@@ -81,9 +81,11 @@ with sync_playwright() as p:
         pos: window.__juzuEngine?.controller?.pos,
         speed: window.__juzuEngine?.controller?.speed,
         pose: window.__juzuEngine?.controller?.pose,
-        anim: window.__juzuEngine?.naira?.currentAction?.getClip()?.name
+        anim: window.__juzuEngine?.naira?.currentAction?.getClip()?.name,
+        grounded: window.__juzuEngine?.controller?.grounded,
+        surface: window.__juzuEngine?.controller?.getSurfaceType()
     })""")
-    print("State during movement in WebKit:", move_state)
+    print("State during extended movement in WebKit:", move_state)
 
     page.screenshot(path=str(OUT_DIR / "webkit_gameplay_moving.png"), timeout=30000)
     print("Captured webkit_gameplay_moving.png")

@@ -131,7 +131,7 @@ async function bootJuzu() {
   const highSierra = new HighSierraRegion(scene);
   const jungleLowlands = new JungleLowlandsRegion(scene);
   const paititi = new PaititiRegion(scene);
-  if (regionParam === 'highSierra') {
+  if (!MOBILE && regionParam === 'highSierra') {
     highSierra.loadScannedAssets();
   }
   const grapple = new GrappleManager(scene);
@@ -429,7 +429,8 @@ async function bootJuzu() {
     totalTime += dt;
     frameCount++;
 
-    // Toggle Field Journal [Tab / J]
+    try {
+      // Toggle Field Journal [Tab / J]
     const jKey = input.journal;
     if (jKey && !lastJournalKey && !hud.isTitleOpen) {
       hud.toggleJournal();
@@ -555,8 +556,8 @@ async function bootJuzu() {
     minimap.update(controller.pos, controller.heading);
     expeditionMenu.update(controller.pos, controller.heading);
 
-    // Lazy-load High Sierra heavy scanned assets (trees & rocks) if approaching region
-    if (Math.hypot(controller.pos.x - 120, controller.pos.z - (-165)) < 160) {
+    // Lazy-load High Sierra heavy scanned assets (trees & rocks) if approaching region on desktop
+    if (!MOBILE && Math.hypot(controller.pos.x - 120, controller.pos.z - (-165)) < 160) {
       highSierra.loadScannedAssets();
     }
 
@@ -722,7 +723,10 @@ async function bootJuzu() {
         window.__shotReady = true;
       }
     }
+  } catch (loopErr) {
+    console.error('[Render Loop Notice]:', loopErr);
   }
+}
 
   requestAnimationFrame(animate);
 
