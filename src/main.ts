@@ -112,7 +112,7 @@ async function bootJuzu() {
 
   // 5. Light Rig & Sky
   const lightRig = new LightRig(scene);
-  lightRig.setShadowSize(currentTier.shadow);
+  lightRig.setShadowSize(MOBILE ? Math.min(currentTier.shadow, 1024) : currentTier.shadow);
   const sky = new Sky(scene);
 
   // 6. World Systems: Terrain, Water, Foliage
@@ -384,7 +384,8 @@ async function bootJuzu() {
   const onResize = () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio, currentTier.dpr);
+    const maxDpr = MOBILE ? 1.75 : 2.5;
+    const dpr = Math.min(window.devicePixelRatio, Math.min(currentTier.dpr, maxDpr));
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);

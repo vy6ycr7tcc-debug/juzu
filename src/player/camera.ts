@@ -4,15 +4,15 @@ import { solidity } from '../world/solidity';
 
 export class FollowCamera {
   yaw = 0;
-  pitch = 0.16;
-  baseDist = 7.4;
-  dist = 7.4;
-  shoulderOffset = 0.52;
+  pitch = 0.12;
+  baseDist = 3.8;
+  dist = 3.8;
+  shoulderOffset = 0.38;
 
   private target = new THREE.Vector3();
   private currentPos = new THREE.Vector3();
   private leadOffset = new THREE.Vector3();
-  private effDist = 7.4;
+  private effDist = 3.8;
   private landingDip = 0;
   private landingDipVel = 0;
   private stridePhase = 0;
@@ -20,11 +20,11 @@ export class FollowCamera {
   public invertY = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
-    this.currentPos.set(0, 7.4, 17.4);
+    this.currentPos.set(0, 3.8, 10.0);
   }
 
   public adjustDistance(delta: number): void {
-    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 4.2, 14.0);
+    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 2.2, 8.5);
   }
 
   public triggerLandingDip(impactSpeed: number): void {
@@ -56,26 +56,22 @@ export class FollowCamera {
     const aspect = Math.max(0.2, this.camera.aspect || window.innerWidth / window.innerHeight);
     const isPortrait = aspect < 1.0;
 
-    // In portrait, pull camera back slightly so character figure and grounding stay in frame
-    const portraitDistMultiplier = isPortrait ? 1.14 : 1.0;
+    // In portrait, keep character prominently framed without excessive zoom-out
+    const portraitDistMultiplier = isPortrait ? 0.92 : 1.0;
     const targetDist = isAiming
-      ? Math.max(2.6, this.baseDist - 3.4)
+      ? Math.max(2.0, this.baseDist - 1.4)
       : isSprinting
-        ? (this.baseDist + 1.25) * portraitDistMultiplier
+        ? (this.baseDist + 0.75) * portraitDistMultiplier
         : isCrouching
-          ? Math.max(4.2, this.baseDist - 0.95) * portraitDistMultiplier
+          ? Math.max(2.4, this.baseDist - 0.55) * portraitDistMultiplier
           : this.baseDist * portraitDistMultiplier;
     this.dist = THREE.MathUtils.lerp(this.dist, targetDist, Math.min(1, dt * 6));
 
-    // Dynamic FOV: in portrait, scale vertical FOV so horizontal field of view stays open and cinematic (~72-76 deg)
-    let baseFov = isAiming ? 38 : isInstinct ? 46 : isSprinting ? 58 : isCrouching ? 48 : 52;
+    // Dynamic FOV: keep natural perspective without wide-angle fisheye distortion
+    let baseFov = isAiming ? 38 : isInstinct ? 46 : isSprinting ? 56 : isCrouching ? 48 : 50;
     if (isPortrait) {
-      // Horizontal FOV = 2 * atan(tan(verticalFov/2) * aspect)
-      // To keep horizontal FOV around 72 deg: verticalFov = 2 * atan(tan(36 deg) / aspect)
-      const desiredHalfHRad = Math.tan(THREE.MathUtils.degToRad(36.0));
-      const compensatedVertFov = 2.0 * Math.atan(desiredHalfHRad / aspect) * (180.0 / Math.PI);
-      baseFov = isAiming ? compensatedVertFov * 0.72 : compensatedVertFov;
-      baseFov = THREE.MathUtils.clamp(baseFov, 55, 82);
+      // In vertical portrait, maintain balanced 52-60 degree vertical FOV for heroic character presence
+      baseFov = isAiming ? 40 : 56;
     }
 
     if (Math.abs(this.camera.fov - baseFov) > 0.05) {
@@ -115,7 +111,7 @@ export class FollowCamera {
             ? this.shoulderOffset * 0.35
             : this.shoulderOffset;
 
-    const eyeHeight = (isCrouching ? 1.18 : 1.54) + this.landingDip + cadenceBobY;
+    const eyeHeight = (isCrouching ? 1.08 : (isPortrait ? 1.34 : 1.48)) + this.landingDip + cadenceBobY;
 
     const targetGoal = new THREE.Vector3(
       playerPos.x + rightX * activeShoulder + this.leadOffset.x,

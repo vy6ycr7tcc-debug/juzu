@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { withFog } from '../gpu/tsl';
 import { getRouteInfluence } from './routeData';
+import { MOBILE } from '../core/quality';
 
 export const WATER_Y = 0;
 export const WORLD_R = 3000;
@@ -161,9 +162,10 @@ export class Terrain {
   private chunks = new Map<string, THREE.Mesh>();
   private material: THREE.MeshStandardMaterial;
   private readonly CHUNK_SIZE = 64;
-  private readonly CHUNK_RES = 48;
+  private readonly CHUNK_RES = MOBILE ? 32 : 44;
   private lastChunkX = NaN;
   private lastChunkZ = NaN;
+  private buildQueue: Array<{ kx: number; kz: number; key: string }> = [];
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Andean_Terrain';
@@ -206,34 +208,61 @@ export class Terrain {
     const cx = Math.floor(playerPos.x / this.CHUNK_SIZE);
     const cz = Math.floor(playerPos.z / this.CHUNK_SIZE);
 
-    if (cx === this.lastChunkX && cz === this.lastChunkZ) return;
-    this.lastChunkX = cx;
-    this.lastChunkZ = cz;
+    if (cx !== this.lastChunkX || cz !== this.lastChunkZ) {
+      this.lastChunkX = cx;
+      this.lastChunkZ = cz;
 
-    const viewRadius = 5;
-    const activeKeys = new Set<string>();
+      const viewRadius = MOBILE ? 3 : 4;
+      const activeKeys = new Set<string>();
+      const missing: Array<{ kx: number; kz: number; key: string; distSq: number }> = [];
 
-    for (let dx = -viewRadius; dx <= viewRadius; dx++) {
-      for (let dz = -viewRadius; dz <= viewRadius; dz++) {
-        const kx = cx + dx;
-        const kz = cz + dz;
-        const key = `${kx},${kz}`;
-        activeKeys.add(key);
+      for (let dx = -viewRadius; dx <= viewRadius; dx++) {
+        for (let dz = -viewRadius; dz <= viewRadius; dz++) {
+          const kx = cx + dx;
+          const kz = cz + dz;
+          const key = `${kx},${kz}`;
+          activeKeys.add(key);
 
-        if (!this.chunks.has(key)) {
-          const chunkMesh = this.buildChunk(kx, kz);
-          this.chunks.set(key, chunkMesh);
-          this.group.add(chunkMesh);
+          if (!this.chunks.has(key)) {
+            const distSq = dx * dx + dz * dz;
+            missing.push({ kx, kz, key, distSq });
+          }
+        }
+      }
+
+      // Sort missing chunks by proximity (closest to player first)
+      missing.sort((a, b) => a.distSq - b.distSq);
+
+      // On initial spawn, immediately build the inner 3x3 (distSq <= 2) so ground is instantly ready
+      if (this.chunks.size === 0) {
+        const immediate = missing.filter((m) => m.distSq <= 2);
+        for (const m of immediate) {
+          const mesh = this.buildChunk(m.kx, m.kz);
+          this.chunks.set(m.key, mesh);
+          this.group.add(mesh);
+        }
+        this.buildQueue = missing.filter((m) => m.distSq > 2).map((m) => ({ kx: m.kx, kz: m.kz, key: m.key }));
+      } else {
+        this.buildQueue = missing.map((m) => ({ kx: m.kx, kz: m.kz, key: m.key }));
+      }
+
+      // Unload distant chunks
+      for (const [key, mesh] of this.chunks.entries()) {
+        if (!activeKeys.has(key)) {
+          this.group.remove(mesh);
+          mesh.geometry.dispose();
+          this.chunks.delete(key);
         }
       }
     }
 
-    // Unload distant chunks
-    for (const [key, mesh] of this.chunks.entries()) {
-      if (!activeKeys.has(key)) {
-        this.group.remove(mesh);
-        mesh.geometry.dispose();
-        this.chunks.delete(key);
+    // Process queued chunk generation: at most 1 chunk per frame to guarantee 60fps frame pacing
+    if (this.buildQueue.length > 0) {
+      const next = this.buildQueue.shift();
+      if (next && !this.chunks.has(next.key)) {
+        const chunkMesh = this.buildChunk(next.kx, next.kz);
+        this.chunks.set(next.key, chunkMesh);
+        this.group.add(chunkMesh);
       }
     }
   }

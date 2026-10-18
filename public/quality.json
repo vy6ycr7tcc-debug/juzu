@@ -8,7 +8,7 @@
   "startSettle": 8,
   "scaleMin": 0.5,
   "scaleStep": 0.1,
-  "dprFloorPhone": 2,
+  "dprFloorPhone": 1.5,
   "dprFloorDesktop": 1,
   "lowPower": {
     "minFps": 27,
@@ -32,12 +32,12 @@
       "shadow": 2048,
       "bloom": true,
       "particles": 1800,
-      "particlesPhone": 1200,
+      "particlesPhone": 800,
       "ao": true,
       "aoPhone": false,
       "rays": true,
       "reflection": true,
-      "dprPhone": 3
+      "dprPhone": 1.75
     },
     {
       "name": "high",
@@ -45,12 +45,12 @@
       "shadow": 2048,
       "bloom": true,
       "particles": 1100,
-      "particlesPhone": 1100,
+      "particlesPhone": 700,
       "ao": false,
       "aoPhone": false,
       "rays": true,
       "reflection": true,
-      "dprPhone": 2
+      "dprPhone": 1.75
     },
     {
       "name": "medium",
@@ -58,12 +58,12 @@
       "shadow": 1024,
       "bloom": true,
       "particles": 900,
-      "particlesPhone": 900,
+      "particlesPhone": 600,
       "ao": false,
       "aoPhone": false,
       "rays": false,
       "reflection": true,
-      "dprPhone": 2
+      "dprPhone": 1.5
     },
     {
       "name": "light",
@@ -71,12 +71,12 @@
       "shadow": 1024,
       "bloom": true,
       "particles": 700,
-      "particlesPhone": 700,
+      "particlesPhone": 500,
       "ao": false,
       "aoPhone": false,
       "rays": false,
       "reflection": false,
-      "dprPhone": 2
+      "dprPhone": 1.5
     },
     {
       "name": "minimum",
@@ -84,12 +84,12 @@
       "shadow": 512,
       "bloom": false,
       "particles": 400,
-      "particlesPhone": 400,
+      "particlesPhone": 350,
       "ao": false,
       "aoPhone": false,
       "rays": false,
       "reflection": false,
-      "dprPhone": 2
+      "dprPhone": 1.5
     }
   ]
 }
