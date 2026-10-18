@@ -110,30 +110,37 @@ export class AudioEngine {
 
   // Footstep foley (grass / stone / wood)
   public playFootstep(material: 'grass' | 'stone' | 'wood' | 'water' = 'grass'): void {
-    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
-    const bufferSize = this.ctx.sampleRate * 0.05;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
+    try {
+      if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+      if (this.ctx.state !== 'running') return;
+      const bufferSize = Math.max(1, Math.floor(this.ctx.sampleRate * 0.04));
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const whiteNoise = this.ctx.createBufferSource();
+      whiteNoise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = material === 'stone' ? 'highpass' : 'lowpass';
+      filter.frequency.value = material === 'stone' ? 800 : material === 'water' ? 1200 : 400;
+
+      const gain = this.ctx.createGain();
+      const now = this.ctx.currentTime;
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+      whiteNoise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+
+      whiteNoise.start(now);
+      whiteNoise.stop(now + 0.05);
+    } catch {
+      // Defensive: ignore audio glitches on interrupted mobile contexts
     }
-
-    const whiteNoise = this.ctx.createBufferSource();
-    whiteNoise.buffer = buffer;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = material === 'stone' ? 'highpass' : 'lowpass';
-    filter.frequency.value = material === 'stone' ? 800 : material === 'water' ? 1200 : 400;
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
-
-    whiteNoise.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.sfxGain);
-
-    whiteNoise.start();
   }
 
   // Grapple throw whoosh sound effect

@@ -5,14 +5,14 @@ import { solidity } from '../world/solidity';
 export class FollowCamera {
   yaw = 0;
   pitch = 0.12;
-  baseDist = 3.8;
-  dist = 3.8;
+  baseDist = 5.2;
+  dist = 5.2;
   shoulderOffset = 0.38;
 
   private target = new THREE.Vector3();
   private currentPos = new THREE.Vector3();
   private leadOffset = new THREE.Vector3();
-  private effDist = 3.8;
+  private effDist = 5.2;
   private landingDip = 0;
   private landingDipVel = 0;
   private stridePhase = 0;
@@ -20,7 +20,7 @@ export class FollowCamera {
   public invertY = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
-    this.currentPos.set(0, 3.8, 10.0);
+    this.currentPos.set(0, 4.2, 11.5);
   }
 
   public adjustDistance(delta: number): void {
@@ -56,8 +56,8 @@ export class FollowCamera {
     const aspect = Math.max(0.2, this.camera.aspect || window.innerWidth / window.innerHeight);
     const isPortrait = aspect < 1.0;
 
-    // In portrait, keep character prominently framed without excessive zoom-out
-    const portraitDistMultiplier = isPortrait ? 0.92 : 1.0;
+    // In portrait, maintain comfortable distance so the avatar does not obstruct forward view
+    const portraitDistMultiplier = isPortrait ? 1.05 : 1.0;
     const targetDist = isAiming
       ? Math.max(2.0, this.baseDist - 1.4)
       : isSprinting

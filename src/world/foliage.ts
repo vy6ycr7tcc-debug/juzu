@@ -1,7 +1,5 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { standAt, vnoise } from './terrain';
 
 function halton(index: number, base: number): number {
@@ -190,278 +188,6 @@ export class Foliage {
 
     this.populateFoliage();
 
-    // Ingest photorealistic scanned assets (Poly Haven CC0 photogrammetry)
-    let pendingAssets = 6;
-    const onAssetLoaded = () => {
-      pendingAssets--;
-      if (pendingAssets <= 0) {
-        this.isLoaded = true;
-      }
-    };
-
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
-
-    // 1. Photorealistic Scanned Granite Boulder (boulder_01)
-    gltfLoader.load(
-      '/juzu/models/scans/boulder_01.glb',
-      (gltf) => {
-        let scannedGeom: THREE.BufferGeometry | null = null;
-        let scannedMat: THREE.Material | null = null;
-
-        gltf.scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
-            const mesh = child as THREE.Mesh;
-            scannedGeom = mesh.geometry.clone();
-            scannedMat = mesh.material as THREE.Material;
-            if (scannedMat instanceof THREE.MeshStandardMaterial) {
-              scannedMat.roughness = 0.88;
-              scannedMat.metalness = 0.02;
-              if (scannedMat.map) {
-                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
-                scannedMat.map.anisotropy = 8;
-              }
-              if (scannedMat.normalMap) {
-                scannedMat.normalMap.anisotropy = 8;
-                scannedMat.normalScale = new THREE.Vector2(1.25, 1.25);
-              }
-            }
-          }
-        });
-
-        if (scannedGeom && scannedMat) {
-          this.rockInstances.geometry.dispose();
-          this.rockInstances.geometry = scannedGeom;
-          this.rockInstances.material = scannedMat;
-          this.rockInstances.instanceMatrix.needsUpdate = true;
-        }
-        onAssetLoaded();
-      },
-      undefined,
-      (err) => {
-        console.warn('[Foliage] Could not load scanned boulder, using fallback:', err);
-        onAssetLoaded();
-      }
-    );
-
-    // 2. Photorealistic Scanned Cloud-Forest Broad-Leaf Foliage (calathea_orbifolia_01)
-    gltfLoader.load(
-      '/juzu/models/scans/calathea_orbifolia_01.glb',
-      (gltf) => {
-        let scannedGeom: THREE.BufferGeometry | null = null;
-        let scannedMat: THREE.Material | null = null;
-
-        gltf.scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
-            const mesh = child as THREE.Mesh;
-            scannedGeom = mesh.geometry.clone();
-            scannedMat = mesh.material as THREE.Material;
-            if (scannedMat instanceof THREE.MeshStandardMaterial) {
-              scannedMat.roughness = 0.68;
-              scannedMat.metalness = 0.02;
-              scannedMat.alphaTest = 0.35;
-              scannedMat.side = THREE.DoubleSide;
-              if (scannedMat.map) {
-                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
-                scannedMat.map.anisotropy = 8;
-              }
-              if (scannedMat.normalMap) {
-                scannedMat.normalMap.anisotropy = 8;
-                scannedMat.normalScale = new THREE.Vector2(1.15, 1.15);
-              }
-            }
-          }
-        });
-
-        if (scannedGeom && scannedMat) {
-          this.grassInstances.geometry.dispose();
-          this.grassInstances.geometry = scannedGeom;
-          this.grassInstances.material = scannedMat;
-          this.grassInstances.instanceMatrix.needsUpdate = true;
-        }
-        onAssetLoaded();
-      },
-      undefined,
-      (err) => {
-        console.warn('[Foliage] Could not load scanned calathea foliage, using fallback:', err);
-        onAssetLoaded();
-      }
-    );
-
-    // 3. Photorealistic Scanned Exposed Tree Roots (root_cluster_01)
-    gltfLoader.load(
-      '/juzu/models/scans/root_cluster_01.glb',
-      (gltf) => {
-        let scannedGeom: THREE.BufferGeometry | null = null;
-        let scannedMat: THREE.Material | null = null;
-
-        gltf.scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
-            const mesh = child as THREE.Mesh;
-            scannedGeom = mesh.geometry.clone();
-            scannedMat = mesh.material as THREE.Material;
-            if (scannedMat instanceof THREE.MeshStandardMaterial) {
-              scannedMat.roughness = 0.90;
-              scannedMat.metalness = 0.02;
-              if (scannedMat.map) {
-                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
-                scannedMat.map.anisotropy = 8;
-              }
-              if (scannedMat.normalMap) {
-                scannedMat.normalMap.anisotropy = 8;
-                scannedMat.normalScale = new THREE.Vector2(1.25, 1.25);
-              }
-            }
-          }
-        });
-
-        if (scannedGeom && scannedMat) {
-          this.rootInstances.geometry.dispose();
-          this.rootInstances.geometry = scannedGeom;
-          this.rootInstances.material = scannedMat;
-          this.rootInstances.instanceMatrix.needsUpdate = true;
-        }
-        onAssetLoaded();
-      },
-      undefined,
-      (err) => {
-        console.warn('[Foliage] Could not load scanned root cluster, using fallback:', err);
-        onAssetLoaded();
-      }
-    );
-
-    // 4. Photorealistic Scanned Mountain Flowering Ground Cover (celandine_01)
-    gltfLoader.load(
-      '/juzu/models/scans/celandine_01.glb',
-      (gltf) => {
-        let scannedGeom: THREE.BufferGeometry | null = null;
-        let scannedMat: THREE.Material | null = null;
-
-        gltf.scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
-            const mesh = child as THREE.Mesh;
-            scannedGeom = mesh.geometry.clone();
-            scannedMat = mesh.material as THREE.Material;
-            if (scannedMat instanceof THREE.MeshStandardMaterial) {
-              scannedMat.roughness = 0.72;
-              scannedMat.metalness = 0.02;
-              scannedMat.alphaTest = 0.30;
-              scannedMat.side = THREE.DoubleSide;
-              if (scannedMat.map) {
-                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
-                scannedMat.map.anisotropy = 8;
-              }
-              if (scannedMat.normalMap) {
-                scannedMat.normalMap.anisotropy = 8;
-                scannedMat.normalScale = new THREE.Vector2(1.15, 1.15);
-              }
-            }
-          }
-        });
-
-        if (scannedGeom && scannedMat) {
-          this.flowerInstances.geometry.dispose();
-          this.flowerInstances.geometry = scannedGeom;
-          this.flowerInstances.material = scannedMat;
-          this.flowerInstances.instanceMatrix.needsUpdate = true;
-        }
-        onAssetLoaded();
-      },
-      undefined,
-      (err) => {
-        console.warn('[Foliage] Could not load scanned celandine, using fallback:', err);
-        onAssetLoaded();
-      }
-    );
-
-    // 5. Photorealistic Scanned Mountain Shrub (shrub_01)
-    gltfLoader.load(
-      '/juzu/models/scans/shrub_01.glb',
-      (gltf) => {
-        let scannedGeom: THREE.BufferGeometry | null = null;
-        let scannedMat: THREE.Material | null = null;
-
-        gltf.scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
-            const mesh = child as THREE.Mesh;
-            scannedGeom = mesh.geometry.clone();
-            scannedMat = mesh.material as THREE.Material;
-            if (scannedMat instanceof THREE.MeshStandardMaterial) {
-              scannedMat.roughness = 0.78;
-              scannedMat.metalness = 0.02;
-              scannedMat.alphaTest = 0.35;
-              scannedMat.side = THREE.DoubleSide;
-              if (scannedMat.map) {
-                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
-                scannedMat.map.anisotropy = 8;
-              }
-              if (scannedMat.normalMap) {
-                scannedMat.normalMap.anisotropy = 8;
-                scannedMat.normalScale = new THREE.Vector2(1.20, 1.20);
-              }
-            }
-          }
-        });
-
-        if (scannedGeom && scannedMat) {
-          this.shrubInstances.geometry.dispose();
-          this.shrubInstances.geometry = scannedGeom;
-          this.shrubInstances.material = scannedMat;
-          this.shrubInstances.instanceMatrix.needsUpdate = true;
-        }
-        onAssetLoaded();
-      },
-      undefined,
-      (err) => {
-        console.warn('[Foliage] Could not load scanned shrub, using fallback:', err);
-        onAssetLoaded();
-      }
-    );
-
-    // 6. Photorealistic Scanned Tropical Understory Anthurium (anthurium_botany_01)
-    gltfLoader.load(
-      '/juzu/models/scans/anthurium_botany_01.glb',
-      (gltf) => {
-        let scannedGeom: THREE.BufferGeometry | null = null;
-        let scannedMat: THREE.Material | null = null;
-
-        gltf.scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && !scannedGeom) {
-            const mesh = child as THREE.Mesh;
-            scannedGeom = mesh.geometry.clone();
-            scannedMat = mesh.material as THREE.Material;
-            if (scannedMat instanceof THREE.MeshStandardMaterial) {
-              scannedMat.roughness = 0.65;
-              scannedMat.metalness = 0.02;
-              scannedMat.alphaTest = 0.32;
-              scannedMat.side = THREE.DoubleSide;
-              if (scannedMat.map) {
-                scannedMat.map.colorSpace = THREE.SRGBColorSpace;
-                scannedMat.map.anisotropy = 8;
-              }
-              if (scannedMat.normalMap) {
-                scannedMat.normalMap.anisotropy = 8;
-                scannedMat.normalScale = new THREE.Vector2(1.20, 1.20);
-              }
-            }
-          }
-        });
-
-        if (scannedGeom && scannedMat) {
-          this.anthuriumInstances.geometry.dispose();
-          this.anthuriumInstances.geometry = scannedGeom;
-          this.anthuriumInstances.material = scannedMat;
-          this.anthuriumInstances.instanceMatrix.needsUpdate = true;
-        }
-        onAssetLoaded();
-      },
-      undefined,
-      (err) => {
-        console.warn('[Foliage] Could not load scanned anthurium, using fallback:', err);
-        onAssetLoaded();
-      }
-    );
-
     this.group.add(this.trunkInstances);
     this.group.add(this.canopyInstances);
     this.group.add(this.grassInstances);
@@ -470,6 +196,8 @@ export class Foliage {
     this.group.add(this.flowerInstances);
     this.group.add(this.shrubInstances);
     this.group.add(this.anthuriumInstances);
+
+    this.isLoaded = true;
   }
 
   private buildGnarledTrunkGeometry(): THREE.BufferGeometry {
@@ -654,10 +382,10 @@ export class Foliage {
   }
 
   private isInClearZone(x: number, z: number): boolean {
-    // Narrow central walkway spine on Bridge & Gateways (x in -4.2..4.2, z in -48..14)
-    if (Math.abs(x) < 4.2 && z > -48 && z < 14) return true;
-    // Immediate South Spawn & Campfire circle
-    if (Math.hypot(x - 1.2, z - 10.5) < 5.8) return true;
+    // Central walkway spine, bridge corridor & camera frustum back-up zone
+    if (Math.abs(x) < 4.2 && z > -48 && z < 22) return true;
+    // Immediate South Spawn & Campfire clearing (covers camera pull-back)
+    if (Math.hypot(x - 0.5, z - 11.5) < 8.5) return true;
     // Immediate Inti Sun-Mirror plinth
     if (Math.hypot(x - (-4.2), z - 3.8) < 3.2) return true;
     // High Sierra central aisle between spawn and Intihuatana/Chakana Gate
@@ -760,8 +488,9 @@ export class Foliage {
       const x = hub.cx + (u * 2 - 1) * (hub.span * 0.88);
       const z = hub.cz + (v * 2 - 1) * (hub.span * 0.88);
 
-      // Keep the immediate 2.2m center of footpaths clear while lining the trail edges & ruins with ferns!
-      if (Math.abs(x) < 2.2 && z > -45 && z < 14) continue;
+      // Keep the trail corridor, camera frustum and spawn clear while lining trail edges & ruins with ferns!
+      if (Math.abs(x) < 3.8 && z > -48 && z < 22) continue;
+      if (Math.hypot(x - 0.5, z - 11.5) < 8.5) continue;
       if (Math.hypot(x - 3.2, z - 8.8) < 2.4) continue;
       if (Math.abs(z + 17) < 13.5 && Math.abs(x) < 55) continue;
       if (Math.hypot(x - 200, z - 180) < 22.5) continue;
@@ -840,8 +569,9 @@ export class Foliage {
       const x = hub.cx + (u * 2 - 1) * (hub.span * 0.92);
       const z = hub.cz + (v * 2 - 1) * (hub.span * 0.92);
 
-      // Keep footpath center clear while populating sides and borders
-      if (Math.abs(x) < 2.0 && z > -45 && z < 14) continue;
+      // Keep footpath center, camera frustum and spawn clear while populating sides and borders
+      if (Math.abs(x) < 3.8 && z > -48 && z < 22) continue;
+      if (Math.hypot(x - 0.5, z - 11.5) < 8.5) continue;
       if (Math.hypot(x - 1.2, z - 10.5) < 3.2) continue; // campfire clearing
       if (Math.abs(z + 17) < 13.0 && Math.abs(x) < 55) continue;
       if (Math.hypot(x - 200, z - 180) < 22.0) continue;
@@ -928,8 +658,9 @@ export class Foliage {
         z = hub.cz + (v * 2 - 1) * (hub.span * 0.85);
       }
 
-      // Avoid blocking footpath centers, campfires, or bridge spans
-      if (Math.abs(x) < 2.0 && z > -45 && z < 14) continue;
+      // Avoid blocking footpath centers, campfires, bridge spans, or camera frustum
+      if (Math.abs(x) < 3.8 && z > -48 && z < 22) continue;
+      if (Math.hypot(x - 0.5, z - 11.5) < 8.5) continue;
       if (Math.hypot(x - 1.2, z - 10.5) < 3.0) continue;
       if (Math.hypot(x - 0, z - (-46)) < 16.0) continue; // North Sanctuary inner courtyard
       if (Math.abs(z + 17) < 3.5 && Math.abs(x) < 45) continue; // In water deep channel

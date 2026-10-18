@@ -4,6 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { standAt } from '../terrain';
 import { solid, passable } from '../solidity';
 import { createIncaBlock, buildTrapezoidalGateway } from '../masonry';
+import { MOBILE } from '../../core/quality';
 
 export class CloudForestRegion {
   public group = new THREE.Group();
@@ -907,16 +908,19 @@ export class CloudForestRegion {
     const wz = -29.5;
     fallsGroup.position.set(wx, -2.2, wz);
 
-    let pendingScans = 5;
-    const checkScansLoaded = () => {
-      pendingScans--;
-      if (pendingScans <= 0) {
-        this.isLoaded = true;
-      }
-    };
+    if (MOBILE) {
+      this.isLoaded = true;
+    } else {
+      let pendingScans = 5;
+      const checkScansLoaded = () => {
+        pendingScans--;
+        if (pendingScans <= 0) {
+          this.isLoaded = true;
+        }
+      };
 
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+      const gltfLoader = new GLTFLoader();
+      gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 
     // 1. Photorealistic Scanned Escarpment Cliff (namaqualand_cliff_01)
     gltfLoader.load(
@@ -1295,6 +1299,7 @@ export class CloudForestRegion {
         checkScansLoaded();
       }
     );
+    }
 
     // 6. Physical Cascading Waterfall Chute & Whitewater Foam
     const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
