@@ -1,6 +1,7 @@
 import type { AudioEngine } from '../core/audio';
 import type { FollowCamera } from '../player/camera';
 import { offlineManager, type OfflineStatus } from '../pwa/offline';
+import { MOBILE } from '../core/quality';
 
 export interface HUDCallbacks {
   onSelectRegion: (region: 'cloudForest' | 'highSierra' | 'jungleLowlands' | 'paititi') => void;
@@ -72,53 +73,87 @@ export class HUD {
       'inset:0',
       'display:flex',
       'flex-direction:column',
+      'justify-content:space-between',
       'align-items:center',
-      'justify-content:center',
-      'background:radial-gradient(ellipse at center, rgba(14,18,16,0.48) 0%, rgba(6,9,8,0.92) 100%)',
+      'padding:20px 16px 28px 16px',
+      'background:linear-gradient(180deg, rgba(8,12,10,0.65) 0%, rgba(8,12,10,0.0) 22%, rgba(8,12,10,0.0) 74%, rgba(8,12,10,0.72) 100%)',
       'z-index:45',
       'font-family:Georgia, serif',
       'color:#f2ece1',
-      'transition:opacity 0.85s ease',
+      'transition:opacity 0.6s ease',
+      'pointer-events:none',
     ].join(';');
 
+    const controlsHint = MOBILE
+      ? ''
+      : '<div style="font-size:11px;letter-spacing:0.05em;color:#9b9487;line-height:1.6;margin-top:8px;">WASD Move · Space Jump · F Grapple · Shift Sprint · C Crouch · Tab Journal</div>';
+
     el.innerHTML = `
-      <div style="text-align:center;max-width:560px;padding:32px 24px;border:1px solid rgba(212,184,136,0.3);background:rgba(12,16,14,0.78);border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,0.85);">
-        <div id="juzu-offline-indicator" style="display:none;position:absolute;top:16px;right:20px;padding:6px 12px;background:rgba(18,24,20,0.92);border:1px solid #c9a468;border-radius:3px;font-size:11px;letter-spacing:0.12em;color:#e6c896;text-transform:uppercase;box-shadow:0 4px 14px rgba(0,0,0,0.7);">📡 Offline Mode · Ready</div>
-        <div style="font-size:11px;letter-spacing:0.32em;color:#d4b888;text-transform:uppercase;margin-bottom:10px;">Archaeological Expedition · Inca Andes</div>
-        <h1 style="font-size:46px;letter-spacing:0.18em;margin:0 0 6px 0;color:#fdfaf2;text-shadow:0 3px 14px rgba(0,0,0,0.9);font-weight:400;">J U Z U</h1>
-        <div style="font-size:15px;letter-spacing:0.1em;color:#e6c896;margin-bottom:26px;font-style:italic;">The Search for Paititi</div>
-        
-        <div style="display:flex;flex-direction:column;gap:10px;width:240px;margin:0 auto 24px auto;">
-          <button id="juzu-btn-begin" style="padding:11px 16px;background:#384836;color:#fdfaf2;border:1px solid #c9a468;cursor:pointer;font-family:Georgia,serif;font-size:14px;letter-spacing:0.08em;transition:background 0.2s ease;">Begin Expedition</button>
-          <button id="juzu-btn-toggle-chapters" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Select Chapter</button>
-          <button id="juzu-btn-title-offline" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;transition:background 0.2s ease;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
-            <span>📥</span><span id="juzu-title-offline-text">Download to Play Offline</span>
+      <!-- Top Title Bar (Non-blocking) -->
+      <div style="text-align:center;pointer-events:auto;background:rgba(12,16,14,0.72);padding:12px 24px;border-radius:6px;border:1px solid rgba(212,184,136,0.32);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 4px 22px rgba(0,0,0,0.55);max-width:440px;width:90%;">
+        <div id="juzu-offline-indicator" style="display:none;position:absolute;top:12px;right:16px;padding:4px 8px;background:rgba(18,24,20,0.92);border:1px solid #c9a468;border-radius:3px;font-size:10px;letter-spacing:0.12em;color:#e6c896;text-transform:uppercase;">📡 Offline</div>
+        <div style="font-size:10px;letter-spacing:0.32em;color:#d4b888;text-transform:uppercase;margin-bottom:3px;">Archaeological Expedition · Inca Andes</div>
+        <h1 style="font-size:32px;letter-spacing:0.2em;margin:0 0 2px 0;color:#fdfaf2;text-shadow:0 2px 12px rgba(0,0,0,0.9);font-weight:400;">J U Z U</h1>
+        <div style="font-size:13px;letter-spacing:0.1em;color:#e6c896;font-style:italic;">The Search for Paititi</div>
+      </div>
+
+      <!-- Bottom Interactive Action Bar -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:auto;max-width:440px;width:90%;">
+        <button id="juzu-btn-begin" style="width:100%;max-width:280px;padding:12px 24px;background:radial-gradient(circle, #384836 0%, #1e281e 100%);color:#fdfaf2;border:2px solid #c9a468;border-radius:24px;cursor:pointer;font-family:Georgia,serif;font-size:14px;letter-spacing:0.1em;box-shadow:0 6px 20px rgba(0,0,0,0.65);transition:transform 0.15s ease;">
+          ✦ Begin Expedition ✦
+        </button>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+          <button id="juzu-btn-toggle-chapters" style="padding:6px 14px;background:rgba(22,28,24,0.85);color:#dcd4c6;border:1px solid #6b5c46;border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:11px;letter-spacing:0.06em;">Select Chapter</button>
+          <button id="juzu-btn-title-offline" style="padding:6px 14px;background:rgba(22,28,24,0.85);color:#dcd4c6;border:1px solid #6b5c46;border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:11px;letter-spacing:0.06em;display:inline-flex;align-items:center;gap:4px;">
+            <span>📥</span><span id="juzu-title-offline-text">Offline Mode</span>
           </button>
-          <button id="juzu-btn-title-settings" style="padding:9px 16px;background:rgba(25,32,28,0.85);color:#dcd4c6;border:1px solid #6b5c46;cursor:pointer;font-family:Georgia,serif;font-size:12px;letter-spacing:0.06em;">Expedition Settings & Audio</button>
+          <button id="juzu-btn-title-settings" style="padding:6px 14px;background:rgba(22,28,24,0.85);color:#dcd4c6;border:1px solid #6b5c46;border-radius:14px;cursor:pointer;font-family:Georgia,serif;font-size:11px;letter-spacing:0.06em;">Settings</button>
         </div>
 
-        <div id="juzu-chapter-list" style="display:none;flex-direction:column;gap:6px;margin-bottom:20px;font-size:12px;">
-          <button class="juzu-chap-pick" data-region="cloudForest" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter I: Cloud Forest Valleys</button>
-          <button class="juzu-chap-pick" data-region="highSierra" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter IV: High Sierra (Intihuatana)</button>
-          <button class="juzu-chap-pick" data-region="jungleLowlands" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter VII: Antisuyu Rainforest Cenote</button>
-          <button class="juzu-chap-pick" data-region="paititi" style="padding:6px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;cursor:pointer;">Chapter X: Paititi — Plaza of the Sun</button>
+        <div id="juzu-chapter-list" style="display:none;flex-direction:column;gap:6px;width:100%;font-size:11px;">
+          <button class="juzu-chap-pick" data-region="cloudForest" style="padding:7px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;border-radius:3px;cursor:pointer;">Chapter I: Cloud Forest Valleys</button>
+          <button class="juzu-chap-pick" data-region="highSierra" style="padding:7px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;border-radius:3px;cursor:pointer;">Chapter IV: High Sierra (Intihuatana)</button>
+          <button class="juzu-chap-pick" data-region="jungleLowlands" style="padding:7px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;border-radius:3px;cursor:pointer;">Chapter VII: Antisuyu Rainforest Cenote</button>
+          <button class="juzu-chap-pick" data-region="paititi" style="padding:7px 10px;background:#1e2722;color:#f2ece1;border:1px solid #584c3c;border-radius:3px;cursor:pointer;">Chapter X: Paititi — Plaza of the Sun</button>
         </div>
 
-        <div style="font-size:11px;letter-spacing:0.05em;color:#9b9487;line-height:1.6;border-top:1px solid rgba(212,184,136,0.18);padding-top:16px;">
-          WASD Move · Space Jump/Mantle · F Grapple · Shift Sprint · C Crouch · Q Survival Instinct · Tab Journal · E Interact
-        </div>
+        ${controlsHint}
       </div>
     `;
 
-    el.querySelector('#juzu-btn-begin')?.addEventListener('click', () => {
+    const startExpedition = () => {
       this.closeTitle();
       this.audio.resume();
       this.audio.playQuenaNote(523.25, 1.8);
       this.callbacks.onBeginExpedition();
-    });
+    };
+
+    el.querySelector('#juzu-btn-begin')?.addEventListener('click', startExpedition);
+
+    // Any touch/click outside the buttons also dismisses the title screen and begins
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!this.isTitleOpen) return;
+        const target = e.target as HTMLElement;
+        if (
+          target.closest('#juzu-btn-toggle-chapters') ||
+          target.closest('#juzu-chapter-list') ||
+          target.closest('#juzu-btn-title-offline') ||
+          target.closest('#juzu-btn-title-settings') ||
+          target.closest('#juzu-settings-modal')
+        ) {
+          return;
+        }
+        startExpedition();
+      },
+      { once: true }
+    );
 
     const chapList = el.querySelector('#juzu-chapter-list') as HTMLElement;
-    el.querySelector('#juzu-btn-toggle-chapters')?.addEventListener('click', () => {
+    el.querySelector('#juzu-btn-toggle-chapters')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (chapList) {
         chapList.style.display = chapList.style.display === 'none' ? 'flex' : 'none';
       }
@@ -126,6 +161,7 @@ export class HUD {
 
     el.querySelectorAll('.juzu-chap-pick').forEach((btn) => {
       btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const region = (e.currentTarget as HTMLElement).getAttribute('data-region') as any;
         if (region) {
           this.closeTitle();
@@ -136,7 +172,8 @@ export class HUD {
       });
     });
 
-    el.querySelector('#juzu-btn-title-settings')?.addEventListener('click', () => {
+    el.querySelector('#juzu-btn-title-settings')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.openSettings();
     });
 
