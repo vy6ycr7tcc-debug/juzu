@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-OUT_DIR = Path("/Users/samuelpires/.gemini/antigravity/brain/99d09d05-dc7a-4eb0-97a1-4255ce259407/shots")
+OUT_DIR = Path(__file__).resolve().parent / "shots"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def run_mobile_test(device_name, viewport, user_agent, is_mobile, has_touch):
@@ -71,7 +71,12 @@ def run_mobile_test(device_name, viewport, user_agent, is_mobile, has_touch):
             isTitleOpen: window.__juzuEngine?.hud?.isTitleOpen,
             nairaLoaded: window.__juzuEngine?.naira?.isLoaded,
             nairaVisible: window.__juzuEngine?.naira?.modelRoot?.visible,
-            startPos: window.__juzuEngine?.controller?.pos
+            startPos: window.__juzuEngine?.controller?.pos,
+            memory: window.__juzuEngine?.renderer?.info?.memory,
+            renderInfo: {
+                calls: window.__juzuEngine?.renderer?.info?.render?.calls,
+                triangles: window.__juzuEngine?.renderer?.info?.render?.triangles
+            }
         })""")
         print(f"   Expedition Start State: {engine_state}")
         assert engine_state['nairaLoaded'] == True, "Dr. Naira Quispe failed to load!"

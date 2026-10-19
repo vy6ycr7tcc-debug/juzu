@@ -172,27 +172,47 @@ export class Terrain {
     this.group.name = 'Andean_Terrain';
     scene.add(this.group);
 
-    // 2048x2048 Photorealistic Andean High-Altitude Mountain & Rocky Trail Scans (Poly Haven CC0)
+    // Andean High-Altitude Mountain & Rocky Trail Scans (Poly Haven CC0)
     const texLoader = new THREE.TextureLoader();
-    const groundTex = texLoader.load('/juzu/textures/scans/rocky_trail_diffuse_2k.webp');
+    const groundTex = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/rocky_trail_diffuse_1k.webp'
+        : '/juzu/textures/scans/rocky_trail_diffuse_2k.webp'
+    );
     groundTex.colorSpace = THREE.SRGBColorSpace;
-    groundTex.anisotropy = 8;
+    groundTex.anisotropy = MOBILE ? 2 : 8;
     groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
 
-    const groundNor = texLoader.load('/juzu/textures/scans/rocky_trail_nor_gl_2k.webp');
-    groundNor.anisotropy = 8;
+    const groundNor = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/rocky_trail_nor_gl_1k.webp'
+        : '/juzu/textures/scans/rocky_trail_nor_gl_2k.webp'
+    );
+    groundNor.anisotropy = MOBILE ? 2 : 8;
     groundNor.wrapS = groundNor.wrapT = THREE.RepeatWrapping;
 
-    const groundRough = texLoader.load('/juzu/textures/scans/rocky_trail_rough_2k.webp');
-    groundRough.anisotropy = 8;
+    const groundRough = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/rocky_trail_rough_1k.webp'
+        : '/juzu/textures/scans/rocky_trail_rough_2k.webp'
+    );
+    groundRough.anisotropy = MOBILE ? 2 : 8;
     groundRough.wrapS = groundRough.wrapT = THREE.RepeatWrapping;
 
-    const groundAO = texLoader.load('/juzu/textures/scans/rocky_trail_ao_2k.webp');
+    const groundAO = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/rocky_trail_ao_1k.webp'
+        : '/juzu/textures/scans/rocky_trail_ao_2k.webp'
+    );
     groundAO.wrapS = groundAO.wrapT = THREE.RepeatWrapping;
 
-    const cliffTex = texLoader.load('/juzu/textures/scans/cliff_side_diffuse_2k.webp');
+    const cliffTex = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cliff_side_diffuse_1k.webp'
+        : '/juzu/textures/scans/cliff_side_diffuse_2k.webp'
+    );
     cliffTex.colorSpace = THREE.SRGBColorSpace;
-    cliffTex.anisotropy = 8;
+    cliffTex.anisotropy = MOBILE ? 2 : 8;
     cliffTex.wrapS = cliffTex.wrapT = THREE.RepeatWrapping;
 
     this.material = new THREE.MeshStandardNodeMaterial({

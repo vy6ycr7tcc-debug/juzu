@@ -28,21 +28,37 @@ export class CloudForestRegion {
     this.group.name = 'Region_CloudForest';
     scene.add(this.group);
 
-    // Authentic 2048x2048 Andean Scanned PBR Ashlar Masonry & Qhapaq Ñan Pavement (Poly Haven CC0)
-    const stoneDiff = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp');
+    // Authentic Andean Scanned PBR Ashlar Masonry & Qhapaq Ñan Pavement (Poly Haven CC0)
+    const stoneDiff = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_diffuse_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp'
+    );
     stoneDiff.colorSpace = THREE.SRGBColorSpace;
-    stoneDiff.anisotropy = 8;
+    stoneDiff.anisotropy = MOBILE ? 2 : 8;
     stoneDiff.wrapS = stoneDiff.wrapT = THREE.RepeatWrapping;
 
-    const stoneNor = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp');
-    stoneNor.anisotropy = 8;
+    const stoneNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_nor_gl_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp'
+    );
+    stoneNor.anisotropy = MOBILE ? 2 : 8;
     stoneNor.wrapS = stoneNor.wrapT = THREE.RepeatWrapping;
 
-    const stoneRough = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_rough_2k.webp');
-    stoneRough.anisotropy = 8;
+    const stoneRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_rough_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_rough_2k.webp'
+    );
+    stoneRough.anisotropy = MOBILE ? 2 : 8;
     stoneRough.wrapS = stoneRough.wrapT = THREE.RepeatWrapping;
 
-    const stoneAO = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_ao_2k.webp');
+    const stoneAO = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_ao_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_ao_2k.webp'
+    );
     stoneAO.wrapS = stoneAO.wrapT = THREE.RepeatWrapping;
 
     const ashlarStoneMat = solid(
@@ -60,19 +76,31 @@ export class CloudForestRegion {
       })
     );
 
-    const plankDiff = this.texLoader.load('/juzu/assets/environment-textures/environment-planks.jpeg');
+    const plankDiff = this.texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-planks_1k.webp'
+        : '/juzu/assets/environment-textures/environment-planks.jpeg'
+    );
     plankDiff.colorSpace = THREE.SRGBColorSpace;
-    plankDiff.anisotropy = 8;
+    plankDiff.anisotropy = MOBILE ? 2 : 8;
     plankDiff.wrapS = plankDiff.wrapT = THREE.RepeatWrapping;
     plankDiff.repeat.set(1.0, 0.35);
 
-    const plankNor = this.texLoader.load('/juzu/assets/environment-textures/environment-planks-normal.jpg');
-    plankNor.anisotropy = 8;
+    const plankNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-planks-normal_1k.webp'
+        : '/juzu/assets/environment-textures/environment-planks-normal.jpg'
+    );
+    plankNor.anisotropy = MOBILE ? 2 : 8;
     plankNor.wrapS = plankNor.wrapT = THREE.RepeatWrapping;
     plankNor.repeat.set(1.0, 0.35);
 
-    const plankRough = this.texLoader.load('/juzu/assets/environment-textures/environment-planks-roughness.jpg');
-    plankRough.anisotropy = 8;
+    const plankRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-planks-roughness_1k.webp'
+        : '/juzu/assets/environment-textures/environment-planks-roughness.jpg'
+    );
+    plankRough.anisotropy = MOBILE ? 2 : 8;
     plankRough.wrapS = plankRough.wrapT = THREE.RepeatWrapping;
     plankRough.repeat.set(1.0, 0.35);
 
@@ -88,20 +116,36 @@ export class CloudForestRegion {
       })
     );
 
-    const paveDiff = this.texLoader.load('/juzu/textures/scans/cobblestone_01_diffuse_2k.webp');
+    const paveDiff = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_diffuse_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_diffuse_2k.webp'
+    );
     paveDiff.colorSpace = THREE.SRGBColorSpace;
-    paveDiff.anisotropy = 8;
+    paveDiff.anisotropy = MOBILE ? 2 : 8;
     paveDiff.wrapS = paveDiff.wrapT = THREE.RepeatWrapping;
 
-    const paveNor = this.texLoader.load('/juzu/textures/scans/cobblestone_01_nor_gl_2k.webp');
-    paveNor.anisotropy = 8;
+    const paveNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_nor_gl_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_nor_gl_2k.webp'
+    );
+    paveNor.anisotropy = MOBILE ? 2 : 8;
     paveNor.wrapS = paveNor.wrapT = THREE.RepeatWrapping;
 
-    const paveRough = this.texLoader.load('/juzu/textures/scans/cobblestone_01_rough_2k.webp');
-    paveRough.anisotropy = 8;
+    const paveRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_rough_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_rough_2k.webp'
+    );
+    paveRough.anisotropy = MOBILE ? 2 : 8;
     paveRough.wrapS = paveRough.wrapT = THREE.RepeatWrapping;
 
-    const paveARM = this.texLoader.load('/juzu/textures/scans/cobblestone_01_arm_2k.webp');
+    const paveARM = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_arm_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_arm_2k.webp'
+    );
     paveARM.wrapS = paveARM.wrapT = THREE.RepeatWrapping;
 
     const redPavementMat = solid(
@@ -769,9 +813,13 @@ export class CloudForestRegion {
     }
 
     // Weathered Olive-Canvas Expedition A-Frame Shelter Tent & Camp Gear beside the fire (matching ref_camp_and_sun_mirror)
-    const tentCanvasTex = this.texLoader.load('/juzu/assets/character-textures/character-canvas.jpeg');
+    const tentCanvasTex = this.texLoader.load(
+      MOBILE
+        ? '/juzu/assets/character-textures/character-canvas_1k.webp'
+        : '/juzu/assets/character-textures/character-canvas.jpeg'
+    );
     tentCanvasTex.colorSpace = THREE.SRGBColorSpace;
-    tentCanvasTex.anisotropy = 8;
+    tentCanvasTex.anisotropy = MOBILE ? 2 : 8;
     tentCanvasTex.wrapS = tentCanvasTex.wrapT = THREE.RepeatWrapping;
     tentCanvasTex.repeat.set(2, 2);
 

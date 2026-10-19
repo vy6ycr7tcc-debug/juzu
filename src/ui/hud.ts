@@ -90,7 +90,7 @@ export class HUD {
 
     el.innerHTML = `
       <!-- Top Title Bar (Non-blocking) -->
-      <div style="text-align:center;pointer-events:auto;background:rgba(12,16,14,0.72);padding:12px 24px;border-radius:6px;border:1px solid rgba(212,184,136,0.32);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 4px 22px rgba(0,0,0,0.55);max-width:440px;width:90%;">
+      <div style="text-align:center;pointer-events:auto;background:rgba(12,16,14,0.92);padding:12px 24px;border-radius:6px;border:1px solid rgba(212,184,136,0.32);box-shadow:0 4px 22px rgba(0,0,0,0.55);max-width:440px;width:90%;">
         <div id="juzu-offline-indicator" style="display:none;position:absolute;top:12px;right:16px;padding:4px 8px;background:rgba(18,24,20,0.92);border:1px solid #c9a468;border-radius:3px;font-size:10px;letter-spacing:0.12em;color:#e6c896;text-transform:uppercase;">📡 Offline</div>
         <div style="font-size:10px;letter-spacing:0.32em;color:#d4b888;text-transform:uppercase;margin-bottom:3px;">Archaeological Expedition · Inca Andes</div>
         <h1 style="font-size:32px;letter-spacing:0.2em;margin:0 0 2px 0;color:#fdfaf2;text-shadow:0 2px 12px rgba(0,0,0,0.9);font-weight:400;">J U Z U</h1>
@@ -207,7 +207,7 @@ export class HUD {
 
     el.innerHTML = `
       <!-- Top Objective Banner -->
-      <div id="juzu-objective-wrap" style="position:absolute;top:136px;left:18px;max-width:320px;background:rgba(12,16,14,0.76);border-left:3px solid #c9a468;padding:8px 14px;border-radius:4px;box-shadow:0 4px 18px rgba(0,0,0,0.65);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+      <div id="juzu-objective-wrap" style="position:absolute;top:136px;left:18px;max-width:320px;background:rgba(12,16,14,0.92);border-left:3px solid #c9a468;padding:8px 14px;border-radius:4px;box-shadow:0 4px 18px rgba(0,0,0,0.65);">
         <div style="font-size:9px;letter-spacing:0.2em;color:#c9a468;text-transform:uppercase;margin-bottom:2px;">Objective</div>
         <div id="juzu-objective-text" style="font-size:12px;color:#f2ede4;line-height:1.35;">Align the bronze Inti sun-mirror on the south cliff or cross the hanging bridge to the North Sanctuary.</div>
       </div>

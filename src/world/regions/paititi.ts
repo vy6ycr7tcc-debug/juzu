@@ -20,20 +20,36 @@ export class PaititiRegion {
     scene.add(this.group);
 
     // Authentic Paititi Imperial Golden Ashlar Masonry & Sacred Plaza Cobblestones (Poly Haven CC0)
-    const blockDiff = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp');
+    const blockDiff = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_diffuse_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_diffuse_2k.webp'
+    );
     blockDiff.colorSpace = THREE.SRGBColorSpace;
-    blockDiff.anisotropy = 8;
+    blockDiff.anisotropy = MOBILE ? 2 : 8;
     blockDiff.wrapS = blockDiff.wrapT = THREE.RepeatWrapping;
 
-    const blockNor = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp');
-    blockNor.anisotropy = 8;
+    const blockNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_nor_gl_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_nor_gl_2k.webp'
+    );
+    blockNor.anisotropy = MOBILE ? 2 : 8;
     blockNor.wrapS = blockNor.wrapT = THREE.RepeatWrapping;
 
-    const blockRough = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_rough_2k.webp');
-    blockRough.anisotropy = 8;
+    const blockRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_rough_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_rough_2k.webp'
+    );
+    blockRough.anisotropy = MOBILE ? 2 : 8;
     blockRough.wrapS = blockRough.wrapT = THREE.RepeatWrapping;
 
-    const blockAO = this.texLoader.load('/juzu/textures/scans/castle_wall_slates_ao_2k.webp');
+    const blockAO = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/castle_wall_slates_ao_1k.webp'
+        : '/juzu/textures/scans/castle_wall_slates_ao_2k.webp'
+    );
     blockAO.wrapS = blockAO.wrapT = THREE.RepeatWrapping;
 
     const precisionAshlarMat = solid(
@@ -51,23 +67,39 @@ export class PaititiRegion {
       })
     );
 
-    const paveDiff = this.texLoader.load('/juzu/textures/scans/cobblestone_01_diffuse_2k.webp');
+    const paveDiff = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_diffuse_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_diffuse_2k.webp'
+    );
     paveDiff.colorSpace = THREE.SRGBColorSpace;
-    paveDiff.anisotropy = 8;
+    paveDiff.anisotropy = MOBILE ? 2 : 8;
     paveDiff.wrapS = paveDiff.wrapT = THREE.RepeatWrapping;
     paveDiff.repeat.set(12, 12);
 
-    const paveNor = this.texLoader.load('/juzu/textures/scans/cobblestone_01_nor_gl_2k.webp');
-    paveNor.anisotropy = 8;
+    const paveNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_nor_gl_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_nor_gl_2k.webp'
+    );
+    paveNor.anisotropy = MOBILE ? 2 : 8;
     paveNor.wrapS = paveNor.wrapT = THREE.RepeatWrapping;
     paveNor.repeat.set(12, 12);
 
-    const paveRough = this.texLoader.load('/juzu/textures/scans/cobblestone_01_rough_2k.webp');
-    paveRough.anisotropy = 8;
+    const paveRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_rough_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_rough_2k.webp'
+    );
+    paveRough.anisotropy = MOBILE ? 2 : 8;
     paveRough.wrapS = paveRough.wrapT = THREE.RepeatWrapping;
     paveRough.repeat.set(12, 12);
 
-    const paveARM = this.texLoader.load('/juzu/textures/scans/cobblestone_01_arm_2k.webp');
+    const paveARM = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/cobblestone_01_arm_1k.webp'
+        : '/juzu/textures/scans/cobblestone_01_arm_2k.webp'
+    );
     paveARM.wrapS = paveARM.wrapT = THREE.RepeatWrapping;
     paveARM.repeat.set(12, 12);
 

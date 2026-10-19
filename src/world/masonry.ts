@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { MOBILE } from '../core/quality';
 
 function pseudoNoise(x: number, y: number, z: number): number {
   const n = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
@@ -6,24 +7,40 @@ function pseudoNoise(x: number, y: number, z: number): number {
 }
 
 /**
- * Creates authentic 2K scanned Inca Ashlar megalithic cut-stone material
- * (Poly Haven CC0 large_sandstone_blocks 2K).
+ * Creates authentic scanned Inca Ashlar megalithic cut-stone material
+ * (Poly Haven CC0 large_sandstone_blocks).
  */
 export function createIncaAshlarMaterial(texLoader: THREE.TextureLoader): THREE.MeshStandardMaterial {
-  const diff = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_diffuse_2k.webp');
+  const diff = texLoader.load(
+    MOBILE
+      ? '/juzu/textures/scans/large_sandstone_blocks_diffuse_1k.webp'
+      : '/juzu/textures/scans/large_sandstone_blocks_diffuse_2k.webp'
+  );
   diff.colorSpace = THREE.SRGBColorSpace;
-  diff.anisotropy = 8;
+  diff.anisotropy = MOBILE ? 2 : 8;
   diff.wrapS = diff.wrapT = THREE.RepeatWrapping;
 
-  const nor = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_nor_gl_2k.webp');
-  nor.anisotropy = 8;
+  const nor = texLoader.load(
+    MOBILE
+      ? '/juzu/textures/scans/large_sandstone_blocks_nor_gl_1k.webp'
+      : '/juzu/textures/scans/large_sandstone_blocks_nor_gl_2k.webp'
+  );
+  nor.anisotropy = MOBILE ? 2 : 8;
   nor.wrapS = nor.wrapT = THREE.RepeatWrapping;
 
-  const rough = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_rough_2k.webp');
-  rough.anisotropy = 8;
+  const rough = texLoader.load(
+    MOBILE
+      ? '/juzu/textures/scans/large_sandstone_blocks_rough_1k.webp'
+      : '/juzu/textures/scans/large_sandstone_blocks_rough_2k.webp'
+  );
+  rough.anisotropy = MOBILE ? 2 : 8;
   rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
 
-  const ao = texLoader.load('/juzu/textures/scans/large_sandstone_blocks_ao_2k.webp');
+  const ao = texLoader.load(
+    MOBILE
+      ? '/juzu/textures/scans/large_sandstone_blocks_ao_1k.webp'
+      : '/juzu/textures/scans/large_sandstone_blocks_ao_2k.webp'
+  );
   ao.wrapS = ao.wrapT = THREE.RepeatWrapping;
 
   return new THREE.MeshStandardMaterial({
