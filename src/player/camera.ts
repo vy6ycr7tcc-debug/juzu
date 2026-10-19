@@ -7,14 +7,14 @@ export class FollowCamera {
   pitch = 0.12;
   targetYaw = 0;
   targetPitch = 0.12;
-  baseDist = 5.2;
-  dist = 5.2;
+  baseDist = 7.4;
+  dist = 7.4;
   shoulderOffset = 0.38;
 
   private target = new THREE.Vector3();
   private currentPos = new THREE.Vector3();
   private leadOffset = new THREE.Vector3();
-  private effDist = 5.2;
+  private effDist = 7.4;
   private landingDip = 0;
   private landingDipVel = 0;
   private stridePhase = 0;
@@ -28,7 +28,7 @@ export class FollowCamera {
   }
 
   public adjustDistance(delta: number): void {
-    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 2.2, 8.5);
+    this.baseDist = THREE.MathUtils.clamp(this.baseDist + delta, 3.0, 10.0);
   }
 
   public triggerLandingDip(impactSpeed: number): void {
