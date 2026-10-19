@@ -52,6 +52,7 @@ export class Naira {
   public isAiming = false;
 
   // Dynamic grounding, banking and athletic posture
+  private groundOffset = 0;
   private smoothPelvisOffset = 0;
   private smoothSpinePitch = 0;
   private smoothTurnBank = 0;
@@ -62,6 +63,8 @@ export class Naira {
     scene.add(this.root);
     this.loadSourcedCharacter();
   }
+
+  private actionKeyCounts: Partial<Record<LocomotionPose, number>> = {};
 
   private async loadSourcedCharacter(): Promise<void> {
     const loader = new GLTFLoader();
@@ -86,7 +89,8 @@ export class Naira {
 
       // Grounding alignment: align soles of boots precisely to local y = 0
       const alignedBox = new THREE.Box3().setFromObject(this.modelRoot);
-      this.modelRoot.position.y = -alignedBox.min.y;
+      this.groundOffset = -alignedBox.min.y;
+      this.modelRoot.position.y = this.groundOffset;
 
       // Enable PBR shadows across sourced geometry and disable frustum culling on skinned mesh
       this.modelRoot.traverse((child) => {
@@ -94,6 +98,9 @@ export class Naira {
           child.castShadow = true;
           child.receiveShadow = true;
           child.frustumCulled = false;
+        }
+        if (child.name && child.name.includes(':')) {
+          child.name = child.name.replace(/:/g, '');
         }
       });
 
@@ -104,8 +111,8 @@ export class Naira {
         for (const name of names) {
           const b =
             this.modelRoot?.getObjectByName(name) ||
-            this.modelRoot?.getObjectByName(`mixamorig:${name}`) ||
             this.modelRoot?.getObjectByName(`mixamorig${name}`) ||
+            this.modelRoot?.getObjectByName(`mixamorig:${name}`) ||
             this.modelRoot?.getObjectByName(`DEF-${name}`);
           if (b) return b;
         }
@@ -128,47 +135,13 @@ export class Naira {
         this.registerClip(clip);
       }
 
-      // Load external modular animations from characters/naira/anims/
-      const animFiles = [
-        'idle.glb',
-        'walk.glb',
-        'run.glb',
-        'sprint.glb',
-        'jump.glb',
-        'jump_start.glb',
-        'jump_land.glb',
-        'crouch.glb',
-        'climb_up.glb',
-        'ledge_grab.glb',
-        'swim.glb',
-        'interact.glb',
-      ];
-
-      await Promise.allSettled(
-        animFiles.map(async (file) => {
-          try {
-            const headRes = await fetch(`${animDir}${file}`, { method: 'HEAD' });
-            if (!headRes.ok || headRes.headers.get('content-type')?.includes('text/html')) {
-              return;
-            }
-            const animGltf = await loader.loadAsync(`${animDir}${file}`);
-            for (const clip of animGltf.animations || []) {
-              const baseName = file.replace('.glb', '');
-              clip.name = baseName;
-              this.registerClip(clip, true);
-            }
-          } catch (err) {
-            console.warn('[Naira] Anim load error for', file, err);
-          }
-        })
-      );
-
       // Start in idle
       if (this.actions.idle) {
         this.actions.idle.play();
         this.currentAction = this.actions.idle;
       }
 
+      (window as any).__naira = this;
       this.isLoaded = true;
     } catch (err) {
       const errorMsg =
@@ -186,38 +159,53 @@ export class Naira {
   private registerClip(clip: THREE.AnimationClip, overwrite = false): void {
     if (!this.mixer) return;
 
-    // Sanitize track targets (strip namespaces like mixamorig: -> mixamorig, and duplicate suffixes like _1)
+    // Sanitize track targets: strip path prefixes and colons to match sanitized bone names
     for (const track of clip.tracks) {
-      track.name = track.name.replace(/mixamorig:/g, 'mixamorig').replace(/_1\./g, '.');
+      track.name = track.name
+        .replace(/^[^\/]+\//, '')
+        .replace(/:/g, '')
+        .replace(/_1\./g, '.');
     }
 
     const name = clip.name.toLowerCase();
-    const action = this.mixer.clipAction(clip);
+    const keyCount = clip.tracks[0]?.times?.length || 0;
 
-    if (name.includes('idle') && (overwrite || !this.actions.idle)) {
-      this.actions.idle = action;
-    } else if (name.includes('walk') && (overwrite || !this.actions.walk)) {
-      this.actions.walk = action;
-    } else if ((name.includes('run') || name.includes('jog')) && (overwrite || !this.actions.run)) {
-      this.actions.run = action;
+    const assignAction = (pose: LocomotionPose, configure?: (a: THREE.AnimationAction) => void) => {
+      if (overwrite || !this.actions[pose] || keyCount > (this.actionKeyCounts[pose] || 0)) {
+        const action = this.mixer!.clipAction(clip);
+        if (configure) configure(action);
+        this.actions[pose] = action;
+        this.actionKeyCounts[pose] = keyCount;
+      }
+    };
+
+    if (name.includes('idle') && !name.includes('swim') && !name.includes('sitting')) {
+      assignAction('idle');
+    } else if (name.includes('walk')) {
+      assignAction('walk');
+    } else if (name.includes('run') || name.includes('jog')) {
+      assignAction('run');
     } else if (name.includes('jump_start')) {
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-      this.actions.jump_start = action;
+      assignAction('jump_start', (a) => {
+        a.setLoop(THREE.LoopOnce, 1);
+        a.clampWhenFinished = true;
+      });
     } else if (name.includes('jump_land')) {
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-      this.actions.jump_land = action;
+      assignAction('jump_land', (a) => {
+        a.setLoop(THREE.LoopOnce, 1);
+        a.clampWhenFinished = true;
+      });
     } else if (name.includes('jump')) {
-      this.actions.jump = action;
+      assignAction('jump');
     } else if (name.includes('swim_idle')) {
-      this.actions.swim_idle = action;
+      assignAction('swim_idle');
     } else if (name.includes('swim')) {
-      this.actions.swim = action;
+      assignAction('swim');
     } else if (name.includes('interact')) {
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-      this.actions.interact = action;
+      assignAction('interact', (a) => {
+        a.setLoop(THREE.LoopOnce, 1);
+        a.clampWhenFinished = true;
+      });
     }
   }
 
@@ -301,43 +289,53 @@ export class Naira {
     );
 
     if (this.modelRoot) {
-      this.modelRoot.position.y = this.smoothPelvisOffset;
+      this.modelRoot.position.y = this.groundOffset + this.smoothPelvisOffset;
       this.modelRoot.rotation.x = this.smoothSpinePitch;
       this.modelRoot.rotation.z = this.smoothTurnBank;
     }
 
     // 3. Blend Locomotion Animations
+    if (!this.currentAction && this.actions.idle) {
+      this.actions.idle.play();
+      this.currentAction = this.actions.idle;
+    }
+
     if (this.currentPose !== controller.pose) {
       const nextAction =
         this.actions[controller.pose] ||
         (controller.pose === 'grapple_swing' ? this.actions.jump : this.actions.idle);
-      if (nextAction && this.currentAction && nextAction !== this.currentAction) {
-        nextAction.reset();
-        nextAction.enabled = true;
+      if (nextAction) {
+        if (this.currentAction && nextAction !== this.currentAction) {
+          nextAction.reset();
+          nextAction.enabled = true;
 
-        if (controller.pose === 'walk') {
-          nextAction.timeScale = Math.max(0.68, controller.speed / 2.35);
-        } else if (controller.pose === 'run') {
-          nextAction.timeScale = Math.max(0.88, controller.speed / 5.4);
-        } else if (
-          controller.pose === 'jump_start' ||
-          controller.pose === 'jump_land' ||
-          controller.pose === 'grapple_swing'
-        ) {
-          nextAction.timeScale = 1.35;
-        } else {
-          nextAction.timeScale = 1.0;
+          if (controller.pose === 'walk') {
+            nextAction.timeScale = Math.max(0.68, controller.speed / 2.35);
+          } else if (controller.pose === 'run') {
+            nextAction.timeScale = Math.max(0.88, controller.speed / 5.4);
+          } else if (
+            controller.pose === 'jump_start' ||
+            controller.pose === 'jump_land' ||
+            controller.pose === 'grapple_swing'
+          ) {
+            nextAction.timeScale = 1.35;
+          } else {
+            nextAction.timeScale = 1.0;
+          }
+
+          const fadeDur =
+            controller.pose === 'jump_start' ||
+            controller.pose === 'jump_land' ||
+            controller.pose === 'grapple_swing'
+              ? 0.12
+              : 0.2;
+          nextAction.crossFadeFrom(this.currentAction, fadeDur, true);
+          nextAction.play();
+          this.currentAction = nextAction;
+        } else if (!this.currentAction) {
+          nextAction.play();
+          this.currentAction = nextAction;
         }
-
-        const fadeDur =
-          controller.pose === 'jump_start' ||
-          controller.pose === 'jump_land' ||
-          controller.pose === 'grapple_swing'
-            ? 0.12
-            : 0.2;
-        nextAction.crossFadeFrom(this.currentAction, fadeDur, true);
-        nextAction.play();
-        this.currentAction = nextAction;
       }
       this.currentPose = controller.pose;
     } else if (this.currentAction) {

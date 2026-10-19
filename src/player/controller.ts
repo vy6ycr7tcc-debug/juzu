@@ -70,7 +70,7 @@ export class Controller {
     // Analytical catenary safety deck for the Cloud Forest Urubamba Rope Bridge (z in -35.2..1.2, |x| <= 1.25)
     if (Math.abs(x) <= 1.25 && z <= 1.2 && z >= -35.2 && probeY > 1.5) {
       const u = THREE.MathUtils.clamp((1.0 - z) / 36.0, 0, 1);
-      const bridgeDeckY = 4.28 - 1.35 * 4 * u * (1 - u);
+      const bridgeDeckY = 4.45 + 0.30 * u - Math.sin(u * Math.PI) * 1.45 + 0.07;
       floorH = Math.max(floorH, bridgeDeckY);
     }
 
