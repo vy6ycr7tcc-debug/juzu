@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { activeToD, sunDirection, TOD_PRESETS, type TimeOfDay } from '../world/fog';
 import { fogUniforms } from './tsl';
+import { MOBILE } from '../core/quality';
 
 export const rig = {
   shadowSize: 2048,
@@ -58,8 +59,11 @@ export class LightRig {
 
     // 4. Photorealistic Andean Image-Based Lighting (IBL) & Environment Map (Poly Haven CC0)
     const hdrLoader = new HDRLoader();
+    const hdrPath = MOBILE
+      ? '/juzu/textures/hdr/forest_slope_512.hdr'
+      : '/juzu/textures/hdr/forest_slope_2k.hdr';
     hdrLoader.load(
-      '/juzu/textures/hdr/forest_slope_2k.hdr',
+      hdrPath,
       (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         this.envTexture = texture;

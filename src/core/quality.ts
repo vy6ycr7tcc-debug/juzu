@@ -98,7 +98,16 @@ export const TIERS: Tier[] = [];
 function buildTiers(): void {
   TIERS.length = 0;
   for (const d of QCONFIG.tiers)
-    TIERS.push({ name: d.name, dpr: MOBILE ? d.dprPhone : d.dpr, shadow: d.shadow, bloom: d.bloom, particles: MOBILE ? d.particlesPhone : d.particles, ao: MOBILE ? d.aoPhone : d.ao, rays: d.rays, reflection: d.reflection });
+    TIERS.push({
+      name: d.name,
+      dpr: MOBILE ? d.dprPhone : d.dpr,
+      shadow: MOBILE ? Math.min(d.shadow, 512) : d.shadow,
+      bloom: MOBILE ? false : d.bloom,
+      particles: MOBILE ? d.particlesPhone : d.particles,
+      ao: MOBILE ? d.aoPhone : d.ao,
+      rays: MOBILE ? false : d.rays,
+      reflection: d.reflection,
+    });
 }
 buildTiers();
 

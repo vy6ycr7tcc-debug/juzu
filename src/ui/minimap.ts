@@ -42,8 +42,6 @@ export class Minimap {
       user-select: none;
       -webkit-user-select: none;
       touch-action: manipulation;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
       transition: transform 0.15s ease, border-color 0.15s ease;
     `;
     this.container.title = 'Tap to open Expedition World Map';

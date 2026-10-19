@@ -21,20 +21,36 @@ export class HighSierraRegion {
     // Authentic High Sierra Scanned PBR Ashlar Masonry (large_sandstone_blocks 2K)
     const ashlarMat = solid(createIncaAshlarMaterial(this.texLoader));
 
-    const rockDiff = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_diffuse_2k.webp');
+    const rockDiff = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/aerial_ground_rock_diffuse_1k.webp'
+        : '/juzu/textures/scans/aerial_ground_rock_diffuse_2k.webp'
+    );
     rockDiff.colorSpace = THREE.SRGBColorSpace;
-    rockDiff.anisotropy = 8;
+    rockDiff.anisotropy = MOBILE ? 2 : 8;
     rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
 
-    const rockNor = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_nor_gl_2k.webp');
-    rockNor.anisotropy = 8;
+    const rockNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/aerial_ground_rock_nor_gl_1k.webp'
+        : '/juzu/textures/scans/aerial_ground_rock_nor_gl_2k.webp'
+    );
+    rockNor.anisotropy = MOBILE ? 2 : 8;
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
 
-    const rockRough = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_rough_2k.webp');
-    rockRough.anisotropy = 8;
+    const rockRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/aerial_ground_rock_rough_1k.webp'
+        : '/juzu/textures/scans/aerial_ground_rock_rough_2k.webp'
+    );
+    rockRough.anisotropy = MOBILE ? 2 : 8;
     rockRough.wrapS = rockRough.wrapT = THREE.RepeatWrapping;
 
-    const rockAO = this.texLoader.load('/juzu/textures/scans/aerial_ground_rock_ao_2k.webp');
+    const rockAO = this.texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/aerial_ground_rock_ao_1k.webp'
+        : '/juzu/textures/scans/aerial_ground_rock_ao_2k.webp'
+    );
     rockAO.wrapS = rockAO.wrapT = THREE.RepeatWrapping;
 
     const bedrockMat = solid(

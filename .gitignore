@@ -1,3 +1,6 @@
 node_modules/
 dist/
 shots_inspect/
+__pycache__/
+*.pyc
+scripts/shots/

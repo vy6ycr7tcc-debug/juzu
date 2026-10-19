@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { standAt, vnoise } from './terrain';
+import { MOBILE } from '../core/quality';
 
 function halton(index: number, base: number): number {
   let result = 0;
@@ -21,9 +22,9 @@ export class Foliage {
   private grassInstances: THREE.InstancedMesh;
   private rockInstances: THREE.InstancedMesh;
   private rootInstances: THREE.InstancedMesh;
-  private readonly TREE_COUNT = 620;
-  private readonly GRASS_COUNT = 3200;
-  private readonly ROCK_COUNT = 420;
+  private readonly TREE_COUNT = MOBILE ? 280 : 620;
+  private readonly GRASS_COUNT = MOBILE ? 1200 : 3200;
+  private readonly ROCK_COUNT = MOBILE ? 200 : 420;
   public isLoaded = false;
 
   constructor(scene: THREE.Scene) {
@@ -32,31 +33,51 @@ export class Foliage {
 
     const texLoader = new THREE.TextureLoader();
 
-    // 2K photorealistic mossy Andean bark textures for gnarled Polylepis (Queñua) trunks
-    const barkDiff = texLoader.load('/juzu/assets/environment-textures/environment-bark.jpeg');
+    // Mossy Andean bark textures for gnarled Polylepis (Queñua) trunks
+    const barkDiff = texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-bark_1k.webp'
+        : '/juzu/assets/environment-textures/environment-bark.jpeg'
+    );
     barkDiff.colorSpace = THREE.SRGBColorSpace;
-    barkDiff.anisotropy = 8;
+    barkDiff.anisotropy = MOBILE ? 2 : 8;
     barkDiff.wrapS = barkDiff.wrapT = THREE.RepeatWrapping;
     barkDiff.repeat.set(1, 2.5);
 
-    const barkNor = texLoader.load('/juzu/assets/environment-textures/environment-bark-normal.jpg');
-    barkNor.anisotropy = 8;
+    const barkNor = texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-bark-normal_1k.webp'
+        : '/juzu/assets/environment-textures/environment-bark-normal.jpg'
+    );
+    barkNor.anisotropy = MOBILE ? 2 : 8;
     barkNor.wrapS = barkNor.wrapT = THREE.RepeatWrapping;
     barkNor.repeat.set(1, 2.5);
 
-    const barkRough = texLoader.load('/juzu/assets/environment-textures/environment-bark-roughness.jpg');
-    barkRough.anisotropy = 8;
+    const barkRough = texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-bark-roughness_1k.webp'
+        : '/juzu/assets/environment-textures/environment-bark-roughness.jpg'
+    );
+    barkRough.anisotropy = MOBILE ? 2 : 8;
     barkRough.wrapS = barkRough.wrapT = THREE.RepeatWrapping;
     barkRough.repeat.set(1, 2.5);
 
-    // 1024x1024 alpha-tested botanical canopy & fern/grass textures + 2K leaf normal & roughness
-    const canopyTex = texLoader.load('/juzu/textures/foliage_canopy_alpha.png');
+    // Alpha-tested botanical canopy & fern/grass textures + leaf normal & roughness
+    const canopyTex = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/foliage_canopy_alpha_1k.webp'
+        : '/juzu/textures/foliage_canopy_alpha.png'
+    );
     canopyTex.colorSpace = THREE.SRGBColorSpace;
-    canopyTex.anisotropy = 8;
+    canopyTex.anisotropy = MOBILE ? 2 : 8;
 
-    const fernTex = texLoader.load('/juzu/textures/fern_grass_alpha.png');
+    const fernTex = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/fern_grass_alpha_1k.webp'
+        : '/juzu/textures/fern_grass_alpha.png'
+    );
     fernTex.colorSpace = THREE.SRGBColorSpace;
-    fernTex.anisotropy = 8;
+    fernTex.anisotropy = MOBILE ? 2 : 8;
 
     const foliageNor = texLoader.load('/juzu/assets/environment-textures/environment-foliage-normal.jpg');
     foliageNor.anisotropy = 8;

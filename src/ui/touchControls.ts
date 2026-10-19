@@ -67,14 +67,12 @@ export class TouchControls {
       width: 120px;
       height: 120px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(24,32,28,0.45) 0%, rgba(12,16,14,0.72) 100%);
+      background: radial-gradient(circle, rgba(24,32,28,0.85) 0%, rgba(12,16,14,0.95) 100%);
       border: 2px solid rgba(212, 160, 40, 0.45);
       box-shadow: 0 4px 20px rgba(0,0,0,0.6), inset 0 0 16px rgba(0,0,0,0.5);
       pointer-events: auto;
       touch-action: none;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      opacity: 0.55;
+      opacity: 0.75;
       transition: opacity 0.2s ease, transform 0.15s ease;
     `;
 
@@ -140,8 +138,6 @@ export class TouchControls {
         pointer-events: auto;
         touch-action: manipulation;
         box-shadow: 0 4px 16px rgba(0,0,0,0.65);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
         transition: transform 0.08s ease, filter 0.12s ease;
       `;
       btn.innerHTML = `
@@ -271,14 +267,12 @@ export class TouchControls {
         gap: 6px;
         padding: 6px 12px;
         border-radius: 16px;
-        background: rgba(18, 24, 20, 0.85);
+        background: rgba(18, 24, 20, 0.95);
         border: 1px solid rgba(212, 160, 40, 0.45);
         color: #f5eedc;
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       `;
       pill.innerHTML = `<span>${icon}</span><span>${label}</span>`;
