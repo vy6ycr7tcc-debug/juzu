@@ -351,6 +351,15 @@ export class Naira {
       this.mixer.update(dt);
     }
 
+    // Post-mixer posture correction: the baked locomotion clips leave the upper arms
+    // flared/bent. Aim each upper arm down along the torso (world-space swing, so it
+    // is independent of the rig's local bone axes) before the head look is applied.
+    if (!this.isAiming && controller.pose !== 'swim' && controller.pose !== 'swim_idle') {
+      const k = controller.pose === 'idle' ? 0.85 : 0.5;
+      this.relaxArm(this.leftUpperArmBone, this.leftForearmBone, k);
+      this.relaxArm(this.rightUpperArmBone, this.rightForearmBone, k);
+    }
+
     // 4. Post-Mixer Procedural Head Look-Direction Alignment
     if (this.headBone && camYaw !== undefined) {
       const camForwardYaw = camYaw + Math.PI;
@@ -364,6 +373,51 @@ export class Naira {
       this.smoothHeadYaw = THREE.MathUtils.lerp(this.smoothHeadYaw, goalHeadYaw, Math.min(1, dt * 8));
       this.headBone.rotation.y += this.smoothHeadYaw;
     }
+  }
+
+  private tmpA = new THREE.Vector3();
+  private tmpB = new THREE.Vector3();
+  private tmpC = new THREE.Vector3();
+  private tmpQ = new THREE.Quaternion();
+  private tmpQ2 = new THREE.Quaternion();
+
+  /** Swing an upper arm so it hangs along the torso, keeping a slight outward cant. */
+  private relaxArm(upper: THREE.Object3D | null, fore: THREE.Object3D | null, k: number): void {
+    if (!upper || !fore || !upper.parent) return;
+    upper.updateWorldMatrix(true, true);
+    const shoulder = upper.getWorldPosition(this.tmpA);
+    const elbow = fore.getWorldPosition(this.tmpB);
+    const cur = elbow.sub(shoulder).normalize();
+
+    // Outward = horizontal direction from body centre to the shoulder
+    const out = this.tmpC.copy(shoulder).sub(this.root.position);
+    out.y = 0;
+    if (out.lengthSq() < 1e-6) return;
+    out.normalize();
+
+    const want = new THREE.Vector3(0, -1, 0).addScaledVector(out, 0.16).normalize();
+    // Partial blend keeps some of the clip's motion (walk swing) alive
+    const swing = this.tmpQ.setFromUnitVectors(cur, want);
+    const blended = this.tmpQ2.identity().slerp(swing, k);
+
+    // World-space delta -> parent-local: q_local' = inv(parentW) * delta * parentW * q_local
+    const parentQ = upper.parent.getWorldQuaternion(new THREE.Quaternion());
+    const delta = parentQ.clone().invert().multiply(blended).multiply(parentQ);
+    upper.quaternion.premultiply(delta);
+
+    // Forearm: open the elbow so the hand hangs by the thigh with a soft forward bend
+    const hand = fore.children.find((c) => /Hand$/.test(c.name));
+    if (!hand) return;
+    upper.updateWorldMatrix(true, true);
+    const e = fore.getWorldPosition(this.tmpB);
+    const h = hand.getWorldPosition(this.tmpA);
+    const curF = h.sub(e).normalize();
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+    const wantF = new THREE.Vector3(0, -1, 0).addScaledVector(fwd, 0.22).addScaledVector(out, 0.05).normalize();
+    const swingF = new THREE.Quaternion().setFromUnitVectors(curF, wantF);
+    const blendF = new THREE.Quaternion().slerp(swingF, k);
+    const pQ = fore.parent!.getWorldQuaternion(new THREE.Quaternion());
+    fore.quaternion.premultiply(pQ.clone().invert().multiply(blendF).multiply(pQ));
   }
 
   public getRightHandWorldPosition(out: THREE.Vector3): THREE.Vector3 {
