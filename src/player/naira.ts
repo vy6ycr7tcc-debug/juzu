@@ -61,6 +61,7 @@ export class Naira {
   constructor(scene: THREE.Scene) {
     this.root.name = 'Naira_PlayerRoot';
     scene.add(this.root);
+    (window as any).__naira = this;
     this.loadSourcedCharacter();
   }
 
