@@ -4,6 +4,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { standAt } from '../terrain';
 import { passable, solid } from '../solidity';
 import { createIncaBlock, buildTrapezoidalGateway, createIncaAshlarMaterial } from '../masonry';
+import { MOBILE } from '../../core/quality';
 
 export class HighSierraRegion {
   public group = new THREE.Group();
@@ -223,6 +224,10 @@ export class HighSierraRegion {
   }
 
   private loadPhotogrammetricScans(): void {
+    if (MOBILE) {
+      this.scansLoaded = true;
+      return;
+    }
     const gltfLoader = new GLTFLoader();
     gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 
