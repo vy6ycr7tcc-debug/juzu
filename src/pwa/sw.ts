@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-const CACHE_CORE = 'juzu-core-v3';
-const CACHE_ASSETS = 'juzu-assets-v3';
+const CACHE_CORE = 'juzu-core-v4';
+const CACHE_ASSETS = 'juzu-assets-v4';
 const PRECACHE_ASSETS: string[] = ['__PRECACHE_ASSETS__'];
 
 const CORE_SHELL: string[] = [

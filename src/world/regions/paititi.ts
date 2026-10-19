@@ -4,6 +4,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { standAt } from '../terrain';
 import { passable, solid } from '../solidity';
 import { createIncaBlock, buildTrapezoidalGateway } from '../masonry';
+import { MOBILE } from '../../core/quality';
 
 export class PaititiRegion {
   public group = new THREE.Group();
@@ -362,6 +363,9 @@ export class PaititiRegion {
   }
 
   private loadPhotogrammetricScans(): void {
+    if (MOBILE) {
+      return;
+    }
     const gltfLoader = new GLTFLoader();
     gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 

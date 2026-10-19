@@ -55,8 +55,15 @@ export interface QualityConfig {
   tiers: TierDef[];
 }
 
+export const IS_IOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
 export const MOBILE =
-  matchMedia("(pointer:coarse)").matches || Math.min(screen.width, screen.height) < 700;
+  IS_IOS ||
+  (typeof window !== 'undefined' &&
+    (matchMedia('(pointer:coarse)').matches || Math.min(screen.width, screen.height) < 840));
 
 /** The defaults (the controller as it was tuned before the config existed). */
 export const QUALITY_DEFAULTS: QualityConfig = {
