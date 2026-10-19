@@ -88,11 +88,12 @@ export class Naira {
       const alignedBox = new THREE.Box3().setFromObject(this.modelRoot);
       this.modelRoot.position.y = -alignedBox.min.y;
 
-      // Enable PBR shadows across sourced geometry
+      // Enable PBR shadows across sourced geometry and disable frustum culling on skinned mesh
       this.modelRoot.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh) {
+        if ((child as THREE.Mesh).isMesh || (child as THREE.SkinnedMesh).isSkinnedMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          child.frustumCulled = false;
         }
       });
 
@@ -146,14 +147,18 @@ export class Naira {
       await Promise.allSettled(
         animFiles.map(async (file) => {
           try {
+            const headRes = await fetch(`${animDir}${file}`, { method: 'HEAD' });
+            if (!headRes.ok || headRes.headers.get('content-type')?.includes('text/html')) {
+              return;
+            }
             const animGltf = await loader.loadAsync(`${animDir}${file}`);
             for (const clip of animGltf.animations || []) {
               const baseName = file.replace('.glb', '');
               clip.name = baseName;
-              this.registerClip(clip);
+              this.registerClip(clip, true);
             }
-          } catch {
-            // Individual anim files load if present
+          } catch (err) {
+            console.warn('[Naira] Anim load error for', file, err);
           }
         })
       );
@@ -178,16 +183,22 @@ export class Naira {
     }
   }
 
-  private registerClip(clip: THREE.AnimationClip): void {
+  private registerClip(clip: THREE.AnimationClip, overwrite = false): void {
     if (!this.mixer) return;
+
+    // Sanitize track targets (strip namespaces like mixamorig: -> mixamorig, and duplicate suffixes like _1)
+    for (const track of clip.tracks) {
+      track.name = track.name.replace(/mixamorig:/g, 'mixamorig').replace(/_1\./g, '.');
+    }
+
     const name = clip.name.toLowerCase();
     const action = this.mixer.clipAction(clip);
 
-    if (name.includes('idle') && !this.actions.idle) {
+    if (name.includes('idle') && (overwrite || !this.actions.idle)) {
       this.actions.idle = action;
-    } else if (name.includes('walk') && !this.actions.walk) {
+    } else if (name.includes('walk') && (overwrite || !this.actions.walk)) {
       this.actions.walk = action;
-    } else if ((name.includes('run') || name.includes('jog')) && !this.actions.run) {
+    } else if ((name.includes('run') || name.includes('jog')) && (overwrite || !this.actions.run)) {
       this.actions.run = action;
     } else if (name.includes('jump_start')) {
       action.setLoop(THREE.LoopOnce, 1);
