@@ -212,7 +212,8 @@ export class HUD {
         <div id="juzu-objective-text" style="font-size:12px;color:#f2ede4;line-height:1.35;">Align the bronze Inti sun-mirror on the south cliff or cross the hanging bridge to the North Sanctuary.</div>
       </div>
 
-      <div id="juzu-compass" style="display:none;"></div>
+      <!-- Assassin's Creed Minimalist Horizontal Compass Bar (Top-Center) -->
+      <div id="juzu-compass" style="position:absolute;top:16px;left:50%;transform:translateX(-50%);width:clamp(220px, calc(100vw - 540px), 410px);height:34px;background:linear-gradient(90deg, rgba(10,14,12,0.0) 0%, rgba(12,16,14,0.84) 18%, rgba(16,22,18,0.92) 50%, rgba(12,16,14,0.84) 82%, rgba(10,14,12,0.0) 100%);border-top:1px solid rgba(201,164,104,0.45);border-bottom:1px solid rgba(201,164,104,0.22);overflow:hidden;pointer-events:none;"></div>
       <div id="juzu-instinct-badge" style="display:none;"></div>
 
       <!-- Grapple Swing Reticle & Prompt Center-Screen -->
@@ -525,14 +526,73 @@ export class HUD {
     }
   }
 
-  public updateCompass(camYawRad: number): void {
-    const deg = Math.round(((-camYawRad * 180) / Math.PI + 360) % 360);
-    const headings = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const heading = headings[Math.floor(((deg + 22.5) % 360) / 45)];
-    const pad = deg < 100 ? (deg < 10 ? '00' : '0') : '';
-    if (this.compassEl) {
-      this.compassEl.textContent = `${heading} · ${pad}${deg}° ANDES`;
+  public updateCompass(
+    camYawRad: number,
+    playerPos?: { x: number; z: number },
+    objectivePos?: { x: number; z: number }
+  ): void {
+    if (!this.compassEl) return;
+    if (window.innerWidth < 740) {
+      this.compassEl.style.display = 'none';
+      return;
     }
+    this.compassEl.style.display = 'block';
+    const deg = ((-camYawRad * 180) / Math.PI + 360) % 360;
+    const marks = [
+      { d: 0, label: 'N', major: true },
+      { d: 45, label: 'NE', major: false },
+      { d: 90, label: 'E', major: true },
+      { d: 135, label: 'SE', major: false },
+      { d: 180, label: 'S', major: true },
+      { d: 225, label: 'SW', major: false },
+      { d: 270, label: 'W', major: true },
+      { d: 315, label: 'NW', major: false },
+    ];
+
+    let objClampedDiff: number | null = null;
+    let objDist = 0;
+    if (playerPos && objectivePos) {
+      const dx = objectivePos.x - playerPos.x;
+      const dz = objectivePos.z - playerPos.z;
+      objDist = Math.round(Math.hypot(dx, dz));
+      const targetDeg = ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360;
+      const diff = ((targetDeg - deg + 540) % 360) - 180;
+      objClampedDiff = Math.max(-88, Math.min(88, diff));
+    }
+
+    let itemsHtml = '';
+    for (const m of marks) {
+      const diff = ((m.d - deg + 540) % 360) - 180;
+      if (Math.abs(diff) <= 95) {
+        if (objClampedDiff !== null && Math.abs(diff - objClampedDiff) < 11) {
+          continue;
+        }
+        const pct = 50 + (diff / 95) * 44;
+        const col = m.label === 'N' ? '#f3d98b' : m.major ? '#e8e0d0' : '#9b9487';
+        const weight = m.major ? '700' : '600';
+        const size = m.major ? '11px' : '9px';
+        itemsHtml += `<div style="position:absolute;left:${pct.toFixed(1)}%;top:5px;transform:translateX(-50%);text-align:center;color:${col};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:${size};font-weight:${weight};letter-spacing:0.08em;">${m.label}<div style="width:1.5px;height:${m.major ? 6 : 4}px;background:${col};margin:2px auto 0 auto;opacity:0.75;"></div></div>`;
+      }
+    }
+
+    // Objective diamond pip & distance on the compass tape
+    if (objClampedDiff !== null) {
+      const pct = 50 + (objClampedDiff / 95) * 44;
+      itemsHtml += `
+        <div style="position:absolute;left:${pct.toFixed(1)}%;top:3px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <polygon points="6,1 11,6 6,11 1,6" fill="#ffd778" stroke="#141816" stroke-width="1.2"/>
+          </svg>
+          <span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:8px;font-weight:700;color:#ffd778;letter-spacing:0.04em;margin-top:-1px;">${objDist}m</span>
+        </div>
+      `;
+    }
+
+    // Central golden heading notch
+    this.compassEl.innerHTML = `
+      <div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #ffd778;"></div>
+      ${itemsHtml}
+    `;
   }
 
   public static async forceReloadLatest(): Promise<void> {

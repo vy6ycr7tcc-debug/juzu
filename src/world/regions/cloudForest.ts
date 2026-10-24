@@ -20,6 +20,7 @@ export class CloudForestRegion {
   private sparkMeshes: THREE.Mesh[] = [];
   private waterfallStrips: THREE.Mesh[] = [];
   private mistPlumes: THREE.Mesh[] = [];
+  private pollenPoints?: THREE.Points;
   private waterfallNormalMap?: THREE.Texture;
   private mirrorAligned = false;
   public isLoaded = false;
@@ -169,6 +170,7 @@ export class CloudForestRegion {
     this.buildCanyonTerraceRuins(ashlarStoneMat);
     this.buildExpeditionBaseCamp(ashlarStoneMat, timberPlankMat);
     this.buildGorgeWaterfall(ashlarStoneMat);
+    this.buildAtmosphereMotes();
   }
 
   public alignSunMirror(): void {
@@ -225,6 +227,10 @@ export class CloudForestRegion {
       const s = 1.0 + Math.sin(time * 2.4 + i * 1.5) * 0.18;
       m.scale.set(s, s * 0.75, s);
       m.rotation.y = time * 0.35 * (i % 2 === 0 ? 1 : -1) + i;
+    }
+    if (this.pollenPoints) {
+      this.pollenPoints.position.y = Math.sin(time * 0.45) * 0.18;
+      this.pollenPoints.position.x = Math.cos(time * 0.28) * 0.14;
     }
   }
 
@@ -633,11 +639,14 @@ export class CloudForestRegion {
     steleGroup.add(stele);
     this.interactables.push(stele);
 
-    // Inlaid Golden Chakana Stepped Cross
+    // Inlaid Hammered Golden Chakana Stepped Cross
     const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xd4a028,
-      metalness: 0.9,
-      roughness: 0.28,
+      color: 0xc89628,
+      normalMap: stoneMat.normalMap,
+      normalScale: new THREE.Vector2(0.30, 0.30),
+      roughnessMap: stoneMat.roughnessMap,
+      metalness: 0.88,
+      roughness: 0.34,
     });
     this.steleChakanaMat = goldMat;
 
@@ -1519,5 +1528,54 @@ export class CloudForestRegion {
     }
 
     this.group.add(fallsGroup);
+  }
+
+  private buildAtmosphereMotes(): void {
+    // Seeded 3D floating sunlit forest dust & pollen motes across South Camp, Gorge Bridge, and North Sanctuary
+    const moteCount = MOBILE ? 45 : 120;
+    const positions = new Float32Array(moteCount * 3);
+    const colors = new Float32Array(moteCount * 3);
+
+    for (let i = 0; i < moteCount; i++) {
+      const h1 = Math.sin(i * 12.9898 + 1.23) * 43758.5453;
+      const u1 = h1 - Math.floor(h1);
+      const h2 = Math.sin(i * 78.233 + 4.56) * 24634.6345;
+      const u2 = h2 - Math.floor(h2);
+      const h3 = Math.sin(i * 37.719 + 7.89) * 19283.7465;
+      const u3 = h3 - Math.floor(h3);
+
+      const x = (u1 - 0.5) * 32.0;
+      const z = 14.0 - u2 * 64.0; // Spans z = +14 (South Camp) across gorge to z = -50 (North Sanctuary)
+      const baseH = Math.max(3.5, standAt(x, z));
+      const y = baseH + 0.65 + u3 * 4.5;
+
+      positions[i * 3] = x;
+      positions[i * 3 + 1] = y;
+      positions[i * 3 + 2] = z;
+
+      // Warm golden-cream sunlit pollen & dust tint
+      const warm = 0.85 + (i % 4) * 0.05;
+      colors[i * 3] = 1.0 * warm;
+      colors[i * 3 + 1] = 0.92 * warm;
+      colors[i * 3 + 2] = 0.68 * warm;
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const mat = new THREE.PointsMaterial({
+      size: 2.2,
+      sizeAttenuation: false,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.46,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const points = new THREE.Points(geom, mat);
+    this.pollenPoints = points;
+    this.group.add(points);
   }
 }

@@ -249,25 +249,22 @@ export class WeaponManager {
     ammoHud.id = 'juzu-ammo-hud';
     ammoHud.style.cssText = `
       position: fixed;
-      top: 66px;
+      top: 56px;
       right: 18px;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      background: rgba(18, 20, 24, 0.78);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(212, 160, 40, 0.45);
-      border-radius: 20px;
-      color: #f5eedc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
+      gap: 7px;
+      padding: 5px 12px;
+      background: rgba(14, 18, 16, 0.86);
+      border: 1px solid rgba(201, 164, 104, 0.42);
+      border-radius: 14px;
+      color: #f2ece1;
+      font-family: Georgia, serif;
+      font-size: 12px;
+      letter-spacing: 0.06em;
       pointer-events: none;
       z-index: 40;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
       user-select: none;
       -webkit-user-select: none;
     `;
@@ -279,10 +276,10 @@ export class WeaponManager {
   public updateAmmoDisplay(): void {
     if (!this.ammoEl) return;
     this.ammoEl.innerHTML = `
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8c872" stroke-width="2">
-        <path d="M7 4h10v16H7z" />
-        <path d="M10 2h4v2h-4z" />
-        <line x1="12" y1="8" x2="12" y2="12" />
+      <svg width="13" height="15" viewBox="0 0 14 20" fill="none" stroke="#e8c872" stroke-width="1.6">
+        <path d="M4 8 L4 18 L10 18 L10 8 C10 4.5 7 1.5 7 1.5 C7 1.5 4 4.5 4 8 Z" fill="rgba(232,200,114,0.22)"/>
+        <line x1="3" y1="18" x2="11" y2="18"/>
+        <line x1="4" y1="11" x2="10" y2="11"/>
       </svg>
       <span>${this.isReloading ? 'RELOADING...' : `${this.ammo} / ${this.totalAmmo}`}</span>
     `;

@@ -134,9 +134,12 @@ export class HighSierraRegion {
 
     // Hand-hammered Golden Chakana keystone above the lintel with central solar aperture
     const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xd4a028,
-      metalness: 0.90,
-      roughness: 0.30,
+      color: 0xc89628,
+      normalMap: ashlarMat.normalMap,
+      normalScale: new THREE.Vector2(0.30, 0.30),
+      roughnessMap: ashlarMat.roughnessMap,
+      metalness: 0.88,
+      roughness: 0.34,
     });
     this.gateSealMat = goldMat;
 
@@ -192,11 +195,14 @@ export class HighSierraRegion {
     this.gnomonColumn = column;
     this.interactables.push(column);
 
-    // Bronze Solstice Calibration Ring with 4 cardinal directional solar ticks
+    // Hammered Bronze Solstice Calibration Ring with 4 cardinal directional solar ticks
     const bronzeMat = new THREE.MeshStandardMaterial({
-      color: 0xc8963e,
-      metalness: 0.92,
-      roughness: 0.26,
+      color: 0x8c6838,
+      normalMap: ashlarMat.normalMap,
+      normalScale: new THREE.Vector2(0.32, 0.32),
+      roughnessMap: ashlarMat.roughnessMap,
+      metalness: 0.85,
+      roughness: 0.42,
     });
     const ringGroup = new THREE.Group();
     ringGroup.position.set(120, gH + 3.15, -165);

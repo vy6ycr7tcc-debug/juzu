@@ -180,17 +180,11 @@ export function buildTrapezoidalGateway(
   const group = new THREE.Group();
   const offset = openingWidth * 0.5 + pillarWidth * 0.5;
 
-  const nicheDarkMat = new THREE.MeshStandardMaterial({
-    color: 0x1a1814,
-    roughness: 0.95,
-    metalness: 0.0,
-  });
-
-  const mossCushionMat = new THREE.MeshStandardMaterial({
-    color: 0x354a21,
-    roughness: 0.92,
-    metalness: 0.0,
-  });
+  const baseStdMat = mat as THREE.MeshStandardMaterial;
+  const nicheDarkMat = baseStdMat.clone ? baseStdMat.clone() : new THREE.MeshStandardMaterial();
+  nicheDarkMat.color = new THREE.Color(0x3a342c);
+  nicheDarkMat.roughness = 0.94;
+  nicheDarkMat.metalness = 0.0;
 
   for (const side of [-1, 1]) {
     const sideIdx = side === -1 ? 1 : 2;
@@ -230,7 +224,7 @@ export function buildTrapezoidalGateway(
     innerReveal.castShadow = true;
     group.add(innerReveal);
 
-    // 4. Recessed Trapezoidal Inca Wall Niches on both front and back faces of each pillar
+    // 4. Framed Recessed Trapezoidal Inca Wall Niches on both front and back faces of each pillar
     const nicheW = pillarWidth * 0.42;
     const nicheH = height * 0.30;
     const nicheY = height * 0.52 + 0.4;
@@ -241,15 +235,41 @@ export function buildTrapezoidalGateway(
         nicheDarkMat
       );
       recess.position.set(jambX, nicheY, faceZ * (depth * 0.45));
+      recess.receiveShadow = true;
       group.add(recess);
 
+      // Projecting monolithic niche lintel
+      const nicheLintel = new THREE.Mesh(
+        createIncaBlock(nicheW * 1.32, 0.20, 0.24, 0.04, 1.1, sideIdx * 31 + faceIdx),
+        mat
+      );
+      nicheLintel.position.set(jambX, nicheY + nicheH * 0.54, faceZ * (depth * 0.47));
+      nicheLintel.castShadow = true;
+      nicheLintel.receiveShadow = true;
+      group.add(nicheLintel);
+
+      // Projecting stone sill
       const sill = new THREE.Mesh(
-        createIncaBlock(nicheW * 1.25, 0.18, 0.24, 0.04, 1.2, sideIdx * 37 + faceIdx),
+        createIncaBlock(nicheW * 1.36, 0.18, 0.24, 0.04, 1.2, sideIdx * 37 + faceIdx),
         mat
       );
       sill.position.set(jambX, nicheY - nicheH * 0.54, faceZ * (depth * 0.47));
       sill.castShadow = true;
+      sill.receiveShadow = true;
       group.add(sill);
+
+      // Inward-battered left and right niche jambs
+      for (const nSide of [-1, 1]) {
+        const nJamb = new THREE.Mesh(
+          createIncaBlock(nicheW * 0.24, nicheH * 0.96, 0.20, 0.04, 0.9, sideIdx * 41 + faceIdx + nSide),
+          mat
+        );
+        nJamb.position.set(jambX + nSide * (nicheW * 0.52), nicheY, faceZ * (depth * 0.46));
+        nJamb.rotation.z = -nSide * 0.075;
+        nJamb.castShadow = true;
+        nJamb.receiveShadow = true;
+        group.add(nJamb);
+      }
     }
   }
 
@@ -274,7 +294,7 @@ export function buildTrapezoidalGateway(
   cornice.receiveShadow = true;
   group.add(cornice);
 
-  // 6. Irregular weathered top crest blocks & mossy cushions (breaks up straight box silhouette like ref_inca_masonry_foliage)
+  // 6. Irregular weathered top crest blocks with vertex-color moss (no untextured icosahedron blobs)
   const crestCount = 5;
   for (let c = 0; c < crestCount; c++) {
     const t = (c / (crestCount - 1)) - 0.5;
@@ -292,16 +312,6 @@ export function buildTrapezoidalGateway(
     crestBlock.castShadow = true;
     crestBlock.receiveShadow = true;
     group.add(crestBlock);
-
-    // Overhanging moss cushion on top of lintel crevices
-    const moss = new THREE.Mesh(new THREE.IcosahedronGeometry(cw * 0.34, 1), mossCushionMat);
-    moss.scale.set(1.3, 0.42, 0.95);
-    moss.position.set(
-      t * lintelW * 0.74,
-      height + lintelH * 1.26,
-      (c % 2 === 0 ? 1 : -1) * (depth * 0.52)
-    );
-    group.add(moss);
   }
 
   // 7. Worn stone threshold paving slabs in the portal opening
