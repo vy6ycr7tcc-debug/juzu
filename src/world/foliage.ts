@@ -114,13 +114,15 @@ export class Foliage {
     const canopyMat = new THREE.MeshStandardMaterial({
       map: canopyTex,
       normalMap: foliageNor,
-      normalScale: new THREE.Vector2(0.85, 0.85),
+      normalScale: new THREE.Vector2(0.55, 0.55),
       roughnessMap: foliageRough,
-      alphaTest: 0.24,
+      alphaTest: 0.28,
       side: THREE.DoubleSide,
       vertexColors: true,
-      roughness: 0.72,
-      metalness: 0.02,
+      roughness: 0.68,
+      metalness: 0.01,
+      emissive: new THREE.Color(0x18260e),
+      emissiveIntensity: 0.18,
     });
 
     this.trunkInstances = new THREE.InstancedMesh(trunkGeom, trunkMat, this.TREE_COUNT);
@@ -136,13 +138,15 @@ export class Foliage {
     const grassMat = new THREE.MeshStandardMaterial({
       map: fernTex,
       normalMap: foliageNor,
-      normalScale: new THREE.Vector2(0.95, 0.95),
+      normalScale: new THREE.Vector2(0.65, 0.65),
       roughnessMap: foliageRough,
-      alphaTest: 0.25,
+      alphaTest: 0.28,
       side: THREE.DoubleSide,
       vertexColors: true,
-      roughness: 0.74,
-      metalness: 0.02,
+      roughness: 0.70,
+      metalness: 0.01,
+      emissive: new THREE.Color(0x16240c),
+      emissiveIntensity: 0.14,
     });
 
     this.grassInstances = new THREE.InstancedMesh(grassGeom, grassMat, this.GRASS_COUNT);
@@ -232,71 +236,78 @@ export class Foliage {
     const cards: THREE.BufferGeometry[] = [];
     // 6 overlapping multi-tier bough crowns for a lush, full cloud-forest silhouette
     const crowns = [
-      { x: 0.0, y: 6.1, z: 0.0, r: 3.1 },
-      { x: 1.55, y: 5.1, z: 1.05, r: 2.7 },
-      { x: -1.45, y: 5.3, z: 0.95, r: 2.6 },
-      { x: 0.35, y: 5.5, z: -1.55, r: 2.6 },
-      { x: -1.25, y: 5.6, z: -1.15, r: 2.4 },
-      { x: 1.15, y: 4.5, z: -0.65, r: 2.3 },
+      { x: 0.0, y: 6.1, z: 0.0, r: 3.15 },
+      { x: 1.55, y: 5.15, z: 1.05, r: 2.75 },
+      { x: -1.45, y: 5.3, z: 0.95, r: 2.65 },
+      { x: 0.35, y: 5.5, z: -1.55, r: 2.65 },
+      { x: -1.25, y: 5.6, z: -1.15, r: 2.45 },
+      { x: 1.15, y: 4.55, z: -0.65, r: 2.35 },
     ];
 
     let seed = 0;
+    const cardPerCrown = MOBILE ? 8 : 11;
     for (const c of crowns) {
-      // 1. Inner 3D Leaf-Cluster Volume Dome (indexed SphereGeometry matching PlaneGeometry) so the tree crown is never see-through edge-on
-      const dome = new THREE.SphereGeometry(c.r * 0.58, 9, 7);
-      const dPos = dome.attributes.position;
-      const dUv = dome.attributes.uv;
-      const dColors = new Float32Array(dPos.count * 3);
-      for (let i = 0; i < dPos.count; i++) {
-        let dx = dPos.getX(i);
-        let dy = dPos.getY(i);
-        let dz = dPos.getZ(i);
-        const n = 0.84 + 0.32 * vnoise(dx * 1.8 + c.x, dz * 1.8 + c.z);
-        dx *= n * 1.18;
-        dy *= n * 0.68;
-        dz *= n * 1.18;
-        dPos.setXYZ(i, dx, dy, dz);
-        dUv.setXY(i, (dx / c.r) + 0.5, (dz / c.r) + 0.5);
-
-        // Warm sunlit olive-emerald crown top vs deep mossy forest-shadow underside
-        const sunT = THREE.MathUtils.clamp((dy / (c.r * 0.5)) * 0.5 + 0.55, 0.0, 1.0);
-        dColors[i * 3] = THREE.MathUtils.lerp(0.42, 0.92, sunT);
-        dColors[i * 3 + 1] = THREE.MathUtils.lerp(0.48, 0.98, sunT);
-        dColors[i * 3 + 2] = THREE.MathUtils.lerp(0.38, 0.82, sunT);
-      }
-      dome.setAttribute('color', new THREE.BufferAttribute(dColors, 3));
-      dome.translate(c.x, c.y, c.z);
-      dome.computeVertexNormals();
-      cards.push(dome);
-
-      // 2. Outer Feathered Botanical Leaf Cards around the dome for crisp alpha-tested leaf silhouettes
-      for (let k = 0; k < 5; k++) {
+      // Multi-layered cupped botanical leaf cards (inner core + outer plumage) with Spherical Bent Normals
+      for (let k = 0; k < cardPerCrown; k++) {
         seed++;
-        const card = new THREE.PlaneGeometry(c.r * 1.25, c.r * 1.25, 2, 2);
+        const isCore = k < 3;
+        const cardScale = isCore ? c.r * 1.05 : c.r * 1.32;
+        const card = new THREE.PlaneGeometry(cardScale, cardScale, 2, 2);
         const p = card.attributes.position;
-        const colors = new Float32Array(p.count * 3);
         for (let i = 0; i < p.count; i++) {
           const lx = p.getX(i);
           const ly = p.getY(i);
-          const d2 = (lx * lx + ly * ly) / (c.r * c.r * 0.65);
-          p.setZ(i, -d2 * 0.42);
-
-          const sunT = THREE.MathUtils.clamp(0.45 + (ly / c.r) * 0.55, 0.15, 1.0);
-          colors[i * 3] = THREE.MathUtils.lerp(0.48, 0.98, sunT);
-          colors[i * 3 + 1] = THREE.MathUtils.lerp(0.55, 1.05, sunT);
-          colors[i * 3 + 2] = THREE.MathUtils.lerp(0.44, 0.88, sunT);
+          const d2 = (lx * lx + ly * ly) / (cardScale * cardScale * 0.5);
+          // Cup each card gently into a natural bough umbrella
+          p.setZ(i, -d2 * 0.38);
         }
-        card.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-        card.rotateX(0.32 + (k % 2) * 0.58);
-        card.rotateY((k * Math.PI * 2) / 5 + seed * 0.5);
-        card.rotateZ(((seed % 3) - 1) * 0.22);
+        // Golden-angle phyllotaxis distribution so no two cards align into flat planes
+        const goldenAngle = k * 2.3999632 + seed * 0.37;
+        const tilt = isCore ? 0.65 + (k % 2) * 0.55 : 0.35 + ((k * 0.618) % 1) * 0.72;
+        card.rotateX(tilt);
+        card.rotateY(goldenAngle);
+        card.rotateZ(((seed % 5) - 2) * 0.14);
+
+        const radialDist = isCore ? c.r * 0.12 : c.r * (0.24 + ((k % 3) * 0.08));
+        const verticalOff = ((k / Math.max(1, cardPerCrown - 1)) - 0.48) * c.r * 0.52;
         card.translate(
-          c.x + Math.cos(seed * 1.7) * (c.r * 0.22),
-          c.y + (k - 2.0) * 0.24,
-          c.z + Math.sin(seed * 1.7) * (c.r * 0.22)
+          c.x + Math.cos(goldenAngle) * radialDist,
+          c.y + verticalOff,
+          c.z + Math.sin(goldenAngle) * radialDist
         );
-        card.computeVertexNormals();
+
+        // AAA Spherical Bent Normals + Internal Canopy Occlusion (SpeedTree / Horizon technique)
+        const nAttr = card.attributes.normal;
+        const colors = new Float32Array(p.count * 3);
+        const centerY = c.y - c.r * 0.28;
+        for (let i = 0; i < p.count; i++) {
+          const vx = p.getX(i);
+          const vy = p.getY(i);
+          const vz = p.getZ(i);
+
+          // Bent normal points radially outward & upward from sub-crown center
+          let nx = vx - c.x;
+          let ny = (vy - centerY) * 1.35 + c.r * 0.35;
+          let nz = vz - c.z;
+          const len = Math.hypot(nx, ny, nz) || 1;
+          nx /= len;
+          ny /= len;
+          nz /= len;
+          nAttr.setXYZ(i, nx, ny, nz);
+
+          // Internal canopy ambient occlusion: shadowed interior vs sunlit outer tips
+          const distFromCore = Math.hypot(vx - c.x, vy - c.y, vz - c.z) / c.r;
+          const heightFactor = THREE.MathUtils.clamp((vy - (c.y - c.r * 0.6)) / (c.r * 1.25), 0, 1);
+          const coreAO = isCore ? 0.52 : THREE.MathUtils.clamp(0.46 + distFromCore * 0.48, 0.42, 1.0);
+          const sunT = THREE.MathUtils.clamp(heightFactor * 0.65 + coreAO * 0.35, 0.22, 1.0);
+
+          colors[i * 3] = THREE.MathUtils.lerp(0.28, 0.86, sunT);
+          colors[i * 3 + 1] = THREE.MathUtils.lerp(0.36, 0.94, sunT);
+          colors[i * 3 + 2] = THREE.MathUtils.lerp(0.22, 0.68, sunT);
+        }
+        nAttr.needsUpdate = true;
+        card.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         cards.push(card);
       }
     }
@@ -306,7 +317,7 @@ export class Foliage {
 
   private buildFernRosetteGeometry(): THREE.BufferGeometry {
     const fronds: THREE.BufferGeometry[] = [];
-    const frondCount = 6;
+    const frondCount = 7;
     for (let i = 0; i < frondCount; i++) {
       const plane = new THREE.PlaneGeometry(1.55, 1.35, 2, 3);
       plane.translate(0, 0.62, 0);
@@ -316,18 +327,28 @@ export class Foliage {
         const vy = p.getY(v);
         const t = THREE.MathUtils.clamp(vy / 1.35, 0, 1);
         // Arch gracefully outward like real Cyathea tree-fern fronds
-        p.setZ(v, t * t * 0.48);
+        p.setZ(v, t * t * 0.52);
         p.setY(v, vy * (1.0 - t * 0.16));
 
-        const shade = 0.58 + t * 0.48;
-        colors[v * 3] = shade * 0.92;
-        colors[v * 3 + 1] = shade * 1.04;
-        colors[v * 3 + 2] = shade * 0.84;
+        const shade = 0.42 + t * 0.58;
+        colors[v * 3] = shade * 0.86;
+        colors[v * 3 + 1] = shade * 0.98;
+        colors[v * 3 + 2] = shade * 0.72;
       }
       plane.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      plane.rotateX(0.26 + (i % 2) * 0.18);
-      plane.rotateY((i * Math.PI * 2) / frondCount + (i % 2) * 0.2);
-      plane.computeVertexNormals();
+      plane.rotateX(0.28 + (i % 2) * 0.18);
+      plane.rotateY((i * Math.PI * 2) / frondCount + (i % 2) * 0.16);
+
+      // Hemispherical bent normals so understory ferns catch soft sky light instead of harsh flat-plane shading
+      const nAttr = plane.attributes.normal;
+      for (let v = 0; v < p.count; v++) {
+        let nx = p.getX(v);
+        let ny = p.getY(v) + 0.85;
+        let nz = p.getZ(v);
+        const len = Math.hypot(nx, ny, nz) || 1;
+        nAttr.setXYZ(v, nx / len, ny / len, nz / len);
+      }
+      nAttr.needsUpdate = true;
       fronds.push(plane);
     }
     return mergeGeometries(fronds);

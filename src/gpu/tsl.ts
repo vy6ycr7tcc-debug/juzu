@@ -62,16 +62,17 @@ export const andeanFog = Fn(([p]: N[]) => {
     float(1).sub(k.mul(0.5))
   );
 
-  // Thins with high Andean altitude so mountain massifs remain crisp
+  // Thins with high Andean altitude so mountain massifs remain crisp, while river canyons hold mist
   const highClear = mix(float(1), float(0.4), smoothstep(30, 240, p.y));
-  const dens = fogUniforms.density.mul(integ).mul(highClear);
+  const canyonMist = smoothstep(3.2, -1.8, p.y).mul(float(1.85)).add(float(1.0));
+  const dens = fogUniforms.density.mul(integ).mul(highClear).mul(canyonMist);
   const fogAmt = float(1).sub(exp(d.mul(dens).negate()));
 
-  // In-scattering toward sun
+  // Mie forward in-scattering toward sun (Anvil / Foundation Engine atmospheric depth)
   const sunScatter = max(dot(rd, fogUniforms.sunDir), 0);
-  const sunGlow = pow(sunScatter, 16).mul(0.4);
-  const col = mix(fogUniforms.color, fogUniforms.sun, sunGlow);
-  return vec4(col, clamp(fogAmt, 0, 1));
+  const sunGlow = pow(sunScatter, 6).mul(0.38).add(pow(sunScatter, 24).mul(0.28));
+  const col = mix(fogUniforms.color, fogUniforms.sun, clamp(sunGlow, 0, 0.75));
+  return vec4(col, clamp(fogAmt, 0, 0.92));
 });
 
 export function juzuFogNode(): N {
