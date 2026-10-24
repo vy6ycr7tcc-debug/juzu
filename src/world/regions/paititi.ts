@@ -13,6 +13,7 @@ export class PaititiRegion {
   private sunGoldMat?: THREE.MeshStandardMaterial;
   private canalWaterMesh?: THREE.Mesh;
   private sunLight?: THREE.PointLight;
+  private waterNor?: THREE.Texture;
   private awakened = false;
 
   constructor(scene: THREE.Scene) {
@@ -120,6 +121,7 @@ export class PaititiRegion {
     const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
     waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
     waterNor.repeat.set(2, 12);
+    this.waterNor = waterNor;
 
     const canalWaterMat = new THREE.MeshStandardMaterial({
       color: 0x245e74,
@@ -155,6 +157,10 @@ export class PaititiRegion {
     if (this.awakened && this.sunLight) {
       this.sunLight.intensity = 4.8 + Math.sin(time * 6.5) * 0.55;
     }
+    if (this.waterNor) {
+      this.waterNor.offset.y = -(time * 0.085) % 1.0;
+      this.waterNor.offset.x = Math.sin(time * 0.6) * 0.015;
+    }
   }
 
   private buildPlazaOfTheSun(
@@ -183,11 +189,15 @@ export class PaititiRegion {
     daisTier2.receiveShadow = true;
     plazaGroup.add(daisTier2);
 
+    // Hand-hammered Imperial Inca Gold with micro-facet normal/roughness relief
     const goldMat = solid(
       new THREE.MeshStandardMaterial({
-        color: 0xd4a017,
-        metalness: 0.95,
-        roughness: 0.28,
+        color: 0xc89624,
+        normalMap: plinthMat.normalMap,
+        normalScale: new THREE.Vector2(0.28, 0.28),
+        roughnessMap: plinthMat.roughnessMap,
+        metalness: 0.90,
+        roughness: 0.34,
       })
     );
     this.sunGoldMat = goldMat;

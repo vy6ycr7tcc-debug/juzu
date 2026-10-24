@@ -1,6 +1,7 @@
 import type { Input } from '../core/input';
 import type { WeaponManager } from '../player/weapon';
 import type { ExpeditionMenu } from './expeditionMenu';
+import { IS_IOS } from '../core/quality';
 
 export interface TouchControlsOptions {
   input: Input;
@@ -22,6 +23,7 @@ export class TouchControls {
   private rootEl: HTMLElement;
   private joyBaseEl: HTMLElement;
   private joyKnobEl: HTMLElement;
+  private actionClusterEl: HTMLElement;
 
   // Joystick state
   private activeJoyTouchId: number | null = null;
@@ -41,6 +43,11 @@ export class TouchControls {
     this.onGrapple = options.onGrapple;
     this.onInteract = options.onInteract;
 
+    const isTouchDevice =
+      IS_IOS ||
+      (typeof window !== 'undefined' &&
+        (matchMedia('(pointer:coarse)').matches || navigator.maxTouchPoints > 0));
+
     // Root touch layer
     const touchLayer = document.getElementById('juzu-touch-layer') || document.body;
     this.rootEl = document.createElement('div');
@@ -57,10 +64,11 @@ export class TouchControls {
     `;
     touchLayer.appendChild(this.rootEl);
 
-    // 1. Floating Virtual Analog Joystick (Bottom-Left Default Resting Position)
+    // 1. Floating Virtual Analog Joystick (Bottom-Left Default Resting Position — shown on Touch devices)
     this.joyBaseEl = document.createElement('div');
     this.joyBaseEl.id = 'juzu-touch-joy-base';
     this.joyBaseEl.style.cssText = `
+      display: ${isTouchDevice ? 'block' : 'none'};
       position: absolute;
       bottom: 32px;
       left: 28px;
@@ -95,10 +103,12 @@ export class TouchControls {
     this.joyBaseEl.appendChild(this.joyKnobEl);
     this.rootEl.appendChild(this.joyBaseEl);
 
-    // 2. Right Ergonomic Action Cluster (Natural Thumb Arc)
+    // 2. Right Ergonomic Action Cluster (Natural Thumb Arc — shown on Touch devices)
     const actionCluster = document.createElement('div');
+    this.actionClusterEl = actionCluster;
     actionCluster.id = 'juzu-touch-action-cluster';
     actionCluster.style.cssText = `
+      display: ${isTouchDevice ? 'block' : 'none'};
       position: absolute;
       bottom: 20px;
       right: 14px;
@@ -110,7 +120,7 @@ export class TouchControls {
     // Action button helper
     const createBtn = (
       id: string,
-      icon: string,
+      svgIcon: string,
       label: string,
       size: number,
       posCss: string,
@@ -141,7 +151,7 @@ export class TouchControls {
         transition: transform 0.08s ease, filter 0.12s ease;
       `;
       btn.innerHTML = `
-        <span style="font-size: ${Math.round(size * 0.36)}px; line-height: 1;">${icon}</span>
+        <span style="display:flex;align-items:center;justify-content:center;line-height:1;">${svgIcon}</span>
         <span style="font-size: 9px; font-weight: 700; color: #e8c872; letter-spacing: 0.05em; margin-top: 2px;">${label}</span>
       `;
       btn.addEventListener('touchstart', (e) => {
@@ -158,7 +168,7 @@ export class TouchControls {
     // JUMP Button (Primary Locomotion — Resting thumb position)
     const jumpBtn = createBtn(
       'juzu-btn-jump',
-      '▲',
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f5eedc" stroke-width="2.4"><polyline points="18 15 12 9 6 15"/></svg>',
       'JUMP',
       62,
       'right: 6px; bottom: 6px;',
@@ -177,7 +187,7 @@ export class TouchControls {
     // FIRE / SHOOT Button (Above Jump)
     const fireBtn = createBtn(
       'juzu-btn-fire',
-      '💥',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffd778" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>',
       'FIRE',
       56,
       'right: 8px; bottom: 84px;',
@@ -194,7 +204,7 @@ export class TouchControls {
     // ACTION / INTERACT / GRAPPLE Button (Left of Jump)
     const interactBtn = createBtn(
       'juzu-btn-interact',
-      '✋',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffd778" stroke-width="2.2"><polygon points="12 2 22 12 12 22 2 12"/></svg>',
       'ACTION',
       54,
       'right: 78px; bottom: 10px;',
@@ -212,7 +222,7 @@ export class TouchControls {
     // AIM Toggle Button (Above Action)
     const aimBtn = createBtn(
       'juzu-btn-aim',
-      '🎯',
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e8c872" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2" fill="#e8c872"/></svg>',
       'AIM',
       46,
       'right: 76px; bottom: 80px;',
@@ -229,7 +239,7 @@ export class TouchControls {
     // CROUCH Toggle Button (Far Left)
     const crouchBtn = createBtn(
       'juzu-btn-crouch',
-      '▼',
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f5eedc" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg>',
       'CROUCH',
       44,
       'right: 144px; bottom: 16px;',
@@ -247,7 +257,7 @@ export class TouchControls {
 
     this.rootEl.appendChild(actionCluster);
 
-    // 3. Top Navigation Pills (World Map & Inventory)
+    // 3. Top Navigation Pills (World Map, Inventory & Menu — Clean Vector SVGs)
     const topBar = document.createElement('div');
     topBar.id = 'juzu-mobile-top-bar';
     topBar.style.cssText = `
@@ -255,11 +265,11 @@ export class TouchControls {
       top: 18px;
       right: 18px;
       display: flex;
-      gap: 10px;
+      gap: 8px;
       pointer-events: auto;
     `;
 
-    const createPill = (icon: string, label: string, onClick: () => void) => {
+    const createPill = (svgIcon: string, label: string, onClick: () => void) => {
       const pill = document.createElement('button');
       pill.style.cssText = `
         display: flex;
@@ -267,15 +277,16 @@ export class TouchControls {
         gap: 6px;
         padding: 6px 12px;
         border-radius: 16px;
-        background: rgba(18, 24, 20, 0.95);
-        border: 1px solid rgba(212, 160, 40, 0.45);
-        color: #f5eedc;
-        font-size: 12px;
-        font-weight: 600;
+        background: rgba(14, 18, 16, 0.88);
+        border: 1px solid rgba(201, 164, 104, 0.45);
+        color: #f2ece1;
+        font-family: Georgia, serif;
+        font-size: 11px;
+        letter-spacing: 0.06em;
         cursor: pointer;
         box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       `;
-      pill.innerHTML = `<span>${icon}</span><span>${label}</span>`;
+      pill.innerHTML = `<span style="display:inline-flex;align-items:center;">${svgIcon}</span><span>${label}</span>`;
       pill.addEventListener('click', (e) => {
         e.stopPropagation();
         onClick();
@@ -283,9 +294,13 @@ export class TouchControls {
       return pill;
     };
 
-    topBar.appendChild(createPill('🗺️', 'Map', () => this.expeditionMenu.open('map')));
-    topBar.appendChild(createPill('🎒', 'Inventory', () => this.expeditionMenu.open('inventory')));
-    topBar.appendChild(createPill('⚙️', 'Menu', () => this.expeditionMenu.open('settings')));
+    const mapSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e8c872" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>`;
+    const packSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e8c872" stroke-width="2"><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`;
+    const gearSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e8c872" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+    topBar.appendChild(createPill(mapSvg, 'Map', () => this.expeditionMenu.open('map')));
+    topBar.appendChild(createPill(packSvg, 'Inventory', () => this.expeditionMenu.open('inventory')));
+    topBar.appendChild(createPill(gearSvg, 'Menu', () => this.expeditionMenu.open('settings')));
 
     this.rootEl.appendChild(topBar);
 
@@ -295,6 +310,10 @@ export class TouchControls {
 
   private bindFloatingJoystickAndLook(): void {
     const handleTouchStart = (e: TouchEvent) => {
+      if (this.joyBaseEl.style.display === 'none') {
+        this.joyBaseEl.style.display = 'block';
+        this.actionClusterEl.style.display = 'block';
+      }
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
         const target = e.target as HTMLElement;

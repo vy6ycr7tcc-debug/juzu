@@ -573,7 +573,7 @@ async function bootJuzu() {
       controller.grounded,
       weapon.isAiming
     );
-    hud.updateCompass(followCamera.yaw);
+    hud.updateCompass(followCamera.yaw, controller.pos, activeBeaconPos);
 
     // Surface-aware Footstep Audio
     if (controller.grounded && controller.speed > 0.4) {
@@ -592,6 +592,7 @@ async function bootJuzu() {
     sky.update(controller.pos, activeToD);
     foliage.update(totalTime);
     cloudForest.update(totalTime);
+    jungleLowlands.update(totalTime);
     paititi.update(totalTime);
     lightRig.update(controller.pos, camera.position);
 

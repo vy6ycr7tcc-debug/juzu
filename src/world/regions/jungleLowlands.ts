@@ -10,6 +10,7 @@ export class JungleLowlandsRegion {
   private texLoader = new THREE.TextureLoader();
   private sluiceWheel?: THREE.Mesh;
   private cenotePool?: THREE.Mesh;
+  private waterNor?: THREE.Texture;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Region_JungleLowlands';
@@ -113,6 +114,7 @@ export class JungleLowlandsRegion {
     const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
     waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
     waterNor.repeat.set(8, 8);
+    this.waterNor = waterNor;
 
     const cenoteWaterMat = new THREE.MeshStandardMaterial({
       color: 0x16423b,
@@ -138,6 +140,13 @@ export class JungleLowlandsRegion {
     }
   }
 
+  public update(time: number): void {
+    if (this.waterNor) {
+      this.waterNor.offset.x = (time * 0.022) % 1.0;
+      this.waterNor.offset.y = (time * 0.016) % 1.0;
+    }
+  }
+
   private buildExpeditionQuay(quayMat: THREE.MeshStandardMaterial): void {
     const quayGroup = new THREE.Group();
     const qH = standAt(-180, 126);
@@ -159,11 +168,14 @@ export class JungleLowlandsRegion {
       this.interactables.push(totem);
     }
 
-    // Ancient Bronze & Stone Sluice Capstan Wheel offset to the right of the central avenue so the Serpent Arches vista is wide open
+    // Ancient Hammered Bronze & Stone Sluice Capstan Wheel offset to the right of the central avenue
     const bronzeMat = new THREE.MeshStandardMaterial({
-      color: 0xb88636,
-      metalness: 0.88,
-      roughness: 0.3,
+      color: 0x8c6838,
+      normalMap: quayMat.normalMap,
+      normalScale: new THREE.Vector2(0.32, 0.32),
+      roughnessMap: quayMat.roughnessMap,
+      metalness: 0.85,
+      roughness: 0.42,
     });
     const capstanPedestal = new THREE.Mesh(createIncaBlock(1.15, 1.25, 1.15, 0.1, 1.5), quayMat);
     capstanPedestal.position.set(-182.6, qH + 0.95, 129.2);
@@ -197,9 +209,12 @@ export class JungleLowlandsRegion {
     const archGroup = new THREE.Group();
 
     const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xc89628,
-      metalness: 0.9,
-      roughness: 0.32,
+      color: 0xb88c34,
+      normalMap: jungleStoneMat.normalMap,
+      normalScale: new THREE.Vector2(0.32, 0.32),
+      roughnessMap: jungleStoneMat.roughnessMap,
+      metalness: 0.86,
+      roughness: 0.38,
     });
 
     for (let i = 0; i < 3; i++) {
@@ -209,7 +224,7 @@ export class JungleLowlandsRegion {
       gate.position.set(-180, h - 0.1, z);
 
       // Carved golden serpent lintel crest on each arch
-      const crest = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.36, 1.92), goldMat);
+      const crest = new THREE.Mesh(createIncaBlock(2.6, 0.36, 1.92, 0.06, 1.2, 60 + i), goldMat);
       crest.position.set(0, 6.2, 0);
       gate.add(crest);
 
