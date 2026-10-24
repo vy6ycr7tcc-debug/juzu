@@ -29,18 +29,18 @@ export class LightRig {
     this.sun.target = this.targetObj;
 
     const cam = this.sun.shadow.camera as THREE.OrthographicCamera;
-    const radius = 54;
+    const radius = 36;
     cam.left = -radius;
     cam.right = radius;
     cam.top = radius;
     cam.bottom = -radius;
     cam.near = 1;
-    cam.far = 200;
+    cam.far = 180;
 
     this.sun.shadow.mapSize.set(rig.shadowSize, rig.shadowSize);
-    this.sun.shadow.bias = -0.0005;
-    this.sun.shadow.normalBias = 0.04;
-    this.sun.shadow.radius = 3;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.028;
+    this.sun.shadow.radius = 2.5;
 
     scene.add(this.sun);
 
@@ -48,12 +48,12 @@ export class LightRig {
     this.hemi = new THREE.HemisphereLight(
       new THREE.Color(cfg.hemiSky),
       new THREE.Color(cfg.hemiGround),
-      cfg.hemiIntensity * 1.5
+      cfg.hemiIntensity * 0.9
     );
     scene.add(this.hemi);
 
-    // 3. Andean Camera Fill / Bounce Light (scaled dynamically by Time of Day)
-    this.camFill = new THREE.DirectionalLight(0xffecd8, 0.62);
+    // 3. Subtle Andean Camera Eye-Catch Fill (low intensity so normal maps and shadows stay crisp)
+    this.camFill = new THREE.DirectionalLight(0xffecd8, 0.12);
     this.camFill.target = this.camFillTarget;
     scene.add(this.camFill);
 
@@ -97,17 +97,17 @@ export class LightRig {
 
     this.hemi.color.set(cfg.hemiSky);
     this.hemi.groundColor.set(cfg.hemiGround);
-    this.hemi.intensity = cfg.hemiIntensity * 1.5;
+    this.hemi.intensity = cfg.hemiIntensity * 0.9;
 
     if (tod === 'night') {
       this.camFill.color.setHex(0x6886b4);
-      this.camFill.intensity = 0.24;
+      this.camFill.intensity = 0.08;
     } else if (tod === 'dawn' || tod === 'dusk') {
       this.camFill.color.setHex(0xffcca0);
-      this.camFill.intensity = 0.48;
+      this.camFill.intensity = 0.10;
     } else {
       this.camFill.color.setHex(0xffecd8);
-      this.camFill.intensity = 0.62;
+      this.camFill.intensity = 0.12;
     }
 
     const sDir = sunDirection(tod);
@@ -123,11 +123,11 @@ export class LightRig {
   private applyEnvironmentIntensity(tod: TimeOfDay): void {
     if (!this.sceneRef.environment) return;
     if (tod === 'night') {
-      this.sceneRef.environmentIntensity = 0.12;
+      this.sceneRef.environmentIntensity = 0.10;
     } else if (tod === 'dawn' || tod === 'dusk') {
-      this.sceneRef.environmentIntensity = 0.42;
+      this.sceneRef.environmentIntensity = 0.30;
     } else {
-      this.sceneRef.environmentIntensity = 0.72;
+      this.sceneRef.environmentIntensity = 0.45;
     }
   }
 

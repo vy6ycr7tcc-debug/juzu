@@ -1,6 +1,15 @@
 import * as THREE from 'three/webgpu';
-import { triplanarTextures, texture, float, positionWorld, normalWorld, vertexColor } from 'three/tsl';
-import { withFog } from '../gpu/tsl';
+import {
+  triplanarTextures,
+  texture,
+  normalMap,
+  float,
+  vec2,
+  mix,
+  smoothstep,
+  positionWorld,
+  normalWorld,
+} from 'three/tsl';
 import { getRouteInfluence } from './routeData';
 import { MOBILE } from '../core/quality';
 
@@ -202,14 +211,22 @@ export class Terrain {
     const groundAO = texLoader.load(
       MOBILE
         ? '/juzu/textures/scans/rocky_trail_ao_1k.webp'
-        : '/juzu/textures/scans/rocky_trail_ao_2k.webp'
+        : '/juzu/textures/scans/rocky_trail_ao_2k.webp',
+      () => {
+        groundAO.needsUpdate = true;
+        this.material.needsUpdate = true;
+      }
     );
     groundAO.wrapS = groundAO.wrapT = THREE.RepeatWrapping;
 
     const cliffTex = texLoader.load(
       MOBILE
         ? '/juzu/textures/scans/cliff_side_diffuse_1k.webp'
-        : '/juzu/textures/scans/cliff_side_diffuse_2k.webp'
+        : '/juzu/textures/scans/cliff_side_diffuse_2k.webp',
+      () => {
+        cliffTex.needsUpdate = true;
+        this.material.needsUpdate = true;
+      }
     );
     cliffTex.colorSpace = THREE.SRGBColorSpace;
     cliffTex.anisotropy = MOBILE ? 2 : 8;
@@ -218,25 +235,30 @@ export class Terrain {
     this.material = new THREE.MeshStandardNodeMaterial({
       color: 0xf6f0e6,
       vertexColors: true,
-      roughness: 0.82,
-      metalness: 0.03,
+      roughness: 0.86,
+      metalness: 0.02,
       map: groundTex,
       normalMap: groundNor,
-      normalScale: new THREE.Vector2(2.4, 2.4),
       roughnessMap: groundRough,
-      aoMap: groundAO,
-      aoMapIntensity: 0.95,
       flatShading: false,
     });
 
+    // Modulate normalMap & AO by slope (normalWorld.y) while keeping 1.15 rock relief on vertical canyon walls
+    const flatSlope = smoothstep(float(0.45), float(0.82), normalWorld.y);
+    const groundAoFactor = mix(float(0.88), texture(groundAO).r, flatSlope.mul(float(0.75)));
+    const normalStrength = mix(float(1.15), float(1.95), flatSlope);
+
+    // Note: NodeMaterial automatically multiplies colorNode by vertexColor() when vertexColors: true
     this.material.colorNode = triplanarTextures(
       texture(cliffTex),
       texture(groundTex),
       texture(cliffTex),
-      float(0.12),
+      float(0.14),
       positionWorld,
-      normalWorld
-    ).mul(vertexColor());
+      normalWorld.abs().pow(float(8.0))
+    ).mul(groundAoFactor);
+
+    this.material.normalNode = normalMap(texture(groundNor), vec2(normalStrength));
   }
 
   public update(playerPos: THREE.Vector3): void {
@@ -337,10 +359,10 @@ export class Terrain {
       const ny = normAttr.getY(i);
       const nz = normAttr.getZ(i);
 
-      // Continuous planar UV projection across the terrain grid
-      const tileScale = 0.12;
-      const uCoord = vx * tileScale;
-      const vCoord = vz * tileScale;
+      // 3D slope-compensated UV projection so normalMap & aoMap never stretch vertically on cliffs
+      const tileScale = 0.14;
+      const uCoord = (vx + vy * 0.85) * tileScale;
+      const vCoord = (vz - vy * 0.65) * tileScale;
       uvAttr.setXY(i, uCoord, vCoord);
 
       // Micro-noise, macro-soil patches & horizontal rock strata banding

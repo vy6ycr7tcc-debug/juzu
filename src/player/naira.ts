@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Controller, LocomotionPose } from './controller';
 import { standAt } from '../world/terrain';
+import { MOBILE } from '../core/quality';
 
 /**
  * Turn quantized vertex data (16-bit positions, 16-bit normals from KHR_mesh_quantization)
@@ -41,14 +42,19 @@ export class Naira {
   private currentAction: THREE.AnimationAction | null = null;
   private currentPose: LocomotionPose = 'idle';
 
-  // Sourced skeleton bone sockets for gear / sidearm attachments
+  // Sourced skeleton bone sockets for gear / sidearm attachments & anatomical posture alignment
   private headBone: THREE.Object3D | null = null;
   public rightHandBone: THREE.Object3D | null = null;
   public rightForearmBone: THREE.Object3D | null = null;
   public rightUpperArmBone: THREE.Object3D | null = null;
   public leftUpperArmBone: THREE.Object3D | null = null;
   public leftForearmBone: THREE.Object3D | null = null;
+  public leftThighBone: THREE.Object3D | null = null;
   public rightThighBone: THREE.Object3D | null = null;
+  public leftShinBone: THREE.Object3D | null = null;
+  public rightShinBone: THREE.Object3D | null = null;
+  public leftFootBone: THREE.Object3D | null = null;
+  public rightFootBone: THREE.Object3D | null = null;
   public isAiming = false;
 
   // Dynamic grounding, banking and athletic posture
@@ -93,12 +99,65 @@ export class Naira {
       this.groundOffset = -alignedBox.min.y;
       this.modelRoot.position.y = this.groundOffset;
 
-      // Enable PBR shadows across sourced geometry and disable frustum culling on skinned mesh
+      // Expedition canvas weave texture for field archaeologist jacket & cargo pants (preserving sculpted normal maps)
+      const texLoader = new THREE.TextureLoader();
+      const canvasTex = texLoader.load(
+        MOBILE
+          ? '/juzu/assets/character-textures/character-canvas_1k.webp'
+          : '/juzu/assets/character-textures/character-canvas.jpeg'
+      );
+      canvasTex.colorSpace = THREE.SRGBColorSpace;
+      canvasTex.wrapS = canvasTex.wrapT = THREE.RepeatWrapping;
+      canvasTex.repeat.set(3, 3);
+      canvasTex.flipY = false;
+
+      // Enable PBR shadows across sourced geometry, fix dielectric skin/hair metalness, and grade expedition wardrobe
       this.modelRoot.traverse((child) => {
         if ((child as THREE.Mesh).isMesh || (child as THREE.SkinnedMesh).isSkinnedMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
           child.frustumCulled = false;
+
+          const mesh = child as THREE.Mesh;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          for (const m of mats) {
+            if (m instanceof THREE.MeshStandardMaterial) {
+              const mName = (m.name || '').toLowerCase();
+              const cName = (child.name || '').toLowerCase();
+              if (mName.includes('body') || cName.includes('body')) {
+                // Human skin is a pure dielectric (fix glTF 0.5 metallicFactor artifact)
+                m.metalness = 0.0;
+                m.roughness = 0.62;
+              } else if (mName.includes('hair') || cName.includes('hair') || cName.includes('eyelash')) {
+                m.metalness = 0.0;
+                m.roughness = 0.56;
+              } else if (mName.includes('jacket') || cName.includes('suit')) {
+                // Andean field archaeologist weathered olive-khaki expedition jacket
+                m.map = canvasTex;
+                m.color.setHex(0x6e6a4c);
+                m.metalness = 0.02;
+                m.roughness = 0.86;
+              } else if (mName.includes('pants') || cName.includes('pants')) {
+                // Rugged earth-brown field cargo trousers
+                m.map = canvasTex;
+                m.color.setHex(0x4c4034);
+                m.metalness = 0.02;
+                m.roughness = 0.88;
+              } else if (mName.includes('shirt') || cName.includes('shirt')) {
+                // Warm natural linen field undershirt
+                m.color.setHex(0xd6c8b2);
+                m.metalness = 0.0;
+                m.roughness = 0.84;
+              } else if (mName.includes('boots') || cName.includes('heels')) {
+                // Oiled dark brown mountain leather boots
+                m.map = canvasTex;
+                m.color.setHex(0x3a2a1d);
+                m.metalness = 0.04;
+                m.roughness = 0.64;
+              }
+              m.needsUpdate = true;
+            }
+          }
         }
         if (child.name && child.name.includes(':')) {
           child.name = child.name.replace(/:/g, '');
@@ -126,7 +185,12 @@ export class Naira {
       this.rightUpperArmBone = findBone(['RightArm', 'upper_arm.R', 'upper_armR', 'arm_r']);
       this.leftUpperArmBone = findBone(['LeftArm', 'upper_arm.L', 'upper_armL', 'arm_l']);
       this.leftForearmBone = findBone(['LeftForeArm', 'forearm.L', 'forearmL', 'forearm_l']);
+      this.leftThighBone = findBone(['LeftUpLeg', 'thigh.L', 'thighL', 'thigh_l']);
       this.rightThighBone = findBone(['RightUpLeg', 'thigh.R', 'thighR', 'thigh_r']);
+      this.leftShinBone = findBone(['LeftLeg', 'shin.L', 'shinL', 'shin_l']);
+      this.rightShinBone = findBone(['RightLeg', 'shin.R', 'shinR', 'shin_r']);
+      this.leftFootBone = findBone(['LeftFoot', 'foot.L', 'footL', 'foot_l']);
+      this.rightFootBone = findBone(['RightFoot', 'foot.R', 'footR', 'foot_r']);
 
       // Setup AnimationMixer
       this.mixer = new THREE.AnimationMixer(this.modelRoot);
@@ -251,7 +315,14 @@ export class Naira {
     const slopeDiff = Math.min(0.35, Math.abs(leftFootH - rightFootH));
     const crouchDrop = controller.crouching ? -0.30 : controller.dodging ? -0.22 : 0;
     const landDrop = controller.pose === 'jump_land' ? -0.14 : 0;
-    const targetPelvisOffset = -slopeDiff * 0.35 + crouchDrop + landDrop;
+    // Compensate for straightening the baked 40-deg knee squat in idle/walk so boot soles rest flush on terrain
+    const uprightLift =
+      controller.pose === 'idle'
+        ? 0.095
+        : controller.pose === 'walk' || controller.pose === 'run'
+          ? 0.038
+          : 0;
+    const targetPelvisOffset = -slopeDiff * 0.35 + crouchDrop + landDrop + uprightLift;
     this.smoothPelvisOffset = THREE.MathUtils.lerp(
       this.smoothPelvisOffset,
       targetPelvisOffset,
@@ -351,13 +422,9 @@ export class Naira {
       this.mixer.update(dt);
     }
 
-    // Post-mixer posture correction: the baked locomotion clips leave the upper arms
-    // flared/bent. Aim each upper arm down along the torso (world-space swing, so it
-    // is independent of the rig's local bone axes) before the head look is applied.
-    if (!this.isAiming && controller.pose !== 'swim' && controller.pose !== 'swim_idle') {
-      const k = controller.pose === 'idle' ? 0.85 : 0.5;
-      this.relaxArm(this.leftUpperArmBone, this.leftForearmBone, k);
-      this.relaxArm(this.rightUpperArmBone, this.rightForearmBone, k);
+    // Post-mixer anatomical retargeting correction (shoulders/elbows, hips/knees, and ankles)
+    if (controller.pose !== 'swim' && controller.pose !== 'swim_idle') {
+      this.applyAnatomicalPosture(controller.pose);
     }
 
     // 4. Post-Mixer Procedural Head Look-Direction Alignment
@@ -375,49 +442,79 @@ export class Naira {
     }
   }
 
-  private tmpA = new THREE.Vector3();
-  private tmpB = new THREE.Vector3();
-  private tmpC = new THREE.Vector3();
-  private tmpQ = new THREE.Quaternion();
-  private tmpQ2 = new THREE.Quaternion();
+  private readonly bindLeftUpLeg = new THREE.Quaternion(0.001, -0.045, -0.998, 0.027).normalize();
+  private readonly bindRightUpLeg = new THREE.Quaternion(0.001, 0.045, 0.998, 0.027).normalize();
+  private readonly bindShin = new THREE.Quaternion(-0.06, 0.0, 0.0, 0.998).normalize();
+  private readonly bindLeftFoot = new THREE.Quaternion(0.55, -0.018, 0.012, 0.835).normalize();
+  private readonly bindRightFoot = new THREE.Quaternion(0.462, 0.025, -0.013, 0.887).normalize();
+  private readonly footUnflipY180 = new THREE.Quaternion(0, 1, 0, 0);
 
-  /** Swing an upper arm so it hangs along the torso, keeping a slight outward cant. */
-  private relaxArm(upper: THREE.Object3D | null, fore: THREE.Object3D | null, k: number): void {
-    if (!upper || !fore || !upper.parent) return;
-    upper.updateWorldMatrix(true, true);
-    const shoulder = upper.getWorldPosition(this.tmpA);
-    const elbow = fore.getWorldPosition(this.tmpB);
-    const cur = elbow.sub(shoulder).normalize();
+  /**
+   * Correct Mixamo Ch07 vs Quaternius retargeting axis mismatches post-mixer:
+   * 1. Upper arms: Ch07 shoulders have a 90-deg roll so local +X lowers the arm to the torso
+   *    while local Z swings the arm forward/back during walk/run.
+   * 2. Forearms: transfer coronal bend (qx) into sagittal forward elbow flexion (+qz left, -qz right)
+   *    so elbows point backward and never flare sideways like chicken wings.
+   * 3. Legs & knees: remove wide-squat hip abduction in idle/walk while preserving stride swing.
+   * 4. Feet: post-multiply by (0, 1, 0, 0) to undo the 180-deg local-Y ankle flip from retargeting.
+   */
+  private applyAnatomicalPosture(pose: LocomotionPose): void {
+    const isIdle = pose === 'idle';
+    const isLoco = pose === 'walk' || pose === 'run';
 
-    // Outward = horizontal direction from body centre to the shoulder
-    const out = this.tmpC.copy(shoulder).sub(this.root.position);
-    out.y = 0;
-    if (out.lengthSq() < 1e-6) return;
-    out.normalize();
+    if (!this.isAiming) {
+      this.fixArmChain(this.leftUpperArmBone, this.leftForearmBone, true, isIdle);
+      this.fixArmChain(this.rightUpperArmBone, this.rightForearmBone, false, isIdle);
+    }
 
-    const want = new THREE.Vector3(0, -1, 0).addScaledVector(out, 0.16).normalize();
-    // Partial blend keeps some of the clip's motion (walk swing) alive
-    const swing = this.tmpQ.setFromUnitVectors(cur, want);
-    const blended = this.tmpQ2.identity().slerp(swing, k);
+    const legBlend = isIdle ? 0.84 : isLoco ? 0.30 : 0.15;
+    const shinBlend = isIdle ? 0.84 : isLoco ? 0.26 : 0.12;
+    if (this.leftThighBone) {
+      this.leftThighBone.quaternion.slerp(this.bindLeftUpLeg, legBlend);
+    }
+    if (this.rightThighBone) {
+      this.rightThighBone.quaternion.slerp(this.bindRightUpLeg, legBlend);
+    }
+    if (this.leftShinBone) {
+      this.leftShinBone.quaternion.slerp(this.bindShin, shinBlend);
+    }
+    if (this.rightShinBone) {
+      this.rightShinBone.quaternion.slerp(this.bindShin, shinBlend);
+    }
 
-    // World-space delta -> parent-local: q_local' = inv(parentW) * delta * parentW * q_local
-    const parentQ = upper.parent.getWorldQuaternion(new THREE.Quaternion());
-    const delta = parentQ.clone().invert().multiply(blended).multiply(parentQ);
-    upper.quaternion.premultiply(delta);
+    const footBlend = isIdle ? 0.68 : 0.45;
+    if (this.leftFootBone) {
+      this.leftFootBone.quaternion.multiply(this.footUnflipY180).normalize();
+      this.leftFootBone.quaternion.slerp(this.bindLeftFoot, footBlend);
+    }
+    if (this.rightFootBone) {
+      this.rightFootBone.quaternion.multiply(this.footUnflipY180).normalize();
+      this.rightFootBone.quaternion.slerp(this.bindRightFoot, footBlend);
+    }
+  }
 
-    // Forearm: open the elbow so the hand hangs by the thigh with a soft forward bend
-    const hand = fore.children.find((c) => /Hand$/.test(c.name));
-    if (!hand) return;
-    upper.updateWorldMatrix(true, true);
-    const e = fore.getWorldPosition(this.tmpB);
-    const h = hand.getWorldPosition(this.tmpA);
-    const curF = h.sub(e).normalize();
-    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-    const wantF = new THREE.Vector3(0, -1, 0).addScaledVector(fwd, 0.22).addScaledVector(out, 0.05).normalize();
-    const swingF = new THREE.Quaternion().setFromUnitVectors(curF, wantF);
-    const blendF = new THREE.Quaternion().slerp(swingF, k);
-    const pQ = fore.parent!.getWorldQuaternion(new THREE.Quaternion());
-    fore.quaternion.premultiply(pQ.clone().invert().multiply(blendF).multiply(pQ));
+  private fixArmChain(
+    upper: THREE.Object3D | null,
+    fore: THREE.Object3D | null,
+    isLeft: boolean,
+    isIdle: boolean
+  ): void {
+    if (upper) {
+      const q = upper.quaternion;
+      const targetQx = isIdle ? 0.60 : 0.54;
+      const newQx = q.x * 0.10 + targetQx * 0.90;
+      const newQy = q.y * 0.20;
+      const newQz = q.z * (isIdle ? 0.28 : 0.85);
+      q.set(newQx, newQy, newQz, q.w).normalize();
+    }
+    if (fore) {
+      const qf = fore.quaternion;
+      const rawFlex = Math.abs(qf.x) * (isIdle ? 0.34 : 0.62) + Math.abs(qf.z) * 0.5;
+      const elbowBend = THREE.MathUtils.clamp(rawFlex, 0.12, 0.48);
+      const sagittalQz = isLeft ? elbowBend : -elbowBend;
+      const adductionQx = isIdle ? 0.13 : 0.08;
+      qf.set(adductionQx, qf.y * 0.2, sagittalQz, qf.w).normalize();
+    }
   }
 
   public getRightHandWorldPosition(out: THREE.Vector3): THREE.Vector3 {

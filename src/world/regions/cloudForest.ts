@@ -234,21 +234,36 @@ export class CloudForestRegion {
   ): void {
     const bridgeGroup = new THREE.Group();
 
-    const ropeDiff = this.texLoader.load('/juzu/assets/character-textures/character-quechua-weave.jpg');
-    ropeDiff.wrapS = ropeDiff.wrapT = THREE.RepeatWrapping;
-    ropeDiff.repeat.set(16, 1);
+    const ropeNor = this.texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-planks-normal_1k.webp'
+        : '/juzu/assets/environment-textures/environment-planks-normal.jpg'
+    );
+    ropeNor.wrapS = ropeNor.wrapT = THREE.RepeatWrapping;
+    ropeNor.repeat.set(24, 2);
 
+    const ropeRough = this.texLoader.load(
+      MOBILE
+        ? '/juzu/assets/environment-textures/environment-planks-roughness_1k.webp'
+        : '/juzu/assets/environment-textures/environment-planks-roughness.jpg'
+    );
+    ropeRough.wrapS = ropeRough.wrapT = THREE.RepeatWrapping;
+    ropeRough.repeat.set(24, 2);
+
+    // Authentic Q'eswachaka hand-woven ichu-grass fiber cable (golden-tan twisted Andean grass, never rainbow cloth)
     const ropeMat = new THREE.MeshStandardMaterial({
-      map: ropeDiff,
-      color: 0x9c8256,
-      roughness: 0.9,
+      color: 0xb59862,
+      normalMap: ropeNor,
+      normalScale: new THREE.Vector2(1.4, 1.4),
+      roughnessMap: ropeRough,
+      roughness: 0.88,
       metalness: 0.0,
     });
 
     const bronzeMat = new THREE.MeshStandardMaterial({
-      color: 0x9e6c38,
-      metalness: 0.85,
-      roughness: 0.38,
+      color: 0x8a6436,
+      metalness: 0.78,
+      roughness: 0.44,
     });
 
     // Bridge spans from South Gorge Rim (z = 1.0, y = 4.45) to North Sanctuary Rim (z = -35.0, y = 4.65)
@@ -322,6 +337,11 @@ export class CloudForestRegion {
     // Handrail, Mid-Rail & Lower Catenary Suspension Cables
     const zMid = (zSouth + zNorth) * 0.5;
     const yMid = (ySouth + yNorth) * 0.5;
+    // Shadowed recessed stone material for Ollantaytambo-style trapezoidal niches (textured, never flat black)
+    const nicheBackMat = abutmentMat.clone();
+    nicheBackMat.color = new THREE.Color(0x3e3830);
+    nicheBackMat.roughness = 0.94;
+
     for (const side of [-1.2, 1.2]) {
       const handCurve = new THREE.QuadraticBezierCurve3(
         new THREE.Vector3(side, ySouth + 1.35, zSouth + 1.6),
@@ -349,8 +369,7 @@ export class CloudForestRegion {
       footRope.castShadow = true;
       bridgeGroup.add(footRope);
 
-      // Battered Trapezoidal Inca Anchor Towers with Recessed Niches on BOTH South and North Canyon Rims
-      const nicheDarkMat = new THREE.MeshStandardMaterial({ color: 0x1a1814, roughness: 0.95 });
+      // Battered Trapezoidal Inca Anchor Towers with Framed Recessed Niches on BOTH South and North Canyon Rims
       for (const zPost of [zSouth + 1.6, zNorth - 1.6]) {
         const towerX = side * 1.65;
         const postH = standAt(towerX, zPost);
@@ -369,11 +388,38 @@ export class CloudForestRegion {
         pylon.receiveShadow = true;
         towerGroup.add(pylon);
 
-        // Recessed trapezoidal niche on the south & north faces of each bridge tower
-        for (const fz of [-0.92, 0.92]) {
-          const niche = new THREE.Mesh(createIncaBlock(0.68, 1.15, 0.14, 0.18, 1.0), nicheDarkMat);
-          niche.position.set(0, 2.65, fz);
-          towerGroup.add(niche);
+        // Ollantaytambo-style framed trapezoidal niche on the south & north faces of each bridge tower
+        for (const fz of [-0.90, 0.90]) {
+          const signZ = Math.sign(fz);
+          // Deep shadowed stone backplate
+          const nicheBack = new THREE.Mesh(createIncaBlock(0.56, 1.05, 0.08, 0.16, 0.8), nicheBackMat);
+          nicheBack.position.set(0, 2.62, fz);
+          nicheBack.receiveShadow = true;
+          towerGroup.add(nicheBack);
+
+          // Heavy monolithic stone lintel above the trapezoidal niche
+          const lintel = new THREE.Mesh(createIncaBlock(0.86, 0.22, 0.24, 0.04, 0.8), abutmentMat);
+          lintel.position.set(0, 3.22, fz + signZ * 0.03);
+          lintel.castShadow = true;
+          lintel.receiveShadow = true;
+          towerGroup.add(lintel);
+
+          // Projecting stone sill at the base of the niche
+          const sill = new THREE.Mesh(createIncaBlock(0.92, 0.16, 0.22, 0.02, 0.8), abutmentMat);
+          sill.position.set(0, 2.04, fz + signZ * 0.03);
+          sill.castShadow = true;
+          sill.receiveShadow = true;
+          towerGroup.add(sill);
+
+          // Inward-battered left and right stone jamb blocks framing the recess
+          for (const jSide of [-1, 1]) {
+            const jamb = new THREE.Mesh(createIncaBlock(0.18, 1.04, 0.20, 0.04, 0.6), abutmentMat);
+            jamb.position.set(jSide * 0.34, 2.62, fz + signZ * 0.02);
+            jamb.rotation.z = -jSide * 0.08;
+            jamb.castShadow = true;
+            jamb.receiveShadow = true;
+            towerGroup.add(jamb);
+          }
         }
 
         const cap = new THREE.Mesh(createIncaBlock(1.82, 0.48, 1.92, 0.04, 1.8), abutmentMat);
@@ -425,17 +471,23 @@ export class CloudForestRegion {
     capSlab.receiveShadow = true;
     mirrorGroup.add(capSlab);
 
+    // Hammered, centuries-old Inca arsenical bronze with weathered mountain patina
     const bronzeRimMat = new THREE.MeshStandardMaterial({
-      color: 0x9e7430,
-      metalness: 0.86,
-      roughness: 0.36,
+      color: 0x74582e,
+      normalMap: stoneMat.normalMap,
+      normalScale: new THREE.Vector2(0.35, 0.35),
+      roughnessMap: stoneMat.roughnessMap,
+      metalness: 0.82,
+      roughness: 0.46,
     });
     const goldReliefMat = new THREE.MeshStandardMaterial({
-      color: 0xdca83a,
-      metalness: 0.92,
-      roughness: 0.24,
-      emissive: 0x3a2405,
-      emissiveIntensity: 0.22,
+      color: 0xb88c38,
+      normalMap: stoneMat.normalMap,
+      normalScale: new THREE.Vector2(0.25, 0.25),
+      metalness: 0.88,
+      roughness: 0.32,
+      emissive: 0x241604,
+      emissiveIntensity: 0.12,
     });
 
     const head = new THREE.Group();
@@ -466,11 +518,12 @@ export class CloudForestRegion {
       innerRing.position.z = fz;
       head.add(innerRing);
 
-      // 16 radiating triangular Inti solar rays around the ring
+      // 16 radiating stepped Inca solar rays around the ring (flattened hammered bronze relief)
       for (let r = 0; r < 16; r++) {
         const ang = (r / 16) * Math.PI * 2;
-        const rayLen = r % 2 === 0 ? 0.24 : 0.18;
-        const ray = new THREE.Mesh(new THREE.ConeGeometry(0.048, rayLen, 4), goldReliefMat);
+        const rayLen = r % 2 === 0 ? 0.22 : 0.16;
+        const ray = new THREE.Mesh(new THREE.ConeGeometry(0.042, rayLen, 4), goldReliefMat);
+        ray.scale.set(1.0, 1.0, 0.35);
         const rad = 0.34 + rayLen * 0.45;
         ray.position.set(Math.cos(ang) * rad, Math.sin(ang) * rad, fz);
         ray.rotation.z = ang - Math.PI / 2;
@@ -479,7 +532,7 @@ export class CloudForestRegion {
 
       // Central embossed Inti Sun-God face medallion
       const sunFace = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), goldReliefMat);
-      sunFace.scale.set(1.0, 1.0, 0.28);
+      sunFace.scale.set(1.0, 1.0, 0.22);
       sunFace.position.z = fz;
       head.add(sunFace);
     }
@@ -680,19 +733,19 @@ export class CloudForestRegion {
     ashBed.receiveShadow = true;
     campGroup.add(ashBed);
 
-    // Ring of 14 irregular river cobbles around the fire pit
-    const cobbleMat = new THREE.MeshStandardMaterial({
-      color: 0x524c43,
-      roughness: 0.86,
-      metalness: 0.02,
-    });
+    // Ring of 14 irregular textured river cobbles around the fire pit
+    const cobbleMat = stoneMat.clone();
+    cobbleMat.color = new THREE.Color(0x6e665c);
+    cobbleMat.roughness = 0.88;
     for (let c = 0; c < 14; c++) {
       const ang = (c / 14) * Math.PI * 2;
       const rad = 0.64 + (c % 2) * 0.04;
-      const cobble = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 1), cobbleMat);
-      cobble.scale.set(1.18, 0.66 + (c % 3) * 0.1, 0.96);
-      cobble.position.set(Math.cos(ang) * rad, 0.075, Math.sin(ang) * rad);
-      cobble.rotation.set(c * 0.4, ang, c * 0.25);
+      const cobble = new THREE.Mesh(
+        createIncaBlock(0.26 + (c % 3) * 0.04, 0.16 + (c % 2) * 0.04, 0.22, 0.12, 0.8),
+        cobbleMat
+      );
+      cobble.position.set(Math.cos(ang) * rad, 0.065, Math.sin(ang) * rad);
+      cobble.rotation.set((c % 2) * 0.12, -ang + (c % 3) * 0.2, 0);
       cobble.castShadow = true;
       cobble.receiveShadow = true;
       campGroup.add(cobble);
@@ -820,16 +873,17 @@ export class CloudForestRegion {
     );
     tentCanvasTex.colorSpace = THREE.SRGBColorSpace;
     tentCanvasTex.anisotropy = MOBILE ? 2 : 8;
-    tentCanvasTex.wrapS = tentCanvasTex.wrapT = THREE.RepeatWrapping;
-    tentCanvasTex.repeat.set(2, 2);
+    tentCanvasTex.wrapS = tentCanvasTex.wrapT = THREE.ClampToEdgeWrapping;
+    tentCanvasTex.offset.set(0.08, 0.08);
+    tentCanvasTex.repeat.set(0.84, 0.84);
 
     const tentCanvasMat = new THREE.MeshStandardMaterial({
       map: tentCanvasTex,
       bumpMap: tentCanvasTex,
-      bumpScale: 0.015,
-      color: 0x8f866a,
-      roughness: 0.88,
-      metalness: 0.02,
+      bumpScale: 0.018,
+      color: 0x7e765a,
+      roughness: 0.90,
+      metalness: 0.01,
       side: THREE.DoubleSide,
     });
     const tentDarkInteriorMat = new THREE.MeshStandardMaterial({
@@ -842,7 +896,7 @@ export class CloudForestRegion {
 
     // A-frame sloped canvas roof panels
     for (const side of [-1, 1]) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.55, 2.1), tentCanvasMat);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.55, 2.15), tentCanvasMat);
       panel.position.set(side * 0.52, 0.62, 0);
       panel.rotation.z = side * 0.58;
       panel.castShadow = true;
@@ -854,10 +908,19 @@ export class CloudForestRegion {
     tentBack.position.set(0, 0.58, 0.0);
     tentGroup.add(tentBack);
 
-    const ridgePole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.3, 8), timberMat);
+    const ridgePole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.35, 8), timberMat);
     ridgePole.rotation.x = Math.PI / 2;
     ridgePole.position.set(0, 1.24, 0);
+    ridgePole.castShadow = true;
     tentGroup.add(ridgePole);
+
+    // Front & rear vertical timber tent poles supporting the ridge pole
+    for (const pz of [-1.08, 1.08]) {
+      const uprightPole = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 1.28, 8), timberMat);
+      uprightPole.position.set(0, 0.62, pz);
+      uprightPole.castShadow = true;
+      tentGroup.add(uprightPole);
+    }
 
     campGroup.add(tentGroup);
 
@@ -909,6 +972,7 @@ export class CloudForestRegion {
     const positions: number[] = [];
     const normals: number[] = [];
     const uvs: number[] = [];
+    const colors: number[] = [];
     const indices: number[] = [];
 
     for (let iy = 0; iy <= segY; iy++) {
@@ -926,6 +990,14 @@ export class CloudForestRegion {
         positions.push(x, y, z + curlZ);
         normals.push(0, 0, 1);
         uvs.push(u, v * 5.0);
+
+        // Lateral edge feathering + aerated whitewater crest & plunge-pool foam gradient
+        const edgeFade = Math.max(0.18, 1.0 - Math.pow(Math.abs(xNorm), 2.2) * 0.82);
+        const plungeFoam = Math.sin(v * Math.PI) * 0.18 + v * 0.22;
+        const r = THREE.MathUtils.clamp((0.68 + plungeFoam) * edgeFade, 0.15, 1.0);
+        const g = THREE.MathUtils.clamp((0.84 + plungeFoam * 0.7) * edgeFade, 0.20, 1.0);
+        const b = THREE.MathUtils.clamp((0.90 + plungeFoam * 0.5) * edgeFade, 0.22, 1.0);
+        colors.push(r, g, b);
       }
     }
 
@@ -943,6 +1015,7 @@ export class CloudForestRegion {
     geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geom.setIndex(indices);
     geom.computeVertexNormals();
     return geom;
@@ -1361,11 +1434,12 @@ export class CloudForestRegion {
 
     const mainChuteGeom = this.buildWaterfallChuteGeometry(4.2, 6.8, 12.2, 2.2, 18, 36);
     const mainWaterMat = new THREE.MeshStandardMaterial({
-      color: 0x5894a0,
-      roughness: 0.12,
-      metalness: 0.08,
+      color: 0xc8e4ec,
+      vertexColors: true,
+      roughness: 0.22,
+      metalness: 0.04,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.62,
       normalMap: waterNor,
       normalScale: new THREE.Vector2(2.2, 2.2),
       side: THREE.DoubleSide,
@@ -1383,10 +1457,11 @@ export class CloudForestRegion {
     const innerChuteGeom = this.buildWaterfallChuteGeometry(3.5, 5.8, 12.0, 2.0, 16, 32);
     const innerFoamMat = new THREE.MeshStandardMaterial({
       color: 0xf4fcff,
-      roughness: 0.38,
+      vertexColors: true,
+      roughness: 0.42,
       metalness: 0.02,
       transparent: true,
-      opacity: 0.48,
+      opacity: 0.46,
       normalMap: waterNor,
       normalScale: new THREE.Vector2(1.5, 1.5),
       side: THREE.DoubleSide,
