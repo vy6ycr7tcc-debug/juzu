@@ -37,9 +37,14 @@ export class Controller {
   landingImpact = 0;
   turnRate = 0;
   slopePitch = 0;
+  slopeRoll = 0;
   accelPitch = 0;
   isBraking = false;
   brakeTimer = 0;
+  isPivoting = false;
+  pivotTimer = 0;
+  pivotSign = 1;
+  stationaryTurnPhase = 0;
   stridePhase = 0;
   isHardTurning = false;
   pose: LocomotionPose = 'idle';
@@ -285,31 +290,79 @@ export class Controller {
         if (dHeading > Math.PI) dHeading -= Math.PI * 2;
         if (dHeading < -Math.PI) dHeading += Math.PI * 2;
 
+        // Assassin's Creed Momentum: Detect sharp 180-degree cuts/reversals during run
+        if (
+          this.grounded &&
+          !this.swimming &&
+          !this.isPivoting &&
+          this.speed > 2.8 &&
+          Math.abs(dHeading) > 1.85 &&
+          !this.dodging
+        ) {
+          this.isPivoting = true;
+          this.pivotTimer = 0.28;
+          this.pivotSign = dHeading > 0 ? 1 : -1;
+          this.speed *= 0.36; // Absorb momentum on foot plant
+        }
+
+        if (this.isPivoting) {
+          this.pivotTimer -= dt;
+          if (this.pivotTimer <= 0) this.isPivoting = false;
+        }
+
+        // Stationary turn-in-place stepping cadence vs moving turn
+        const isStationary = this.speed < 0.35;
+        if (isStationary && Math.abs(dHeading) > 0.55) {
+          this.stationaryTurnPhase += dt * 4.8;
+        } else {
+          this.stationaryTurnPhase = 0;
+        }
+
         const prevHeading = this.heading;
-        const turnSpeed = this.grounded ? (Math.abs(dHeading) > 1.1 ? 24.0 : 18.0) : 10.5;
+        const turnSpeed = this.grounded
+          ? this.isPivoting
+            ? 22.0
+            : isStationary
+              ? 8.5 // Natural deliberate stepping rate, not a 30rad/s turntable spin
+              : Math.abs(dHeading) > 1.1
+                ? 18.0
+                : 14.0
+          : 10.5;
         const turnBlend = Math.min(1, dt * turnSpeed);
         this.heading += dHeading * turnBlend;
 
         const instTurnRate = (this.heading - prevHeading) / Math.max(0.001, dt);
         this.turnRate = THREE.MathUtils.lerp(this.turnRate, instTurnRate, Math.min(1, dt * 12));
         this.heading = ((this.heading + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-        turnAlign = this.dodging ? 1.0 : Math.max(0.28, Math.cos(dHeading * 0.65));
+        turnAlign = this.dodging ? 1.0 : this.isPivoting ? 0.45 : Math.max(0.28, Math.cos(dHeading * 0.65));
       } else {
         this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 10));
+        this.isPivoting = false;
+        this.stationaryTurnPhase = 0;
       }
 
       const moveDir = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
 
-      // Compute forward terrain slope pitch for realistic uphill/downhill speed & body lean
-      const aheadH = this.getGroundAt(
-        this.pos.x + moveDir.x * 0.65,
-        this.pos.z + moveDir.z * 0.65,
-        this.pos.y
-      );
-      const rawSlope = THREE.MathUtils.clamp((aheadH - this.pos.y) / 0.65, -0.65, 0.65);
+      // 3-Point Terrain Normal Sampling for authentic slope pitch & roll under boots
+      const probeD = 0.48;
+      const sinH = Math.sin(this.heading);
+      const cosH = Math.cos(this.heading);
+      const aheadH = this.getGroundAt(this.pos.x + sinH * probeD, this.pos.z + cosH * probeD, this.pos.y);
+      const behindH = this.getGroundAt(this.pos.x - sinH * probeD, this.pos.z - cosH * probeD, this.pos.y);
+      const rightH = this.getGroundAt(this.pos.x + cosH * probeD, this.pos.z - sinH * probeD, this.pos.y);
+      const leftH = this.getGroundAt(this.pos.x - cosH * probeD, this.pos.z + sinH * probeD, this.pos.y);
+
+      const rawPitch = THREE.MathUtils.clamp((aheadH - behindH) / (probeD * 2), -0.75, 0.75);
+      const rawRoll = THREE.MathUtils.clamp((rightH - leftH) / (probeD * 2), -0.65, 0.65);
+
       this.slopePitch = THREE.MathUtils.lerp(
         this.slopePitch,
-        this.grounded ? rawSlope : 0,
+        this.grounded ? rawPitch : 0,
+        Math.min(1, dt * 10)
+      );
+      this.slopeRoll = THREE.MathUtils.lerp(
+        this.slopeRoll,
+        this.grounded ? rawRoll : 0,
         Math.min(1, dt * 10)
       );
       const slopeSpeedFactor = this.grounded
@@ -382,6 +435,9 @@ export class Controller {
 
       this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 12));
       this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, 0, Math.min(1, dt * 10));
+      this.slopeRoll = THREE.MathUtils.lerp(this.slopeRoll, 0, Math.min(1, dt * 10));
+      this.isPivoting = false;
+      this.stationaryTurnPhase = 0;
       this.vel.x = Math.sin(this.heading) * this.speed;
       this.vel.z = Math.cos(this.heading) * this.speed;
       if (this.speed > 0.04) {

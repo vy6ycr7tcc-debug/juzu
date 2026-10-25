@@ -27,6 +27,13 @@ export class CloudForestRegion {
   private mirrorAligned = false;
   public isLoaded = false;
   public bridgePlanks: Array<{ mesh: THREE.Mesh; restY: number; z: number; restX: number }> = [];
+  private crepuscularShafts: Array<{ group: THREE.Group; baseOpacity: number; phase: number; mats: THREE.MeshBasicMaterial[] }> = [];
+  private skidParticles?: THREE.Points;
+  private skidPositions = new Float32Array(90 * 3);
+  private skidVelocities = new Float32Array(90 * 3);
+  private skidLifetimes = new Float32Array(90);
+  private skidIdx = 0;
+  private lastSkidTime = 0;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Region_CloudForest';
@@ -174,6 +181,8 @@ export class CloudForestRegion {
     this.buildExpeditionBaseCamp(ashlarStoneMat, timberPlankMat);
     this.buildGorgeWaterfall(ashlarStoneMat);
     this.buildAtmosphereMotes();
+    this.buildCrepuscularSunShafts();
+    this.buildSkidDebrisSystem();
   }
 
   public alignSunMirror(): void {
@@ -194,7 +203,12 @@ export class CloudForestRegion {
     }
   }
 
-  public update(time: number, playerPos?: THREE.Vector3, playerSpeed?: number): void {
+  public update(
+    time: number,
+    playerPos?: THREE.Vector3,
+    playerSpeed?: number,
+    isSkiddingOrPivoting?: boolean
+  ): void {
     // Tactile Suspension Bridge Dynamics: footstep depression & harmonic sway
     if (this.bridgePlanks.length > 0) {
       const onBridge =
@@ -259,6 +273,43 @@ export class CloudForestRegion {
     if (this.pollenPoints) {
       this.pollenPoints.position.y = Math.sin(time * 0.45) * 0.18;
       this.pollenPoints.position.x = Math.cos(time * 0.28) * 0.14;
+    }
+
+    // Dynamic Crepuscular Sun Shafts gentle wind flutter
+    for (let i = 0; i < this.crepuscularShafts.length; i++) {
+      const s = this.crepuscularShafts[i];
+      const pulse = 0.86 + Math.sin(time * 0.95 + s.phase) * 0.14;
+      for (let m = 0; m < s.mats.length; m++) {
+        s.mats[m].opacity = s.baseOpacity * pulse;
+      }
+      s.group.rotation.z = Math.sin(time * 0.5 + s.phase) * 0.018;
+    }
+
+    // Dynamic Footstep Skid & Soil Debris Emission
+    if (isSkiddingOrPivoting && playerPos && time - this.lastSkidTime > 0.08) {
+      this.lastSkidTime = time;
+      this.emitSkidDebris(playerPos);
+    }
+
+    if (this.skidParticles) {
+      let needsPosUpdate = false;
+      const dt = 0.016;
+      for (let i = 0; i < 90; i++) {
+        if (this.skidLifetimes[i] > 0) {
+          this.skidLifetimes[i] -= dt;
+          this.skidPositions[i * 3] += this.skidVelocities[i * 3] * dt;
+          this.skidPositions[i * 3 + 1] += this.skidVelocities[i * 3 + 1] * dt;
+          this.skidPositions[i * 3 + 2] += this.skidVelocities[i * 3 + 2] * dt;
+          this.skidVelocities[i * 3 + 1] -= 3.2 * dt;
+          if (this.skidLifetimes[i] <= 0) {
+            this.skidPositions[i * 3 + 1] = -999;
+          }
+          needsPosUpdate = true;
+        }
+      }
+      if (needsPosUpdate) {
+        this.skidParticles.geometry.attributes.position.needsUpdate = true;
+      }
     }
   }
 
@@ -1703,5 +1754,133 @@ export class CloudForestRegion {
     const points = new THREE.Points(geom, mat);
     this.pollenPoints = points;
     this.group.add(points);
+  }
+
+  private createShaftAlphaMap(): THREE.Texture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const imgData = ctx.createImageData(128, 256);
+      const data = imgData.data;
+      for (let y = 0; y < 256; y++) {
+        const v = y / 255; // 0 at top, 1 at bottom
+        // Vertical envelope: 0 at top (v=0), peak around v=0.45, completely 0 at bottom (v=1)
+        const vAlpha = Math.sin(v * Math.PI) * Math.min(1.0, v * 3.5) * Math.min(1.0, (1.0 - v) * 2.8);
+        for (let x = 0; x < 128; x++) {
+          const u = x / 127; // 0 at left, 1 at right
+          // Horizontal cosine bell curve: 0 at edges, 1 at center
+          const hAlpha = Math.pow(Math.sin(u * Math.PI), 2.2);
+          const alpha = vAlpha * hAlpha;
+          const idx = (y * 128 + x) * 4;
+          data[idx] = 255;
+          data[idx + 1] = 244;
+          data[idx + 2] = 224;
+          data[idx + 3] = Math.round(alpha * 255);
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    return tex;
+  }
+
+  private buildCrepuscularSunShafts(): void {
+    const alphaMap = this.createShaftAlphaMap();
+    const shaftGroup = new THREE.Group();
+    shaftGroup.name = 'VolumetricSunShafts';
+
+    // Sunlight angles down from South-East (elevation ~31°, azimuth 138°)
+    // 3-way crossed plane ribbons (0°, 60°, 120°) guarantee seamless 3D volumetric appearance from any view
+    const shaftConfigs = [
+      { x: 1.5, y: 19.5, z: 2.0, length: 20, width: 3.8, opacity: 0.085, pitch: 0.58, yaw: 2.4 },
+      { x: -5.8, y: 20.5, z: 5.0, length: 22, width: 4.2, opacity: 0.090, pitch: 0.58, yaw: 2.4 },
+      { x: -1.2, y: 19.8, z: 9.8, length: 19, width: 3.5, opacity: 0.075, pitch: 0.58, yaw: 2.4 },
+      { x: 0.4, y: 19.2, z: -4.5, length: 22, width: 4.4, opacity: 0.080, pitch: 0.58, yaw: 2.4 },
+      { x: 6.8, y: 21.0, z: 1.5, length: 21, width: 3.6, opacity: 0.070, pitch: 0.58, yaw: 2.4 },
+    ];
+
+    for (let i = 0; i < shaftConfigs.length; i++) {
+      const cfg = shaftConfigs[i];
+      const beamGroup = new THREE.Group();
+      beamGroup.position.set(cfg.x, cfg.y, cfg.z);
+      beamGroup.rotation.order = 'YXZ';
+      beamGroup.rotation.y = cfg.yaw;
+      beamGroup.rotation.x = cfg.pitch;
+
+      const planeGeom = new THREE.PlaneGeometry(cfg.width, cfg.length);
+      planeGeom.translate(0, -cfg.length * 0.5, 0);
+
+      const mats: THREE.MeshBasicMaterial[] = [];
+      for (let r = 0; r < 3; r++) {
+        const mat = new THREE.MeshBasicMaterial({
+          color: 0xffeed8,
+          alphaMap: alphaMap,
+          transparent: true,
+          opacity: cfg.opacity,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        mats.push(mat);
+
+        const mesh = new THREE.Mesh(planeGeom, mat);
+        mesh.rotation.y = r * (Math.PI / 3);
+        mesh.renderOrder = 20;
+        beamGroup.add(mesh);
+      }
+
+      shaftGroup.add(beamGroup);
+      this.crepuscularShafts.push({ group: beamGroup, baseOpacity: cfg.opacity, phase: i * 1.35, mats });
+    }
+
+    this.group.add(shaftGroup);
+  }
+
+  private buildSkidDebrisSystem(): void {
+    const count = 90;
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(this.skidPositions, 3));
+
+    const mat = new THREE.PointsMaterial({
+      size: MOBILE ? 2.5 : 3.5,
+      sizeAttenuation: false,
+      color: 0xc8b69b, // Warm dry Andean mineral soil
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+
+    this.skidParticles = new THREE.Points(geom, mat);
+    this.skidParticles.frustumCulled = false;
+    this.group.add(this.skidParticles);
+
+    for (let i = 0; i < count; i++) {
+      this.skidLifetimes[i] = 0;
+      this.skidPositions[i * 3 + 1] = -999;
+    }
+  }
+
+  public emitSkidDebris(pos: THREE.Vector3): void {
+    if (!this.skidParticles) return;
+    const burst = 4;
+    for (let b = 0; b < burst; b++) {
+      const i = this.skidIdx;
+      this.skidIdx = (this.skidIdx + 1) % 90;
+
+      const spread = 0.22;
+      this.skidPositions[i * 3] = pos.x + (Math.random() - 0.5) * spread;
+      this.skidPositions[i * 3 + 1] = pos.y + 0.08 + Math.random() * 0.08;
+      this.skidPositions[i * 3 + 2] = pos.z + (Math.random() - 0.5) * spread;
+
+      this.skidVelocities[i * 3] = (Math.random() - 0.5) * 1.4;
+      this.skidVelocities[i * 3 + 1] = 0.8 + Math.random() * 1.2;
+      this.skidVelocities[i * 3 + 2] = (Math.random() - 0.5) * 1.4;
+
+      this.skidLifetimes[i] = 0.38;
+    }
   }
 }

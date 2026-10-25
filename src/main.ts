@@ -654,7 +654,7 @@ async function bootJuzu() {
     water.update(dt, totalTime);
     sky.update(controller.pos, activeToD);
     foliage.update(totalTime);
-    cloudForest.update(totalTime, controller.pos, controller.speed);
+    cloudForest.update(totalTime, controller.pos, controller.speed, controller.isPivoting || controller.isBraking);
     jungleLowlands.update(totalTime);
     paititi.update(totalTime);
     lightRig.update(controller.pos, camera.position);
