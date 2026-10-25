@@ -126,7 +126,21 @@ export class Naira {
       canvasTex.repeat.set(3, 3);
       canvasTex.flipY = false;
 
-      // Enable PBR shadows across sourced geometry, fix dielectric skin/hair metalness, and grade expedition wardrobe
+      const leatherTex = texLoader.load(
+        MOBILE
+          ? '/juzu/assets/character-textures/character-leather_1k.webp'
+          : '/juzu/assets/character-textures/character-leather.webp'
+      );
+      leatherTex.colorSpace = THREE.SRGBColorSpace;
+      leatherTex.wrapS = leatherTex.wrapT = THREE.RepeatWrapping;
+      leatherTex.repeat.set(2, 2);
+
+      const quechuaTex = texLoader.load('/juzu/assets/character-textures/character-quechua-weave.jpg');
+      quechuaTex.colorSpace = THREE.SRGBColorSpace;
+      quechuaTex.wrapS = quechuaTex.wrapT = THREE.RepeatWrapping;
+      quechuaTex.repeat.set(2, 1);
+
+      // Enable PBR shadows across sourced geometry, reshape shoes into rugged field boots, and grade expedition wardrobe
       this.modelRoot.traverse((child) => {
         if ((child as THREE.Mesh).isMesh || (child as THREE.SkinnedMesh).isSkinnedMesh) {
           child.castShadow = true;
@@ -134,36 +148,48 @@ export class Naira {
           child.frustumCulled = false;
 
           const mesh = child as THREE.Mesh;
+          const cName = (child.name || '').toLowerCase();
+
+          // Reshape stiletto heel geometry (Ch07_Heels) into sturdy flat-soled Andean expedition field boots
+          if (cName.includes('heels') || cName.includes('boots') || cName.includes('shoe')) {
+            this.reshapeIntoExpeditionBoots(mesh.geometry);
+          }
+
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             if (m instanceof THREE.MeshStandardMaterial) {
               const mName = (m.name || '').toLowerCase();
-              const cName = (child.name || '').toLowerCase();
               if (mName.includes('body') || cName.includes('body')) {
                 m.metalness = 0.0;
-                m.roughness = 0.58;
+                m.roughness = 0.72; // Soft natural matte skin scattering (Tomb Raider / AC realistic skin)
               } else if (mName.includes('hair') || cName.includes('hair') || cName.includes('eyelash')) {
                 m.metalness = 0.0;
-                m.roughness = 0.54;
+                m.roughness = 0.78;
               } else if (mName.includes('jacket') || cName.includes('suit')) {
                 m.map = canvasTex;
-                m.color.setHex(0x6e6a4c);
+                m.bumpMap = canvasTex;
+                m.bumpScale = 0.008;
+                m.color.setHex(0x786a4e);
                 m.metalness = 0.02;
-                m.roughness = 0.86;
+                m.roughness = 0.84;
               } else if (mName.includes('pants') || cName.includes('pants')) {
                 m.map = canvasTex;
-                m.color.setHex(0x38322c);
+                m.bumpMap = canvasTex;
+                m.bumpScale = 0.006;
+                m.color.setHex(0x3a322a);
                 m.metalness = 0.02;
-                m.roughness = 0.88;
+                m.roughness = 0.86;
               } else if (mName.includes('shirt') || cName.includes('shirt')) {
                 m.color.setHex(0xd6c8b2);
                 m.metalness = 0.0;
                 m.roughness = 0.84;
               } else if (mName.includes('boots') || cName.includes('heels')) {
-                m.map = canvasTex;
-                m.color.setHex(0x2b221a);
-                m.metalness = 0.04;
-                m.roughness = 0.64;
+                m.map = leatherTex;
+                m.bumpMap = leatherTex;
+                m.bumpScale = 0.012;
+                m.color.setHex(0x3a281c);
+                m.metalness = 0.06;
+                m.roughness = 0.62;
               }
               m.needsUpdate = true;
             }
@@ -224,6 +250,9 @@ export class Naira {
         }
       }
 
+      // Attach bone-socketed 3D Andean archaeologist expedition gear (pack, bedroll, rope, harness, belt, wrist wraps)
+      this.attachExpeditionGear(canvasTex, leatherTex, quechuaTex);
+
       // Setup AnimationMixer
       this.mixer = new THREE.AnimationMixer(this.modelRoot);
 
@@ -249,6 +278,286 @@ export class Naira {
 
       this.displayMissingAssetBanner(errorMsg);
       throw new Error(errorMsg);
+    }
+  }
+
+  /**
+   * Reshapes the sourced Ch07_Heels mesh vertices in-place from thin stiletto spikes
+   * into sturdy, flat-soled Andean leather expedition boots with a solid block heel and lug sole.
+   */
+  private reshapeIntoExpeditionBoots(geom: THREE.BufferGeometry): void {
+    const pos = geom.attributes.position as THREE.BufferAttribute;
+    const norm = geom.attributes.normal as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+      const ny = norm ? norm.getY(i) : 0;
+
+      const signX = x >= 0 ? 1 : -1;
+      const footCenterX = signX * 0.145;
+      const dx = x - footCenterX;
+
+      // 1. Widen the thin stiletto heel spike (z < -0.050, y < 0.085) into a sturdy 7cm block boot heel
+      if (z < -0.050 && y < 0.085) {
+        const heelBlend = THREE.MathUtils.clamp((0.085 - y) / 0.055, 0, 1);
+        const dz = z - (-0.086);
+        x = footCenterX + dx * (1.0 + 2.35 * heelBlend);
+        z = -0.086 + dz * (1.0 + 1.95 * heelBlend);
+      }
+
+      // 2. Fill the open high-heel arch gap (-0.080 <= z < 0.038, y < 0.105) into a thick continuous lug sole
+      if (z >= -0.080 && z < 0.038 && y < 0.105) {
+        const archFactor = Math.sin(
+          THREE.MathUtils.clamp((z - (-0.080)) / 0.118, 0, 1) * Math.PI
+        );
+        if (ny < 0.35 || y < 0.082) {
+          y = THREE.MathUtils.lerp(y, 0.004, archFactor * 0.94);
+          x = footCenterX + (x - footCenterX) * (1.0 + 0.35 * archFactor);
+        }
+      }
+
+      // 3. Raise the open pump vamp over the instep so leather covers the top of the foot
+      if (z > -0.055 && z < 0.065 && y > 0.045 && ny > 0.15) {
+        y += 0.024;
+      }
+
+      // 4. Widen the forefoot & toe box slightly into a rugged expedition boot welt
+      if (y < 0.055) {
+        x = footCenterX + (x - footCenterX) * 1.15;
+      }
+
+      // 5. Flare the upper ankle collar (y > 0.085) slightly outward and upward into a field boot cuff
+      if (y > 0.085) {
+        const cuffT = THREE.MathUtils.clamp((y - 0.085) / 0.085, 0, 1);
+        x = footCenterX + (x - footCenterX) * (1.0 + 0.16 * cuffT);
+        z = z * (1.0 + 0.10 * cuffT);
+        y += cuffT * 0.022;
+      }
+
+      pos.setXYZ(i, x, y, z);
+    }
+
+    pos.needsUpdate = true;
+    geom.computeVertexNormals();
+  }
+
+  /**
+   * Attaches authentic Andean archaeological expedition gear (weathered canvas field pack,
+   * rolled Quechua blanket, coiled hemp climbing rope, cross-body leather bandolier,
+   * waist utility belt with pouches, and woven wrist bracers) directly to Naira's skeleton bones.
+   * Note: Armature scale is 0.01, so 1 unit in bone-local space = 1 cm (0.01m).
+   */
+  private attachExpeditionGear(
+    canvasTex: THREE.Texture,
+    leatherTex: THREE.Texture,
+    quechuaTex: THREE.Texture
+  ): void {
+    const packCanvasMat = new THREE.MeshStandardMaterial({
+      map: canvasTex,
+      bumpMap: canvasTex,
+      bumpScale: 0.012,
+      color: 0x78684e, // Weathered olive-khaki expedition canvas
+      roughness: 0.88,
+      metalness: 0.02,
+    });
+
+    const darkLeatherMat = new THREE.MeshStandardMaterial({
+      map: leatherTex,
+      bumpMap: leatherTex,
+      bumpScale: 0.015,
+      color: 0x3b2314, // Oiled saddle leather straps & pouches
+      roughness: 0.62,
+      metalness: 0.06,
+    });
+
+    const quechuaWoolMat = new THREE.MeshStandardMaterial({
+      map: quechuaTex,
+      bumpMap: quechuaTex,
+      bumpScale: 0.016,
+      color: 0xb84a32, // Traditional crimson-terracotta woven Andean textile
+      roughness: 0.86,
+      metalness: 0.02,
+    });
+
+    const hempRopeMat = new THREE.MeshStandardMaterial({
+      map: canvasTex,
+      bumpMap: canvasTex,
+      bumpScale: 0.02,
+      color: 0xb89b6a, // Twisted natural ichu/hemp climbing rope
+      roughness: 0.90,
+      metalness: 0.01,
+    });
+
+    const bronzeHardwareMat = new THREE.MeshStandardMaterial({
+      color: 0xc4933f, // Aged Inca bronze buckles & sun medallion
+      roughness: 0.34,
+      metalness: 0.84,
+    });
+
+    // 1. Spine1 Bone Attachments: Expedition Backpack, Bedroll, Climbing Rope & Cross-Body Bandolier
+    if (this.spine1Bone) {
+      const packGroup = new THREE.Group();
+      packGroup.name = 'Naira_Expedition_Backpack';
+
+      // Main canvas rucksack body on upper/mid back (cm coordinates)
+      const mainBag = new THREE.Mesh(new THREE.BoxGeometry(19.5, 23.5, 9.5), packCanvasMat);
+      mainBag.position.set(0, 4.5, -13.2);
+      mainBag.castShadow = true;
+      mainBag.receiveShadow = true;
+      packGroup.add(mainBag);
+
+      // Rounded leather top storm-flap
+      const topFlap = new THREE.Mesh(new THREE.BoxGeometry(20.2, 6.5, 10.2), darkLeatherMat);
+      topFlap.position.set(0, 14.2, -13.2);
+      topFlap.castShadow = true;
+      packGroup.add(topFlap);
+
+      // Exterior lower field pocket
+      const outerPocket = new THREE.Mesh(new THREE.BoxGeometry(15.5, 10.5, 3.2), packCanvasMat);
+      outerPocket.position.set(0, 1.2, -18.8);
+      outerPocket.castShadow = true;
+      packGroup.add(outerPocket);
+
+      // Twin vertical leather cinch straps & bronze buckles on the rucksack
+      for (const sx of [-5.8, 5.8]) {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(2.2, 24.5, 10.8), darkLeatherMat);
+        strap.position.set(sx, 4.8, -13.4);
+        strap.castShadow = true;
+        packGroup.add(strap);
+
+        const buckle = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.2, 1.2), bronzeHardwareMat);
+        buckle.position.set(sx, 8.5, -18.8);
+        packGroup.add(buckle);
+      }
+
+      // Rolled Quechua wool blanket strapped atop the rucksack
+      const bedroll = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 22.5, 14), quechuaWoolMat);
+      bedroll.rotation.z = Math.PI / 2;
+      bedroll.position.set(0, 18.8, -12.6);
+      bedroll.castShadow = true;
+      packGroup.add(bedroll);
+
+      for (const bx of [-6.5, 6.5]) {
+        const rollStrap = new THREE.Mesh(new THREE.CylinderGeometry(4.05, 4.05, 1.8, 12), darkLeatherMat);
+        rollStrap.rotation.z = Math.PI / 2;
+        rollStrap.position.set(bx, 18.8, -12.6);
+        packGroup.add(rollStrap);
+      }
+
+      // Coiled hemp climbing rope lashed to the left side of the pack
+      const ropeCoil = new THREE.Mesh(new THREE.TorusGeometry(5.2, 1.35, 10, 20), hempRopeMat);
+      ropeCoil.rotation.y = Math.PI / 2;
+      ropeCoil.position.set(10.6, 3.5, -13.2);
+      ropeCoil.castShadow = true;
+      packGroup.add(ropeCoil);
+
+      // Shoulder harness straps wrapping from pack over shoulders
+      for (const shX of [-7.5, 7.5]) {
+        const shoulderStrap = new THREE.Mesh(new THREE.BoxGeometry(3.0, 20.0, 1.6), darkLeatherMat);
+        shoulderStrap.position.set(shX, 7.5, -6.5);
+        shoulderStrap.rotation.x = 0.25;
+        packGroup.add(shoulderStrap);
+      }
+
+      this.spine1Bone.add(packGroup);
+    }
+
+    // 2. Hips Bone Attachments: Utility Belt, Leather Satchel Pouch & Brass Expedition Canteen
+    if (this.hipsBone) {
+      const beltGroup = new THREE.Group();
+      beltGroup.name = 'Naira_Utility_Belt';
+
+      // Heavy leather waist belt
+      const beltRing = new THREE.Mesh(new THREE.CylinderGeometry(14.6, 15.2, 3.6, 20), darkLeatherMat);
+      beltRing.scale.set(1.0, 1.0, 0.74);
+      beltRing.position.set(0, 1.5, 0.2);
+      beltRing.castShadow = true;
+      beltGroup.add(beltRing);
+
+      // Center bronze Inca belt buckle
+      const beltBuckle = new THREE.Mesh(new THREE.BoxGeometry(4.6, 4.2, 1.6), bronzeHardwareMat);
+      beltBuckle.position.set(0, 1.5, 11.2);
+      beltGroup.add(beltBuckle);
+
+      // Left hip leather field journal & tool pouch
+      const leftPouch = new THREE.Mesh(new THREE.BoxGeometry(4.8, 9.2, 7.2), darkLeatherMat);
+      leftPouch.position.set(14.8, -1.5, 1.2);
+      leftPouch.rotation.z = 0.08;
+      leftPouch.castShadow = true;
+      beltGroup.add(leftPouch);
+
+      // Right hip expedition canteen / astrolabe case
+      const rightCase = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 8.5, 12), bronzeHardwareMat);
+      rightCase.position.set(-14.6, -1.8, -1.0);
+      rightCase.rotation.z = -0.10;
+      rightCase.castShadow = true;
+      beltGroup.add(rightCase);
+
+      this.hipsBone.add(beltGroup);
+    }
+
+    // 3. Forearm Bone Attachments: Woven Quechua Wrist Bracers & Leather Cuffs
+    for (const [bone, sideName] of [
+      [this.leftForearmBone, 'Left'],
+      [this.rightForearmBone, 'Right'],
+    ] as const) {
+      if (!bone) continue;
+      const bracerGroup = new THREE.Group();
+      bracerGroup.name = `Naira_Wrist_Bracer_${sideName}`;
+
+      const woolWrap = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.9, 8.2, 14), quechuaWoolMat);
+      woolWrap.position.set(0, 14.2, 0);
+      woolWrap.castShadow = true;
+      bracerGroup.add(woolWrap);
+
+      const leatherCuff = new THREE.Mesh(new THREE.CylinderGeometry(3.55, 3.75, 2.4, 14), darkLeatherMat);
+      leatherCuff.position.set(0, 16.2, 0);
+      bracerGroup.add(leatherCuff);
+
+      bone.add(bracerGroup);
+    }
+
+    // 4. Lower-Leg / Ankle Boot Gaiter Cuffs & Instep Tongue Covers (eliminates pump skin gap)
+    for (const [footBone, sideName] of [
+      [this.leftFootBone, 'Left'],
+      [this.rightFootBone, 'Right'],
+    ] as const) {
+      const shinBone = footBone?.parent;
+      if (!shinBone) continue;
+      const gaiterGroup = new THREE.Group();
+      gaiterGroup.name = `Naira_Boot_Gaiter_${sideName}`;
+
+      // Rugged leather ankle boot shaft wrapping lower shin to ankle (cm coordinates along LeftLeg/RightLeg)
+      const bootShaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.3, 4.7, 9.5, 14),
+        darkLeatherMat
+      );
+      bootShaft.position.set(0, 32.5, -0.3);
+      bootShaft.castShadow = true;
+      gaiterGroup.add(bootShaft);
+
+      // Top wool-trimmed boot collar cuff
+      const collarTrim = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.5, 4.4, 2.2, 14),
+        quechuaWoolMat
+      );
+      collarTrim.position.set(0, 28.2, -0.3);
+      gaiterGroup.add(collarTrim);
+
+      // Laced leather instep vamp cover bridging the ankle down over the top of the foot
+      const instepCover = new THREE.Mesh(
+        new THREE.BoxGeometry(7.2, 6.5, 8.8),
+        darkLeatherMat
+      );
+      instepCover.position.set(0, 36.2, 2.4);
+      instepCover.rotation.x = 0.48;
+      instepCover.castShadow = true;
+      gaiterGroup.add(instepCover);
+
+      shinBone.add(gaiterGroup);
     }
   }
 

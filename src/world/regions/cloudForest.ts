@@ -22,6 +22,8 @@ export class CloudForestRegion {
   private mistPlumes: THREE.Mesh[] = [];
   private pollenPoints?: THREE.Points;
   private waterfallNormalMap?: THREE.Texture;
+  private fallsGroup = new THREE.Group();
+  private scansRequested = false;
   private mirrorAligned = false;
   public isLoaded = false;
 
@@ -328,14 +330,14 @@ export class CloudForestRegion {
     const trailZs = [3.6, 5.4, 7.2, 9.0, 10.8, -37.2, -39.2, -41.2];
     for (let s = 0; s < trailZs.length; s++) {
       const tz = trailZs[s];
-      const tx = Math.sin(s * 1.7) * 0.22;
+      const tx = Math.sin(s * 1.7) * 0.28;
       const ty = standAt(tx, tz);
       const slab = passable(new THREE.Mesh(
-        createIncaBlock(1.85 + (s % 2) * 0.35, 0.16, 1.35, 0.06, 1.5),
+        createIncaBlock(1.65 + (s % 2) * 0.30, 0.14, 1.15, 0.10, 1.4),
         abutmentMat
       ));
-      slab.position.set(tx, ty - 0.02, tz);
-      slab.rotation.y = ((s % 3) - 1) * 0.08;
+      slab.position.set(tx, ty - 0.05, tz);
+      slab.rotation.y = ((s % 3) - 1) * 0.14;
       slab.receiveShadow = true;
       bridgeGroup.add(slab);
     }
@@ -903,19 +905,72 @@ export class CloudForestRegion {
     tentGroup.position.set(1.55, 0.0, -1.05);
     tentGroup.rotation.y = -0.72;
 
-    // A-frame sloped canvas roof panels
+    // A-frame sloped canvas roof panels with realistic catenary cloth sag & guy-ropes
     for (const side of [-1, 1]) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.55, 2.15), tentCanvasMat);
-      panel.position.set(side * 0.52, 0.62, 0);
+      const panelGeom = new THREE.BoxGeometry(0.025, 1.55, 2.15, 1, 10, 12);
+      const pAttr = panelGeom.attributes.position as THREE.BufferAttribute;
+      for (let vi = 0; vi < pAttr.count; vi++) {
+        const lx = pAttr.getX(vi);
+        const ly = pAttr.getY(vi); // -0.775 (eave) .. +0.775 (ridge)
+        const lz = pAttr.getZ(vi); // -1.075 .. +1.075 along ridge
+        const uSpan = (ly + 0.775) / 1.55;
+        const vSpan = (lz + 1.075) / 2.15;
+        // Natural catenary fabric belly sag between front/back poles and ridge/eave
+        const bellySag = Math.sin(uSpan * Math.PI) * Math.sin(vSpan * Math.PI) * 0.065;
+        const hemRipple = Math.sin(vSpan * Math.PI * 5.0) * 0.012 * Math.sin(uSpan * Math.PI);
+        pAttr.setX(vi, lx - (bellySag + hemRipple) * side);
+      }
+      panelGeom.computeVertexNormals();
+
+      const panel = new THREE.Mesh(panelGeom, tentCanvasMat);
+      panel.position.set(side * 0.44, 0.62, 0);
       panel.rotation.z = side * 0.58;
       panel.castShadow = true;
       panel.receiveShadow = true;
       tentGroup.add(panel);
+
+      // Tension guy-ropes & wooden ground stakes anchoring the tent eaves
+      for (const gz of [-0.92, 0.0, 0.92]) {
+        const ropeCurve = new THREE.LineCurve3(
+          new THREE.Vector3(side * 0.86, 0.04, gz),
+          new THREE.Vector3(side * 1.18, -0.02, gz * 1.04)
+        );
+        const guyRope = new THREE.Mesh(
+          new THREE.TubeGeometry(ropeCurve, 4, 0.008, 5, false),
+          timberMat
+        );
+        tentGroup.add(guyRope);
+
+        const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.006, 0.22, 6), timberMat);
+        stake.position.set(side * 1.18, 0.02, gz * 1.04);
+        stake.rotation.z = -side * 0.35;
+        tentGroup.add(stake);
+      }
     }
-    const tentBack = new THREE.Mesh(new THREE.ConeGeometry(0.95, 1.25, 3), tentDarkInteriorMat);
-    tentBack.rotation.y = Math.PI / 2;
-    tentBack.position.set(0, 0.58, 0.0);
-    tentGroup.add(tentBack);
+
+    // Recessed dark interior gable & groundsheet inside the A-frame tent
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: tentCanvasTex,
+      color: 0x3d3628,
+      roughness: 0.94,
+    });
+    const groundSheet = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.04, 2.05), floorMat);
+    groundSheet.position.set(0, 0.02, 0);
+    groundSheet.receiveShadow = true;
+    tentGroup.add(groundSheet);
+
+    const gableShape = new THREE.Shape();
+    gableShape.moveTo(-0.84, 0);
+    gableShape.lineTo(0.84, 0);
+    gableShape.lineTo(0, 1.24);
+    gableShape.closePath();
+    const gableGeom = new THREE.ShapeGeometry(gableShape);
+    const backGable = new THREE.Mesh(gableGeom, tentDarkInteriorMat);
+    backGable.position.set(0, 0.02, -0.95);
+    tentGroup.add(backGable);
+    const midShadowGable = new THREE.Mesh(gableGeom, tentDarkInteriorMat);
+    midShadowGable.position.set(0, 0.02, 0.25);
+    tentGroup.add(midShadowGable);
 
     const ridgePole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.35, 8), timberMat);
     ridgePole.rotation.x = Math.PI / 2;
@@ -987,22 +1042,31 @@ export class CloudForestRegion {
     for (let iy = 0; iy <= segY; iy++) {
       const v = iy / segY;
       const y = (1.0 - v) * height;
-      const z = (1.0 - Math.cos(v * Math.PI * 0.5)) * depthArc + v * 0.35;
-      const width = THREE.MathUtils.lerp(topWidth, bottomWidth, v);
+      // Stepped cascade profile over rock ledges rather than a smooth uniform cylinder arc
+      const rockStepBump =
+        Math.sin(v * Math.PI * 3.0) * 0.22 + Math.sin(v * Math.PI * 7.0 + 0.8) * 0.09;
+      const z = (1.0 - Math.cos(v * Math.PI * 0.5)) * depthArc + v * 0.35 + rockStepBump;
+      const width =
+        THREE.MathUtils.lerp(topWidth, bottomWidth, v) *
+        (1.0 + Math.sin(v * Math.PI * 4.0) * 0.08);
 
       for (let ix = 0; ix <= segX; ix++) {
         const u = ix / segX;
-        const x = (u - 0.5) * width;
         const xNorm = (u - 0.5) * 2.0;
-        const curlZ = -(xNorm * xNorm) * 0.35 * (1.0 - v * 0.4);
+        const edgeWave = Math.sin(v * 14.0 + u * 5.0) * 0.18 * Math.abs(xNorm);
+        const x = (u - 0.5) * width + edgeWave;
+        const curlZ =
+          -(xNorm * xNorm) * 0.35 * (1.0 - v * 0.4) +
+          Math.cos(u * Math.PI * 3.0 + v * 9.0) * 0.12;
 
         positions.push(x, y, z + curlZ);
         normals.push(0, 0, 1);
         uvs.push(u, v * 5.0);
 
-        // Lateral edge feathering + aerated whitewater crest & plunge-pool foam gradient
+        // Lateral edge feathering + aerated whitewater crest & stepped ledge foam gradient
         const edgeFade = Math.max(0.18, 1.0 - Math.pow(Math.abs(xNorm), 2.2) * 0.82);
-        const plungeFoam = Math.sin(v * Math.PI) * 0.18 + v * 0.22;
+        const stepFoam = Math.max(0, Math.cos(v * Math.PI * 3.0)) * 0.16;
+        const plungeFoam = Math.sin(v * Math.PI) * 0.18 + v * 0.22 + stepFoam;
         const r = THREE.MathUtils.clamp((0.68 + plungeFoam) * edgeFade, 0.15, 1.0);
         const g = THREE.MathUtils.clamp((0.84 + plungeFoam * 0.7) * edgeFade, 0.20, 1.0);
         const b = THREE.MathUtils.clamp((0.90 + plungeFoam * 0.5) * edgeFade, 0.22, 1.0);
@@ -1030,27 +1094,24 @@ export class CloudForestRegion {
     return geom;
   }
 
-  private buildGorgeWaterfall(_stoneMat: THREE.MeshStandardMaterial): void {
-    // Cascading Andean mountain waterfall pouring down Horizontally Stratified Craggy Cliff Ledges
-    // into the Urubamba River (-2.2m)
-    const fallsGroup = new THREE.Group();
-    const wx = 17.5;
-    const wz = -29.5;
-    fallsGroup.position.set(wx, -2.2, wz);
-
-    if (MOBILE) {
+  public loadScannedAssets(): void {
+    if (this.scansRequested || MOBILE) {
       this.isLoaded = true;
-    } else {
-      let pendingScans = 5;
-      const checkScansLoaded = () => {
-        pendingScans--;
-        if (pendingScans <= 0) {
-          this.isLoaded = true;
-        }
-      };
+      return;
+    }
+    this.scansRequested = true;
+    const fallsGroup = this.fallsGroup;
 
-      const gltfLoader = new GLTFLoader();
-      gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+    let pendingScans = 5;
+    const checkScansLoaded = () => {
+      pendingScans--;
+      if (pendingScans <= 0) {
+        this.isLoaded = true;
+      }
+    };
+
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 
     // 1. Photorealistic Scanned Escarpment Cliff (namaqualand_cliff_01)
     gltfLoader.load(
@@ -1429,9 +1490,26 @@ export class CloudForestRegion {
         checkScansLoaded();
       }
     );
+  }
+
+  private buildGorgeWaterfall(stoneMat: THREE.MeshStandardMaterial): void {
+    // Cascading Andean mountain waterfall pouring down Horizontally Stratified Craggy Cliff Ledges
+    // into the Urubamba River (-2.2m)
+    const fallsGroup = this.fallsGroup;
+    const wx = 17.5;
+    const wz = -29.5;
+    fallsGroup.position.set(wx, -2.2, wz);
+
+    if (MOBILE) {
+      this.isLoaded = true;
     }
 
-    // 6. Physical Cascading Waterfall Chute & Whitewater Foam
+    // Synchronous wet dark-slate bedrock cliff ledges behind & beside the waterfall cascade
+    const wetBedrockMat = stoneMat.clone();
+    wetBedrockMat.color = new THREE.Color(0x4a524e);
+    wetBedrockMat.roughness = 0.48;
+
+    // Physical Cascading Waterfall Chute & Whitewater Foam
     const waterNor = this.texLoader.load('/juzu/textures/water_nor.png');
     waterNor.wrapS = waterNor.wrapT = THREE.RepeatWrapping;
     waterNor.repeat.set(3, 12);
@@ -1440,6 +1518,27 @@ export class CloudForestRegion {
     const cascadeGroup = new THREE.Group();
     cascadeGroup.rotation.y = -1.05;
     fallsGroup.add(cascadeGroup);
+
+    // Stepped wet granite cliff ledges backing the main and side cascades so water pours over solid rock
+    const rockTiers = [
+      { x: 0.0, y: 10.2, z: -2.55, w: 6.8, h: 3.4, d: 2.4, ry: 0.04 },
+      { x: 0.2, y: 6.8, z: -1.65, w: 7.6, h: 3.8, d: 2.8, ry: -0.05 },
+      { x: -0.2, y: 3.2, z: -0.75, w: 8.4, h: 4.0, d: 3.2, ry: 0.03 },
+      { x: 3.6, y: 7.4, z: -1.95, w: 3.8, h: 3.5, d: 2.2, ry: 0.22 },
+      { x: 3.8, y: 3.6, z: -0.95, w: 4.4, h: 4.0, d: 2.6, ry: 0.18 },
+      { x: -4.2, y: 5.5, z: -1.60, w: 3.6, h: 7.5, d: 2.8, ry: -0.28 },
+    ];
+    for (const rt of rockTiers) {
+      const rockBlock = new THREE.Mesh(
+        createIncaBlock(rt.w, rt.h, rt.d, 0.22, 1.4),
+        wetBedrockMat
+      );
+      rockBlock.position.set(rt.x, rt.y, rt.z);
+      rockBlock.rotation.y = rt.ry;
+      rockBlock.castShadow = true;
+      rockBlock.receiveShadow = true;
+      cascadeGroup.add(rockBlock);
+    }
 
     const mainChuteGeom = this.buildWaterfallChuteGeometry(4.2, 6.8, 12.2, 2.2, 18, 36);
     const mainWaterMat = new THREE.MeshStandardMaterial({
