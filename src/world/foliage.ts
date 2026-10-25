@@ -85,17 +85,31 @@ export class Foliage {
     const foliageRough = texLoader.load('/juzu/assets/environment-textures/environment-foliage-roughness.jpg');
     foliageRough.anisotropy = 8;
 
-    // Rock textures for mossy Andean boulders
-    const rockDiff = texLoader.load('/juzu/textures/rock_diff.jpg');
+    // Photogrammetry scanned mossy Andean granite textures (Poly Haven CC0)
+    const rockDiff = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/mossy_rock_diffuse_1k.webp'
+        : '/juzu/textures/scans/mossy_rock_diffuse_2k.webp'
+    );
     rockDiff.colorSpace = THREE.SRGBColorSpace;
-    rockDiff.anisotropy = 8;
+    rockDiff.anisotropy = MOBILE ? 2 : 8;
     rockDiff.wrapS = rockDiff.wrapT = THREE.RepeatWrapping;
-    rockDiff.repeat.set(2, 2);
 
-    const rockNor = texLoader.load('/juzu/textures/rock_nor.jpg');
-    rockNor.anisotropy = 8;
+    const rockNor = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/mossy_rock_nor_gl_1k.webp'
+        : '/juzu/textures/scans/mossy_rock_nor_gl_2k.webp'
+    );
+    rockNor.anisotropy = MOBILE ? 2 : 8;
     rockNor.wrapS = rockNor.wrapT = THREE.RepeatWrapping;
-    rockNor.repeat.set(2, 2);
+
+    const rockRough = texLoader.load(
+      MOBILE
+        ? '/juzu/textures/scans/mossy_rock_rough_1k.webp'
+        : '/juzu/textures/scans/mossy_rock_rough_2k.webp'
+    );
+    rockRough.anisotropy = MOBILE ? 2 : 8;
+    rockRough.wrapS = rockRough.wrapT = THREE.RepeatWrapping;
 
     // 1. Gnarled Multi-Limb Polylepis Trunk + Volumetric Canopy Crowns
     const trunkGeom = this.buildGnarledTrunkGeometry();
@@ -152,7 +166,7 @@ export class Foliage {
     this.grassInstances = new THREE.InstancedMesh(grassGeom, grassMat, this.GRASS_COUNT);
     this.grassInstances.receiveShadow = true;
 
-    // 3. Displaced Mossy Crag Boulders
+    // 3. Displaced Mossy Crag Boulders & Bark-Textured Gnarled Root Buttresses
     const rockGeom = this.buildCragBoulderGeometry();
     const rockMat = new THREE.MeshStandardMaterial({
       map: rockDiff,
@@ -163,13 +177,8 @@ export class Foliage {
       metalness: 0.04,
     });
 
-    const rootGeom = new THREE.CylinderGeometry(0.4, 0.9, 0.35, 8);
-    const rootMat = new THREE.MeshStandardMaterial({
-      color: 0x483e32,
-      roughness: 0.92,
-      metalness: 0.02,
-    });
-    this.rootInstances = new THREE.InstancedMesh(rootGeom, rootMat, this.TREE_COUNT);
+    const rootGeom = this.buildGnarledRootButtressGeometry();
+    this.rootInstances = new THREE.InstancedMesh(rootGeom, trunkMat, this.TREE_COUNT);
     this.rootInstances.castShadow = true;
     this.rootInstances.receiveShadow = true;
 
@@ -188,38 +197,66 @@ export class Foliage {
     this.isLoaded = true;
   }
 
+  private buildGnarledRootButtressGeometry(): THREE.BufferGeometry {
+    const roots: THREE.BufferGeometry[] = [];
+    for (let r = 0; r < 5; r++) {
+      const ang = (r * Math.PI * 2) / 5 + (r % 2) * 0.22;
+      const tendril = new THREE.CylinderGeometry(0.09, 0.24, 1.35, 7, 4);
+      const pos = tendril.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = (y + 0.675) / 1.35; // 0 = tip in soil, 1 = trunk join
+        pos.setX(i, pos.getX(i) + Math.sin(t * Math.PI) * 0.12);
+        pos.setZ(i, pos.getZ(i) * (1.25 - t * 0.35));
+      }
+      tendril.translate(0, 0.45, 0);
+      tendril.rotateZ(0.92);
+      tendril.rotateY(ang);
+      tendril.translate(0, 0.08, 0);
+      tendril.computeVertexNormals();
+      roots.push(tendril);
+    }
+    return mergeGeometries(roots);
+  }
+
   private buildGnarledTrunkGeometry(): THREE.BufferGeometry {
     const parts: THREE.BufferGeometry[] = [];
 
-    // Main twisted trunk with flared buttress root base
-    const main = new THREE.CylinderGeometry(0.22, 0.56, 4.8, 8, 7);
-    main.translate(0, 2.4, 0);
+    // Main twisted trunk with flared buttress root base (12 radial segments for organic roundness)
+    const main = new THREE.CylinderGeometry(0.22, 0.58, 5.1, 12, 9);
+    main.translate(0, 2.35, 0);
     const pos = main.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
       const z = pos.getZ(i);
-      const t = y / 4.8;
-      // Flared root buttresses near base (t < 0.22)
-      const rootFlare = t < 0.22 ? 1.0 + Math.pow(1.0 - t / 0.22, 2) * 0.45 * Math.abs(Math.sin(Math.atan2(z, x) * 3)) : 1.0;
-      const bendX = Math.sin(t * Math.PI * 1.35) * 0.38;
-      const bendZ = Math.cos(t * Math.PI * 1.15) * 0.26 - 0.26;
-      pos.setX(i, x * rootFlare + bendX);
-      pos.setZ(i, z * rootFlare + bendZ);
+      const t = THREE.MathUtils.clamp((y + 0.2) / 5.1, 0, 1);
+      const theta = Math.atan2(z, x);
+      // Organic 5-fluted root flare & bark ridges near base (t < 0.28)
+      const flute = 1.0 + 0.14 * Math.sin(theta * 5 + t * 4.0);
+      const rootFlare =
+        t < 0.28
+          ? 1.0 + Math.pow(1.0 - t / 0.28, 2) * 0.55 * (0.65 + 0.35 * Math.sin(theta * 5))
+          : 1.0;
+      const bendX = Math.sin(t * Math.PI * 1.35) * 0.36;
+      const bendZ = Math.cos(t * Math.PI * 1.15) * 0.24 - 0.24;
+      pos.setX(i, x * rootFlare * flute + bendX);
+      pos.setZ(i, z * rootFlare * flute + bendZ);
     }
     main.computeVertexNormals();
     parts.push(main);
 
-    // 5 spreading primary and secondary boughs
+    // 6 spreading primary and secondary boughs
     const branches = [
-      { rx: 0.52, rz: 0.46, ry: 0.2, y: 3.3, len: 2.6, rTop: 0.09, rBot: 0.21 },
-      { rx: -0.48, rz: 0.40, ry: 1.9, y: 3.6, len: 2.4, rTop: 0.08, rBot: 0.19 },
-      { rx: 0.42, rz: -0.54, ry: 3.5, y: 3.8, len: 2.3, rTop: 0.08, rBot: 0.18 },
-      { rx: -0.38, rz: -0.44, ry: 4.9, y: 4.1, len: 2.1, rTop: 0.07, rBot: 0.16 },
-      { rx: 0.22, rz: 0.28, ry: 1.1, y: 4.3, len: 1.9, rTop: 0.07, rBot: 0.15 },
+      { rx: 0.52, rz: 0.46, ry: 0.2, y: 3.2, len: 2.7, rTop: 0.08, rBot: 0.22 },
+      { rx: -0.48, rz: 0.40, ry: 1.9, y: 3.5, len: 2.5, rTop: 0.08, rBot: 0.20 },
+      { rx: 0.42, rz: -0.54, ry: 3.5, y: 3.8, len: 2.4, rTop: 0.07, rBot: 0.19 },
+      { rx: -0.38, rz: -0.44, ry: 4.9, y: 4.1, len: 2.2, rTop: 0.07, rBot: 0.17 },
+      { rx: 0.24, rz: 0.30, ry: 1.1, y: 4.3, len: 2.0, rTop: 0.06, rBot: 0.15 },
+      { rx: -0.26, rz: 0.32, ry: 2.7, y: 4.4, len: 1.9, rTop: 0.06, rBot: 0.14 },
     ];
     for (const b of branches) {
-      const limb = new THREE.CylinderGeometry(b.rTop, b.rBot, b.len, 6, 3);
+      const limb = new THREE.CylinderGeometry(b.rTop, b.rBot, b.len, 8, 4);
       limb.translate(0, b.len * 0.5, 0);
       limb.rotateX(b.rx);
       limb.rotateZ(b.rz);
@@ -234,43 +271,44 @@ export class Foliage {
 
   private buildCanopyClusterGeometry(): THREE.BufferGeometry {
     const cards: THREE.BufferGeometry[] = [];
-    // 6 overlapping multi-tier bough crowns for a lush, full cloud-forest silhouette
+    // 7 overlapping multi-tier bough crowns for a lush, rounded cloud-forest silhouette
     const crowns = [
-      { x: 0.0, y: 6.1, z: 0.0, r: 3.15 },
-      { x: 1.55, y: 5.15, z: 1.05, r: 2.75 },
-      { x: -1.45, y: 5.3, z: 0.95, r: 2.65 },
-      { x: 0.35, y: 5.5, z: -1.55, r: 2.65 },
-      { x: -1.25, y: 5.6, z: -1.15, r: 2.45 },
-      { x: 1.15, y: 4.55, z: -0.65, r: 2.35 },
+      { x: 0.0, y: 6.15, z: 0.0, r: 2.85 },
+      { x: 1.55, y: 5.15, z: 1.05, r: 2.45 },
+      { x: -1.45, y: 5.3, z: 0.95, r: 2.40 },
+      { x: 0.35, y: 5.5, z: -1.55, r: 2.40 },
+      { x: -1.25, y: 5.6, z: -1.15, r: 2.25 },
+      { x: 1.20, y: 4.65, z: -0.75, r: 2.15 },
+      { x: -0.45, y: 4.75, z: 1.35, r: 2.10 },
     ];
 
     let seed = 0;
-    const cardPerCrown = MOBILE ? 8 : 11;
+    const cardPerCrown = MOBILE ? 9 : 13;
     for (const c of crowns) {
-      // Multi-layered cupped botanical leaf cards (inner core + outer plumage) with Spherical Bent Normals
+      // Multi-layered domed botanical leaf clusters with Spherical Bent Normals
       for (let k = 0; k < cardPerCrown; k++) {
         seed++;
-        const isCore = k < 3;
-        const cardScale = isCore ? c.r * 1.05 : c.r * 1.32;
-        const card = new THREE.PlaneGeometry(cardScale, cardScale, 2, 2);
+        const isCore = k < 4;
+        const cardScale = isCore ? c.r * 0.98 : c.r * 1.18;
+        const card = new THREE.PlaneGeometry(cardScale, cardScale, 3, 3);
         const p = card.attributes.position;
         for (let i = 0; i < p.count; i++) {
           const lx = p.getX(i);
           const ly = p.getY(i);
           const d2 = (lx * lx + ly * ly) / (cardScale * cardScale * 0.5);
-          // Cup each card gently into a natural bough umbrella
-          p.setZ(i, -d2 * 0.38);
+          // Dome each leaf cluster smoothly into an umbrella cap so flat planes never show
+          p.setZ(i, -d2 * 0.48);
         }
 
         // Golden-angle phyllotaxis distribution so no two cards align into flat planes
         const goldenAngle = k * 2.3999632 + seed * 0.37;
-        const tilt = isCore ? 0.65 + (k % 2) * 0.55 : 0.35 + ((k * 0.618) % 1) * 0.72;
+        const tilt = isCore ? 0.58 + (k % 2) * 0.52 : 0.32 + ((k * 0.618) % 1) * 0.68;
         card.rotateX(tilt);
         card.rotateY(goldenAngle);
-        card.rotateZ(((seed % 5) - 2) * 0.14);
+        card.rotateZ(((seed % 5) - 2) * 0.16);
 
-        const radialDist = isCore ? c.r * 0.12 : c.r * (0.24 + ((k % 3) * 0.08));
-        const verticalOff = ((k / Math.max(1, cardPerCrown - 1)) - 0.48) * c.r * 0.52;
+        const radialDist = isCore ? c.r * 0.14 : c.r * (0.26 + ((k % 3) * 0.09));
+        const verticalOff = ((k / Math.max(1, cardPerCrown - 1)) - 0.46) * c.r * 0.56;
         card.translate(
           c.x + Math.cos(goldenAngle) * radialDist,
           c.y + verticalOff,
@@ -355,8 +393,9 @@ export class Foliage {
   }
 
   private buildCragBoulderGeometry(): THREE.BufferGeometry {
-    const geom = new THREE.IcosahedronGeometry(1.3, 2);
+    const geom = new THREE.IcosahedronGeometry(1.25, 3);
     const pos = geom.attributes.position;
+    const uv = geom.attributes.uv;
     const colors = new Float32Array(pos.count * 3);
 
     for (let i = 0; i < pos.count; i++) {
@@ -364,23 +403,30 @@ export class Foliage {
       let y = pos.getY(i);
       let z = pos.getZ(i);
 
-      // Angular stratified displacement
-      const n = vnoise(x * 1.4 + 5.2, z * 1.4 - 3.1);
-      const scale = 0.78 + n * 0.48;
-      x *= scale * 1.15;
-      z *= scale * 1.05;
-      // Flatten underside so boulder sits solidly in soil
-      y = y < 0 ? y * 0.45 : y * (0.75 + n * 0.35);
+      // Angular stratified Andean granite fracture planes
+      const n1 = vnoise(x * 1.4 + 5.2, z * 1.4 - 3.1);
+      const n2 = vnoise(y * 2.2 - 1.7, x * 1.8 + z * 1.8);
+      const strata = 0.90 + 0.14 * Math.sin(y * 5.5 + n1 * 2.4);
+      const scale = (0.76 + n1 * 0.36 + (n2 - 0.5) * 0.18) * strata;
+      x *= scale * 1.16;
+      z *= scale * 1.06;
+      // Flatten underside so boulder sits solidly embedded in soil
+      y = y < 0 ? y * 0.42 : y * (0.72 + n1 * 0.32);
 
-      pos.setXYZ(i, x, y + 0.35, z);
+      const finalY = y + 0.32;
+      pos.setXYZ(i, x, finalY, z);
+
+      // Box/planar UV projection (eliminates spherical polar UV pinching at top of boulder)
+      uv.setXY(i, (x + finalY * 0.45) * 0.65, (z + finalY * 0.45) * 0.65);
 
       // Top-surface moss tint vs dark granite underside
-      const moss = THREE.MathUtils.clamp((y + 0.2) / 1.2, 0, 1);
-      colors[i * 3] = THREE.MathUtils.lerp(0.54, 0.68, moss);
-      colors[i * 3 + 1] = THREE.MathUtils.lerp(0.54, 0.82, moss);
-      colors[i * 3 + 2] = THREE.MathUtils.lerp(0.50, 0.56, moss);
+      const moss = THREE.MathUtils.clamp((y + 0.25) / 1.15, 0, 1);
+      colors[i * 3] = THREE.MathUtils.lerp(0.46, 0.76, moss);
+      colors[i * 3 + 1] = THREE.MathUtils.lerp(0.46, 0.84, moss);
+      colors[i * 3 + 2] = THREE.MathUtils.lerp(0.44, 0.66, moss);
     }
 
+    uv.needsUpdate = true;
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geom.computeVertexNormals();
     return geom;

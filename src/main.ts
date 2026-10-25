@@ -101,19 +101,20 @@ async function bootJuzu() {
   // 4. Quality & Post Processing
   await loadQualityConfig();
   const post = new Post(renderer, scene, camera);
+  const useHeavyPost = !MOBILE && !forceWebGL;
   const quality = new AdaptiveQuality((tier) => {
     post.rebuild({
-      ao: tier.ao,
+      ao: useHeavyPost && tier.ao,
       bloom: tier.bloom,
-      aa: MOBILE ? 'none' : 'smaa',
+      aa: useHeavyPost ? 'smaa' : 'none',
     });
   });
   const currentTier = quality.current;
 
   post.rebuild({
-    ao: currentTier.ao,
+    ao: useHeavyPost && currentTier.ao,
     bloom: currentTier.bloom,
-    aa: MOBILE ? 'none' : 'smaa',
+    aa: useHeavyPost ? 'smaa' : 'none',
   });
 
   // 5. Light Rig & Sky
@@ -556,7 +557,10 @@ async function bootJuzu() {
     minimap.update(controller.pos, controller.heading);
     expeditionMenu.update(controller.pos, controller.heading);
 
-    // Lazy-load High Sierra heavy scanned assets (trees & rocks) if approaching region on desktop
+    // Lazy-load Cloud Forest & High Sierra heavy scanned assets on desktop after Naira rig is ready
+    if (!MOBILE && naira.isLoaded) {
+      cloudForest.loadScannedAssets();
+    }
     if (!MOBILE && Math.hypot(controller.pos.x - 120, controller.pos.z - (-165)) < 160) {
       highSierra.loadScannedAssets();
     }

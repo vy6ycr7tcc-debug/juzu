@@ -62,8 +62,11 @@ export const IS_IOS =
 
 export const MOBILE =
   IS_IOS ||
+  (typeof navigator !== 'undefined' && /Android|Mobile|Tablet/i.test(navigator.userAgent)) ||
   (typeof window !== 'undefined' &&
-    (matchMedia('(pointer:coarse)').matches || Math.min(screen.width, screen.height) < 840));
+    (matchMedia('(pointer:coarse)').matches ||
+      window.innerWidth <= 840 ||
+      screen.width <= 840));
 
 /** The defaults (the controller as it was tuned before the config existed). */
 export const QUALITY_DEFAULTS: QualityConfig = {

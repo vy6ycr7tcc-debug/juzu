@@ -1,10 +1,10 @@
 import * as THREE from 'three/webgpu';
 import {
-  triplanarTextures,
   texture,
   normalMap,
   float,
   vec2,
+  vec3,
   mix,
   smoothstep,
   positionWorld,
@@ -87,27 +87,24 @@ const PEAKS = [
 export function rawHeight(x: number, z: number): number {
   // 1. Base high-altitude Andean landmass
   const n1 = fbm(x, z);
-  const crag = ridgedFbm(x, z);
-  let h = 6.5 + (n1 - 0.45) * 18.0 + Math.pow(crag, 1.5) * 16.0;
+  const crag = ridgedFbm(x * 0.65, z * 0.65);
+  let h = 6.5 + (n1 - 0.45) * 18.0 + Math.pow(crag, 1.5) * 14.0;
 
-  // 2. Dramatic Huayna-Picchu Monoliths & Cordillera Peaks with Ridged Crags
+  // 2. Dramatic Huayna-Picchu Monoliths & Cordillera Peaks with Smooth Geological Ridges
+  // (Band-limited to avoid sub-grid Nyquist aliasing on steep PlaneGeometry triangles)
   for (const p of PEAKS) {
     const d = Math.hypot(x - p.x, z - p.z) / p.r;
     if (d < 1) {
       const peakShape = Math.pow(1 - d * d, p.sharp);
-      const ridgeDetail = 0.68 + 0.55 * ridgedFbm(x * 1.8 + p.x, z * 1.8 + p.z);
-      h += peakShape * p.h * ridgeDetail;
+      const lowFreqRidge =
+        0.78 +
+        0.24 * vnoise(x * 0.022 + p.x * 0.1, z * 0.022 + p.z * 0.1) +
+        0.12 * vnoise(x * 0.048 - p.z * 0.1, z * 0.048 + p.x * 0.1);
+      h += peakShape * p.h * lowFreqRidge;
     }
   }
 
-  // 3. Natural Inca Geological Strata Steps on steep slopes (h > 6.5m)
-  if (h > 6.5) {
-    const strataMask = smooth(6.5, 18.0, h);
-    const strataWave = Math.sin(h * 1.35 + vnoise(x * 0.08, z * 0.08) * 1.8);
-    h += strataWave * 0.42 * strataMask;
-  }
-
-  // 4. Urubamba River Gorge (runs East-West centered around z = -17, spanned by the bridge at x = 0, z = 2..-36)
+  // 3. Urubamba River Gorge (runs East-West centered around z = -17, spanned by the bridge at x = 0, z = 2..-36)
   const riverCurveZ = -17.0 + Math.sin(x * 0.018) * 6.5 * smooth(8, 35, Math.abs(x));
   const distToRiver = Math.abs(z - riverCurveZ);
   if (distToRiver < 22) {
@@ -172,7 +169,7 @@ export class Terrain {
   private chunks = new Map<string, THREE.Mesh>();
   private material: THREE.MeshStandardNodeMaterial;
   private readonly CHUNK_SIZE = 64;
-  private readonly CHUNK_RES = MOBILE ? 32 : 44;
+  private readonly CHUNK_RES = MOBILE ? 32 : 56;
   private lastChunkX = NaN;
   private lastChunkZ = NaN;
   private buildQueue: Array<{ kx: number; kz: number; key: string }> = [];
@@ -233,9 +230,9 @@ export class Terrain {
     cliffTex.wrapS = cliffTex.wrapT = THREE.RepeatWrapping;
 
     this.material = new THREE.MeshStandardNodeMaterial({
-      color: 0xf6f0e6,
+      color: 0xf4eee4,
       vertexColors: true,
-      roughness: 0.86,
+      roughness: 0.88,
       metalness: 0.02,
       map: groundTex,
       normalMap: groundNor,
@@ -243,21 +240,24 @@ export class Terrain {
       flatShading: false,
     });
 
-    // Modulate normalMap & AO by slope (normalWorld.y) while keeping 1.15 rock relief on vertical canyon walls
-    const flatSlope = smoothstep(float(0.45), float(0.82), normalWorld.y);
-    const groundAoFactor = mix(float(0.88), texture(groundAO).r, flatSlope.mul(float(0.75)));
-    const normalStrength = mix(float(1.15), float(1.95), flatSlope);
+    // Orientation-correct 3D triplanar projection (zy for X-axis, xz for Y-axis, xy for Z-axis)
+    // so horizontal rock strata stay horizontal on ALL cliff orientations without 90-deg rotation!
+    const flatSlope = smoothstep(float(0.55), float(0.84), normalWorld.y);
+    const groundAoFactor = mix(float(0.92), texture(groundAO).r, flatSlope.mul(float(0.72)));
+    const normalStrength = mix(float(0.04), float(1.65), flatSlope);
 
-    // Note: NodeMaterial automatically multiplies colorNode by vertexColor() when vertexColors: true
-    this.material.colorNode = triplanarTextures(
-      texture(cliffTex),
-      texture(groundTex),
-      texture(cliffTex),
-      float(0.14),
-      positionWorld,
-      normalWorld.abs().pow(float(8.0))
-    ).mul(groundAoFactor);
+    const wRaw = normalWorld.abs().pow(float(5.0));
+    const wSum = wRaw.dot(vec3(1.0, 1.0, 1.0)).max(float(0.0001));
+    const triW = wRaw.div(wSum);
 
+    const cliffScale = float(0.095);
+    const groundScale = float(0.14);
+    const colX = texture(cliffTex, positionWorld.zy.mul(cliffScale)).mul(triW.x);
+    const colY = texture(groundTex, positionWorld.xz.mul(groundScale)).mul(triW.y);
+    const colZ = texture(cliffTex, positionWorld.xy.mul(cliffScale)).mul(triW.z);
+
+    this.material.colorNode = colX.add(colY).add(colZ).mul(groundAoFactor);
+    this.material.roughnessNode = mix(float(0.88), texture(groundRough).r, flatSlope);
     this.material.normalNode = normalMap(texture(groundNor), vec2(normalStrength));
   }
 
@@ -359,75 +359,73 @@ export class Terrain {
       const ny = normAttr.getY(i);
       const nz = normAttr.getZ(i);
 
-      // 3D slope-compensated UV projection so normalMap & aoMap never stretch vertically on cliffs
+      // Clean world-planar XZ UVs for ground AO & roughness maps (cliffs use 3D triplanar projection)
       const tileScale = 0.14;
-      const uCoord = (vx + vy * 0.85) * tileScale;
-      const vCoord = (vz - vy * 0.65) * tileScale;
-      uvAttr.setXY(i, uCoord, vCoord);
+      uvAttr.setXY(i, vx * tileScale, vz * tileScale);
 
-      // Micro-noise, macro-soil patches & horizontal rock strata banding
-      const detailNoise = vnoise(vx * 0.14, vz * 0.14);
+      // Micro-noise, macro-soil patches & broad horizontal rock strata banding
+      const detailNoise = vnoise(vx * 0.08, vz * 0.08);
       const macroSoil = vnoise(vx * 0.022, vz * 0.022);
-      const microGravel = vnoise(vx * 0.38, vz * 0.38);
-      const strataBand = 0.82 + 0.18 * Math.sin(vy * 2.8 + detailNoise * 3.2);
+      const microGravel = vnoise(vx * 0.25, vz * 0.25);
+      const strataBand = 0.90 + 0.10 * Math.sin(vy * 0.42 + macroSoil * 2.2);
 
       // Slope factor: 1 = flat Andean valley/terrace, 0 = sheer granite gorge wall
-      const slope = THREE.MathUtils.clamp((ny - 0.58) / 0.28, 0, 1);
+      const slope = THREE.MathUtils.clamp((ny - 0.56) / 0.28, 0, 1);
 
-      // Moss crevices on mid-slope rock faces
-      const mossCrevice = THREE.MathUtils.clamp((ny - 0.35) / 0.35, 0, 1) * (1 - slope) * detailNoise;
+      // Moss crevices on mid-slope cloud-forest rock faces
+      const mossCrevice = THREE.MathUtils.clamp((ny - 0.30) / 0.40, 0, 1) * (1 - slope) * detailNoise;
 
-      // High altitude snow-capped cordillera factor (snow settles on upper alpine ledges & couloirs > 36m)
-      const snow = THREE.MathUtils.clamp((vy - 36 + detailNoise * 6) / 22, 0, 1) * THREE.MathUtils.clamp((ny - 0.16) / 0.34, 0, 1);
+      // High altitude snow-capped cordillera factor (snow settles on high alpine ridges > 46m)
+      const snow = THREE.MathUtils.clamp((vy - 46 + detailNoise * 6) / 24, 0, 1) * THREE.MathUtils.clamp((ny - 0.28) / 0.34, 0, 1);
 
       // Riverbank wet dark slate & cobbles near water line
       const riverbank = THREE.MathUtils.clamp((vy - 0.4) / 2.2, 0, 1);
 
-      // Steep granite cliff color (stratified warm-charcoal andesite) vs lush cloud-forest moss/pebble floor
-      const rockR = (0.58 + macroSoil * 0.12) * strataBand;
-      const rockG = (0.54 + macroSoil * 0.10) * strataBand + mossCrevice * 0.18;
-      const rockB = (0.50 + macroSoil * 0.08) * strataBand;
+      // Steep granite cliff color (weathered dark Andean andesite with mossy ledges) vs cloud-forest floor
+      const rockR = (0.48 + macroSoil * 0.10 - mossCrevice * 0.08) * strataBand;
+      const rockG = (0.47 + macroSoil * 0.09 + mossCrevice * 0.18) * strataBand;
+      const rockB = (0.43 + macroSoil * 0.08 - mossCrevice * 0.04) * strataBand;
 
-      const grassR = 0.70 + detailNoise * 0.14 + (macroSoil - 0.5) * 0.12;
-      const grassG = 0.84 + detailNoise * 0.14 + (macroSoil - 0.5) * 0.10;
-      const grassB = 0.62 + detailNoise * 0.10;
+      const grassR = 0.66 + detailNoise * 0.12 + (macroSoil - 0.5) * 0.10;
+      const grassG = 0.80 + detailNoise * 0.12 + (macroSoil - 0.5) * 0.10;
+      const grassB = 0.56 + detailNoise * 0.08;
 
-      // Above 28m, transition vegetation into rugged high-alpine stone & scree before snowline
-      const alpineRockMask = THREE.MathUtils.clamp((vy - 28) / 14, 0, 1);
+      // Above 34m, transition vegetation into rugged high-alpine stone & scree before snowline
+      const alpineRockMask = THREE.MathUtils.clamp((vy - 34) / 16, 0, 1);
       const effectiveSlope = slope * (1 - alpineRockMask * 0.78);
 
-      let r = THREE.MathUtils.lerp(rockR, grassR, effectiveSlope) + (microGravel - 0.5) * 0.05;
-      let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope) + (microGravel - 0.5) * 0.05;
-      let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope) + (microGravel - 0.5) * 0.04;
+      let r = THREE.MathUtils.lerp(rockR, grassR, effectiveSlope) + (microGravel - 0.5) * 0.04;
+      let g = THREE.MathUtils.lerp(rockG, grassG, effectiveSlope) + (microGravel - 0.5) * 0.04;
+      let b = THREE.MathUtils.lerp(rockB, grassB, effectiveSlope) + (microGravel - 0.5) * 0.03;
 
       // Worn stone-and-earth expedition footpath along the sanctuary trail & inter-region routes
       const rInf = getRouteInfluence(vx, vz);
       if (rInf.trailFactor > 0 && !rInf.isChasm && vy > 1.2) {
         const trailT = rInf.trailFactor * 0.72;
-        r = THREE.MathUtils.lerp(r, 0.90, trailT);
-        g = THREE.MathUtils.lerp(g, 0.82, trailT);
-        b = THREE.MathUtils.lerp(b, 0.68, trailT);
+        r = THREE.MathUtils.lerp(r, 0.86, trailT);
+        g = THREE.MathUtils.lerp(g, 0.78, trailT);
+        b = THREE.MathUtils.lerp(b, 0.65, trailT);
       } else if (rInf.isChasm && rInf.trailFactor > 0) {
         const chasmDark = rInf.trailFactor * 0.65;
-        r = THREE.MathUtils.lerp(r, 0.32, chasmDark);
-        g = THREE.MathUtils.lerp(g, 0.30, chasmDark);
-        b = THREE.MathUtils.lerp(b, 0.28, chasmDark);
+        r = THREE.MathUtils.lerp(r, 0.30, chasmDark);
+        g = THREE.MathUtils.lerp(g, 0.29, chasmDark);
+        b = THREE.MathUtils.lerp(b, 0.27, chasmDark);
       } else if (vz > -48 && vz < 16 && Math.abs(vx) < 2.8 && vy > 3.5) {
-        const trailT = (1.0 - Math.abs(vx) / 2.8) * slope * 0.55;
-        r = THREE.MathUtils.lerp(r, 0.88, trailT);
-        g = THREE.MathUtils.lerp(g, 0.78, trailT);
-        b = THREE.MathUtils.lerp(b, 0.64, trailT);
+        const trailT = (1.0 - Math.abs(vx) / 2.8) * slope * 0.52;
+        r = THREE.MathUtils.lerp(r, 0.84, trailT);
+        g = THREE.MathUtils.lerp(g, 0.75, trailT);
+        b = THREE.MathUtils.lerp(b, 0.62, trailT);
       }
 
       // Darken damp river canyon stone along the gorge waterline
-      r = THREE.MathUtils.lerp(0.36, r, riverbank);
-      g = THREE.MathUtils.lerp(0.38, g, riverbank);
-      b = THREE.MathUtils.lerp(0.34, b, riverbank);
+      r = THREE.MathUtils.lerp(0.32, r, riverbank);
+      g = THREE.MathUtils.lerp(0.35, g, riverbank);
+      b = THREE.MathUtils.lerp(0.31, b, riverbank);
 
       // Glaciated alpine snow on high cordillera peaks
-      r = THREE.MathUtils.lerp(r, 1.05, snow);
-      g = THREE.MathUtils.lerp(g, 1.08, snow);
-      b = THREE.MathUtils.lerp(b, 1.14, snow);
+      r = THREE.MathUtils.lerp(r, 1.02, snow);
+      g = THREE.MathUtils.lerp(g, 1.05, snow);
+      b = THREE.MathUtils.lerp(b, 1.10, snow);
 
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;

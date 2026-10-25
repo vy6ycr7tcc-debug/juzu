@@ -3,13 +3,29 @@ import { standAt } from '../world/terrain';
 import { solidity } from '../world/solidity';
 
 export class FollowCamera {
-  yaw = 0;
-  pitch = 0.12;
+  private _yaw = 0;
+  private _pitch = 0.12;
   targetYaw = 0;
   targetPitch = 0.12;
   baseDist = 7.4;
   dist = 7.4;
   shoulderOffset = 0.38;
+
+  get yaw(): number {
+    return this._yaw;
+  }
+  set yaw(v: number) {
+    this._yaw = v;
+    this.targetYaw = v;
+  }
+
+  get pitch(): number {
+    return this._pitch;
+  }
+  set pitch(v: number) {
+    this._pitch = v;
+    this.targetPitch = v;
+  }
 
   private target = new THREE.Vector3();
   private currentPos = new THREE.Vector3();
@@ -22,8 +38,8 @@ export class FollowCamera {
   public invertY = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
-    this.targetYaw = this.yaw;
-    this.targetPitch = this.pitch;
+    this.targetYaw = this._yaw;
+    this.targetPitch = this._pitch;
     this.currentPos.set(0, 4.2, 11.5);
   }
 
@@ -53,8 +69,8 @@ export class FollowCamera {
     this.targetPitch = THREE.MathUtils.clamp(this.targetPitch + dy, -0.32, 1.15);
 
     const lookBlend = Math.min(1, dt * 26);
-    this.yaw = THREE.MathUtils.lerp(this.yaw, this.targetYaw, lookBlend);
-    this.pitch = THREE.MathUtils.lerp(this.pitch, this.targetPitch, lookBlend);
+    this._yaw = THREE.MathUtils.lerp(this._yaw, this.targetYaw, lookBlend);
+    this._pitch = THREE.MathUtils.lerp(this._pitch, this.targetPitch, lookBlend);
 
     // 2. Landing spring dip
     this.landingDipVel += (-this.landingDip * 42 - this.landingDipVel * 9.5) * dt;
