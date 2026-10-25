@@ -5,6 +5,9 @@ export class AudioEngine {
   private sfxGain: GainNode | null = null;
   private isMuted = false;
   private windNode: AudioNode | null = null;
+  private echoDelay: DelayNode | null = null;
+  private echoGain: GainNode | null = null;
+  private echoFilter: BiquadFilterNode | null = null;
 
   constructor() {
     // Initialized on first user interaction
@@ -28,6 +31,20 @@ export class AudioEngine {
       this.musicGain.connect(this.masterGain);
       this.sfxGain.connect(this.masterGain);
       this.masterGain.connect(this.ctx.destination);
+
+      // Andean Mountain Canyon Slapback Echo Loop (damped multi-tap reflection)
+      this.echoDelay = this.ctx.createDelay(1.0);
+      this.echoDelay.delayTime.value = 0.28; // 280ms canyon rock face reflection
+      this.echoGain = this.ctx.createGain();
+      this.echoGain.gain.value = 0.32; // Natural acoustic falloff
+      this.echoFilter = this.ctx.createBiquadFilter();
+      this.echoFilter.type = 'lowpass';
+      this.echoFilter.frequency.value = 1800; // High-frequency mountain absorption
+
+      this.echoDelay.connect(this.echoFilter);
+      this.echoFilter.connect(this.echoGain);
+      this.echoGain.connect(this.echoDelay); // Feedback loop
+      this.echoGain.connect(this.masterGain);
 
       this.startAmbientMountainBreeze();
       return true;
@@ -108,39 +125,163 @@ export class AudioEngine {
     osc.stop(this.ctx.currentTime + duration);
   }
 
-  // Footstep foley (grass / stone / wood)
+  // Route an audio transient burst into the Andean canyon echo line
+  public triggerCanyonEcho(sourceNode: AudioNode, gainLevel = 0.38): void {
+    if (!this.ctx || !this.echoDelay) return;
+    try {
+      const sendGain = this.ctx.createGain();
+      sendGain.gain.value = gainLevel;
+      sourceNode.connect(sendGain);
+      sendGain.connect(this.echoDelay);
+    } catch {}
+  }
+
+  // Realistic surface-acoustic footsteps (stone mineral grit, hollow timber cavity, water splash, soft soil)
   public playFootstep(material: 'grass' | 'stone' | 'wood' | 'water' = 'grass'): void {
     try {
       if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
       if (this.ctx.state !== 'running') return;
-      const bufferSize = Math.max(1, Math.floor(this.ctx.sampleRate * 0.04));
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const output = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = Math.random() * 2 - 1;
-      }
-
-      const whiteNoise = this.ctx.createBufferSource();
-      whiteNoise.buffer = buffer;
-
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = material === 'stone' ? 'highpass' : 'lowpass';
-      filter.frequency.value = material === 'stone' ? 800 : material === 'water' ? 1200 : 400;
-
-      const gain = this.ctx.createGain();
       const now = this.ctx.currentTime;
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
 
-      whiteNoise.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.sfxGain);
+      if (material === 'stone') {
+        // 1. Solid heel-strike impact thud
+        const thud = this.ctx.createOscillator();
+        const thudGain = this.ctx.createGain();
+        thud.type = 'triangle';
+        thud.frequency.setValueAtTime(145, now);
+        thud.frequency.exponentialRampToValueAtTime(42, now + 0.055);
+        thudGain.gain.setValueAtTime(0.18, now);
+        thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+        thud.connect(thudGain);
+        thudGain.connect(this.sfxGain);
+        thud.start(now);
+        thud.stop(now + 0.06);
 
-      whiteNoise.start(now);
-      whiteNoise.stop(now + 0.05);
+        // 2. High-frequency mineral grit & gravel crunch
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.05);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.4));
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 2200;
+        filter.Q.value = 2.2;
+        const gritGain = this.ctx.createGain();
+        gritGain.gain.setValueAtTime(0.14, now);
+        gritGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        noise.connect(filter);
+        filter.connect(gritGain);
+        gritGain.connect(this.sfxGain);
+        noise.start(now);
+      } else if (material === 'wood') {
+        // Hollow timber plank acoustic resonance (hanging bridge plank)
+        const timber = this.ctx.createOscillator();
+        const timberGain = this.ctx.createGain();
+        timber.type = 'sine';
+        timber.frequency.setValueAtTime(125, now);
+        timber.frequency.exponentialRampToValueAtTime(75, now + 0.08);
+        timberGain.gain.setValueAtTime(0.24, now);
+        timberGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        timber.connect(timberGain);
+        timberGain.connect(this.sfxGain);
+        timber.start(now);
+        timber.stop(now + 0.085);
+
+        // Timber creak click
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.03);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 720;
+        const clickGain = this.ctx.createGain();
+        clickGain.gain.setValueAtTime(0.16, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+        noise.connect(filter);
+        filter.connect(clickGain);
+        clickGain.connect(this.sfxGain);
+        noise.start(now);
+      } else if (material === 'water') {
+        // Aquatic splash & bubbling wake
+        const splosh = this.ctx.createOscillator();
+        const sploshGain = this.ctx.createGain();
+        splosh.type = 'sine';
+        splosh.frequency.setValueAtTime(210, now);
+        splosh.frequency.exponentialRampToValueAtTime(65, now + 0.09);
+        sploshGain.gain.setValueAtTime(0.22, now);
+        sploshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+        splosh.connect(sploshGain);
+        sploshGain.connect(this.sfxGain);
+        splosh.start(now);
+        splosh.stop(now + 0.095);
+
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.11);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = (Math.random() * 2 - 1) * (1 - i / bufLen);
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1600;
+        const sprayGain = this.ctx.createGain();
+        sprayGain.gain.setValueAtTime(0.20, now);
+        sprayGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+        noise.connect(filter);
+        filter.connect(sprayGain);
+        sprayGain.connect(this.sfxGain);
+        noise.start(now);
+      } else {
+        // Soil / turf / moss damp scuff
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.045);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 380;
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.sfxGain);
+        noise.start(now);
+      }
     } catch {
       // Defensive: ignore audio glitches on interrupted mobile contexts
     }
+  }
+
+  // Ethereal Survival Instinct / Eagle Vision Sonar Chime
+  public playSurvivalInstinctSonar(): void {
+    if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
+    const now = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 (Inca pentatonic celestial chord)
+
+    notes.forEach((freq, idx) => {
+      if (!this.ctx || !this.sfxGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+
+      gain.gain.setValueAtTime(0, now + idx * 0.04);
+      gain.gain.linearRampToValueAtTime(0.12, now + idx * 0.04 + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 1.2);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now + idx * 0.04);
+      osc.stop(now + idx * 0.04 + 1.25);
+    });
   }
 
   // Grapple throw whoosh sound effect
@@ -249,6 +390,7 @@ export class AudioEngine {
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
     noiseGain.connect(this.sfxGain);
+    this.triggerCanyonEcho(noiseGain, 0.40);
     noise.start(t);
 
     // 2. Heavy sub-bass chamber detonation punch
@@ -263,6 +405,7 @@ export class AudioEngine {
 
     punch.connect(punchGain);
     punchGain.connect(this.sfxGain);
+    this.triggerCanyonEcho(punchGain, 0.45);
     punch.start(t);
     punch.stop(t + 0.25);
 
@@ -318,24 +461,114 @@ export class AudioEngine {
     osc2.stop(t + 0.28);
   }
 
-  // Bullet impact crack & ricochet ping
-  public playBulletImpact(): void {
+  // Bullet impact crack & ricochet ping with surface differentiation
+  public playBulletImpact(material: 'stone' | 'wood' | 'water' = 'stone'): void {
     if (!this.initCtx() || !this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
 
-    const osc = this.ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(2200, t);
-    osc.frequency.exponentialRampToValueAtTime(750, t + 0.12);
+    try {
+      if (material === 'stone') {
+        // High supersonic ricochet ping
+        const ping = this.ctx.createOscillator();
+        ping.type = 'sine';
+        ping.frequency.setValueAtTime(2800, t);
+        ping.frequency.exponentialRampToValueAtTime(820, t + 0.14);
 
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.35, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        const pingGain = this.ctx.createGain();
+        pingGain.gain.setValueAtTime(0.38, t);
+        pingGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
 
-    osc.connect(gain);
-    gain.connect(this.sfxGain);
-    osc.start(t);
-    osc.stop(t + 0.12);
+        ping.connect(pingGain);
+        pingGain.connect(this.sfxGain);
+        this.triggerCanyonEcho(pingGain, 0.25);
+        ping.start(t);
+        ping.stop(t + 0.14);
+
+        // Mineral crack noise burst
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.06);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.3));
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 1800;
+        const crackGain = this.ctx.createGain();
+        crackGain.gain.setValueAtTime(0.30, t);
+        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        noise.connect(filter);
+        filter.connect(crackGain);
+        crackGain.connect(this.sfxGain);
+        noise.start(t);
+      } else if (material === 'wood') {
+        // Solid timber impact thud
+        const thunk = this.ctx.createOscillator();
+        thunk.type = 'triangle';
+        thunk.frequency.setValueAtTime(190, t);
+        thunk.frequency.exponentialRampToValueAtTime(55, t + 0.09);
+
+        const thunkGain = this.ctx.createGain();
+        thunkGain.gain.setValueAtTime(0.42, t);
+        thunkGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        thunk.connect(thunkGain);
+        thunkGain.connect(this.sfxGain);
+        thunk.start(t);
+        thunk.stop(t + 0.095);
+
+        // Splinter crack
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.05);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1200;
+        const splinterGain = this.ctx.createGain();
+        splinterGain.gain.setValueAtTime(0.24, t);
+        splinterGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        noise.connect(filter);
+        filter.connect(splinterGain);
+        splinterGain.connect(this.sfxGain);
+        noise.start(t);
+      } else if (material === 'water') {
+        // Liquid cavitation plop
+        const plop = this.ctx.createOscillator();
+        plop.type = 'sine';
+        plop.frequency.setValueAtTime(340, t);
+        plop.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+
+        const plopGain = this.ctx.createGain();
+        plopGain.gain.setValueAtTime(0.45, t);
+        plopGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        plop.connect(plopGain);
+        plopGain.connect(this.sfxGain);
+        plop.start(t);
+        plop.stop(t + 0.125);
+
+        // Water splash spray
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.15);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) out[i] = (Math.random() * 2 - 1) * (1 - i / bufLen);
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 2100;
+        const sprayGain = this.ctx.createGain();
+        sprayGain.gain.setValueAtTime(0.28, t);
+        sprayGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        noise.connect(filter);
+        filter.connect(sprayGain);
+        sprayGain.connect(this.sfxGain);
+        noise.start(t);
+      }
+    } catch {
+      // Defensive
+    }
   }
 
   private startAmbientMountainBreeze(): void {

@@ -33,6 +33,10 @@ export class FollowCamera {
   private effDist = 7.4;
   private landingDip = 0;
   private landingDipVel = 0;
+  private recoilPitch = 0;
+  private recoilPitchVel = 0;
+  private recoilYaw = 0;
+  private recoilYawVel = 0;
   private stridePhase = 0;
   public sensitivity = 1.0;
   public invertY = false;
@@ -49,6 +53,11 @@ export class FollowCamera {
 
   public triggerLandingDip(impactSpeed: number): void {
     this.landingDipVel -= Math.min(2.4, impactSpeed * 0.24);
+  }
+
+  public triggerRecoilKick(pitchDelta: number = 0.038, yawDelta: number = 0): void {
+    this.recoilPitchVel += pitchDelta * 22;
+    this.recoilYawVel += yawDelta * 22;
   }
 
   public update(
@@ -76,7 +85,16 @@ export class FollowCamera {
     this.landingDipVel += (-this.landingDip * 42 - this.landingDipVel * 9.5) * dt;
     this.landingDip += this.landingDipVel * dt;
 
-    // 3. Adaptive Mobile Orientation & Dynamic Distance
+    // 3. Kinetic weapon recoil spring recovery
+    this.recoilPitchVel += (-this.recoilPitch * 62 - this.recoilPitchVel * 14) * dt;
+    this.recoilPitch += this.recoilPitchVel * dt;
+    this.recoilYawVel += (-this.recoilYaw * 62 - this.recoilYawVel * 14) * dt;
+    this.recoilYaw += this.recoilYawVel * dt;
+
+    const effYaw = this._yaw + this.recoilYaw;
+    const effPitch = this._pitch + this.recoilPitch;
+
+    // 4. Adaptive Mobile Orientation & Dynamic Distance
     const aspect = Math.max(0.2, this.camera.aspect || window.innerWidth / window.innerHeight);
     const isPortrait = aspect < 1.0;
 
@@ -103,7 +121,7 @@ export class FollowCamera {
       this.camera.updateProjectionMatrix();
     }
 
-    // 4. Velocity Lead-Ahead & Grounded Footstep Cadence Micro-Bob
+    // 5. Velocity Lead-Ahead & Grounded Footstep Cadence Micro-Bob
     const speedHoriz = playerVel ? Math.hypot(playerVel.x, playerVel.z) : 0;
     const leadScale = this.dist < 2.5 ? 0.0 : 0.07;
     const goalLeadX = playerVel ? THREE.MathUtils.clamp(playerVel.x * leadScale, -0.45, 0.45) : 0;
@@ -118,9 +136,9 @@ export class FollowCamera {
       cadenceBobY = Math.sin(this.stridePhase) * bobAmp * Math.min(1, speedHoriz / 3.0);
     }
 
-    // 5. Over-the-Shoulder Target Framing
-    const sinYaw = Math.sin(this.yaw);
-    const cosYaw = Math.cos(this.yaw);
+    // 6. Over-the-Shoulder Target Framing
+    const sinYaw = Math.sin(effYaw);
+    const cosYaw = Math.cos(effYaw);
     const rightX = cosYaw;
     const rightZ = -sinYaw;
 
@@ -144,9 +162,9 @@ export class FollowCamera {
     );
     this.target.lerp(targetGoal, Math.min(1, dt * 15));
 
-    // 6. Compute spherical offset
-    const cosPitch = Math.cos(this.pitch);
-    const sinPitch = Math.sin(this.pitch);
+    // 7. Compute spherical offset with recoil
+    const cosPitch = Math.cos(effPitch);
+    const sinPitch = Math.sin(effPitch);
 
     const dir = new THREE.Vector3(
       sinYaw * cosPitch,
