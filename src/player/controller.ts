@@ -266,6 +266,7 @@ export class Controller {
     const inputMag = Math.min(1.0, Math.hypot(inputMove.x, inputMove.y));
     const hasMove = inputMag > 0.08 || this.dodging;
     if (hasMove) {
+      let turnAlign = 1.0;
       if (inputMag > 0.08) {
         const sinY = Math.sin(camYaw);
         const cosY = Math.cos(camYaw);
@@ -278,11 +279,14 @@ export class Controller {
         if (dHeading < -Math.PI) dHeading += Math.PI * 2;
 
         const prevHeading = this.heading;
-        const turnBlend = Math.min(1, dt * (this.grounded ? 18.0 : 10.5));
+        const turnSpeed = this.grounded ? (Math.abs(dHeading) > 1.1 ? 24.0 : 18.0) : 10.5;
+        const turnBlend = Math.min(1, dt * turnSpeed);
         this.heading += dHeading * turnBlend;
 
         const instTurnRate = (this.heading - prevHeading) / Math.max(0.001, dt);
         this.turnRate = THREE.MathUtils.lerp(this.turnRate, instTurnRate, Math.min(1, dt * 12));
+        this.heading = ((this.heading + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+        turnAlign = this.dodging ? 1.0 : Math.max(0.28, Math.cos(dHeading * 0.65));
       } else {
         this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 10));
       }
@@ -312,7 +316,7 @@ export class Controller {
           : isBoost
             ? RUN_SPEED
             : WALK_SPEED * Math.max(0.55, inputMag);
-      const targetSpeed = baseTargetSpeed * slopeSpeedFactor;
+      const targetSpeed = baseTargetSpeed * slopeSpeedFactor * turnAlign;
 
       this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 16));
       this.vel.x = moveDir.x * this.speed;
