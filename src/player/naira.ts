@@ -904,30 +904,51 @@ export class Naira {
       const pelvisUprightBlend = isAirborne ? 0.55 : 0.84;
       this.hipsBone.quaternion.slerp(this.bindHipsQuat, pelvisUprightBlend);
 
-      // Athletic pelvic roll and yaw swivel in phase with advancing leg
+      // Athletic pelvic roll, yaw swivel and pivot skid banking
       if (!isAirborne) {
-        const pelvicRoll = Math.sin(controller.stridePhase) * THREE.MathUtils.lerp(0.024, 0.042, run01) * loco01;
-        const pelvicYaw = -Math.cos(controller.stridePhase) * THREE.MathUtils.lerp(0.038, 0.065, run01) * loco01;
-        this.tempQuat.set(0, pelvicRoll * 0.5, pelvicYaw * 0.5, 1.0).normalize();
-        this.hipsBone.quaternion.multiply(this.tempQuat);
+        if (controller.isPivoting) {
+          // Assassin's Creed Skid Pivot: Dynamic athletic inward banking and momentum absorption
+          const pivotBanking = controller.pivotSign * 0.16;
+          const pivotYaw = controller.pivotSign * 0.14;
+          this.tempQuat.set(0, pivotBanking * 0.5, pivotYaw * 0.5, 1.0).normalize();
+          this.hipsBone.quaternion.multiply(this.tempQuat);
+        } else if (controller.stationaryTurnPhase > 0) {
+          // Stationary turn-in-place stepping swivel
+          const stepSwivel = Math.sin(controller.stationaryTurnPhase) * 0.08;
+          this.tempQuat.set(0, 0, stepSwivel * 0.5, 1.0).normalize();
+          this.hipsBone.quaternion.multiply(this.tempQuat);
+        } else {
+          const pelvicRoll = Math.sin(controller.stridePhase) * THREE.MathUtils.lerp(0.024, 0.042, run01) * loco01;
+          const pelvicYaw = -Math.cos(controller.stridePhase) * THREE.MathUtils.lerp(0.038, 0.065, run01) * loco01;
+          this.tempQuat.set(0, pelvicRoll * 0.5, pelvicYaw * 0.5, 1.0).normalize();
+          this.hipsBone.quaternion.multiply(this.tempQuat);
+        }
       }
 
       // Stabilize Hips local translation & dynamic lateral weight shift
       const hp = this.hipsBone.position;
-      const lateralWeightShift = Math.sin(controller.stridePhase) * THREE.MathUtils.lerp(1.2, 2.2, run01) * loco01;
-      hp.x = THREE.MathUtils.lerp(hp.x, lateralWeightShift, 0.75);
-      hp.y = THREE.MathUtils.lerp(hp.y, 0.84, 0.82);
-      if (!isAirborne) {
-        const cadenceAmp = THREE.MathUtils.lerp(0.0, THREE.MathUtils.lerp(1.4, 2.6, run01), loco01);
-        const cadenceBob = Math.sin(controller.stridePhase * 2.0) * cadenceAmp;
-        hp.z = THREE.MathUtils.lerp(hp.z, -95.5 + cadenceBob, 0.85);
+      if (controller.isPivoting) {
+        // Lower center of mass during plant-and-turn pivot
+        hp.x = THREE.MathUtils.lerp(hp.x, -controller.pivotSign * 1.8, 0.35);
+        hp.y = THREE.MathUtils.lerp(hp.y, 0.76, 0.4);
+        hp.z = THREE.MathUtils.lerp(hp.z, -97.8, 0.4);
+      } else {
+        const lateralWeightShift = Math.sin(controller.stridePhase) * THREE.MathUtils.lerp(1.2, 2.2, run01) * loco01;
+        hp.x = THREE.MathUtils.lerp(hp.x, lateralWeightShift, 0.75);
+        hp.y = THREE.MathUtils.lerp(hp.y, 0.84, 0.82);
+        if (!isAirborne) {
+          const cadenceAmp = THREE.MathUtils.lerp(0.0, THREE.MathUtils.lerp(1.4, 2.6, run01), loco01);
+          const cadenceBob = Math.sin(controller.stridePhase * 2.0) * cadenceAmp;
+          hp.z = THREE.MathUtils.lerp(hp.z, -95.5 + cadenceBob, 0.85);
+        }
       }
     }
 
     // 2. Upper-Torso Spine Pitch, Turn Banking & Acceleration/Braking Lean
+    const pivotSpineBank = controller.isPivoting ? -controller.pivotSign * 0.32 : 0;
     const totalSpinePitch = (this.smoothSpinePitch + controller.accelPitch) * 0.34;
     const spinePitchPerBone = totalSpinePitch;
-    const spineBankPerBone = -this.smoothTurnBank * 0.28;
+    const spineBankPerBone = (-this.smoothTurnBank * 0.28 + pivotSpineBank) * 0.34;
     for (const sb of [this.spineBone, this.spine1Bone, this.spine2Bone]) {
       if (sb) {
         this.tempQuat.set(spinePitchPerBone * 0.5, 0, spineBankPerBone * 0.5, 1.0).normalize();
@@ -1022,8 +1043,12 @@ export class Naira {
       }
     }
 
-    // 5. Ankles & Toes: Undo 180-deg Y Flip and Plant Boot Soles Level
+    // 5. Ankles & Toes: Undo 180-deg Y Flip, Plant Level & Conform to Slope Normal
     const footLevelBlend = isAirborne ? 0.45 : THREE.MathUtils.lerp(0.88, 0.72, loco01);
+    const slopePitchFoot = !isAirborne ? -controller.slopePitch * 0.58 : 0;
+    const slopeRollFoot = !isAirborne ? -controller.slopeRoll * 0.48 : 0;
+    this.tempQuat.set(slopePitchFoot * 0.5, 0, slopeRollFoot * 0.5, 1.0).normalize();
+
     if (this.leftFootBone) {
       this.leftFootBone.quaternion.multiply(this.footUnflipY180).normalize();
       if (this.leftFootBone.quaternion.w < 0) {
@@ -1031,6 +1056,9 @@ export class Naira {
         fq.set(-fq.x, -fq.y, -fq.z, -fq.w);
       }
       this.leftFootBone.quaternion.slerp(this.levelLeftFoot, footLevelBlend);
+      if (!isAirborne) {
+        this.leftFootBone.quaternion.multiply(this.tempQuat);
+      }
     }
     if (this.rightFootBone) {
       this.rightFootBone.quaternion.multiply(this.footUnflipY180).normalize();
@@ -1039,6 +1067,9 @@ export class Naira {
         fq.set(-fq.x, -fq.y, -fq.z, -fq.w);
       }
       this.rightFootBone.quaternion.slerp(this.levelRightFoot, footLevelBlend);
+      if (!isAirborne) {
+        this.rightFootBone.quaternion.multiply(this.tempQuat);
+      }
     }
 
     // 6. Symmetrical Counter-Rotating Arm Swing & Dynamic Elbow Flexion
