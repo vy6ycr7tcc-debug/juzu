@@ -165,6 +165,38 @@ async function bootJuzu() {
   instinctBeacon.visible = false;
   scene.add(instinctBeacon);
 
+  // Survival Instinct Expanding Solar Chakana Sonar Wave
+  const sonarGroup = new THREE.Group();
+  sonarGroup.name = 'SurvivalInstinct_SonarWave';
+  scene.add(sonarGroup);
+
+  const sonarRingGeom = new THREE.RingGeometry(0.85, 1.25, 48);
+  sonarRingGeom.rotateX(-Math.PI / 2);
+  const sonarRingMat = new THREE.MeshBasicMaterial({
+    color: 0xffd25a,
+    transparent: true,
+    opacity: 0.0,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const sonarRingMesh = new THREE.Mesh(sonarRingGeom, sonarRingMat);
+  sonarGroup.add(sonarRingMesh);
+
+  const sonarInnerRingGeom = new THREE.RingGeometry(0.35, 0.65, 36);
+  sonarInnerRingGeom.rotateX(-Math.PI / 2);
+  const sonarInnerRingMat = new THREE.MeshBasicMaterial({
+    color: 0xfff0aa,
+    transparent: true,
+    opacity: 0.0,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const sonarInnerRingMesh = new THREE.Mesh(sonarInnerRingGeom, sonarInnerRingMat);
+  sonarGroup.add(sonarInnerRingMesh);
+  sonarGroup.visible = false;
+
   // 8. Player: Controller, Naira Model, FollowCamera
   let startPos = SPAWN.clone();
   let startHeading = Math.PI;
@@ -263,6 +295,9 @@ async function bootJuzu() {
 
   // 10.1 Expedition Weapon, World Map, Inventory, and Mobile Touch Controls
   const weapon = new WeaponManager(scene, naira, audio, camera);
+  weapon.onFireRecoil = () => {
+    followCamera.triggerRecoilKick(0.046, (Math.random() - 0.5) * 0.018);
+  };
 
   const expeditionMenu = new ExpeditionMenu({
     audio,
@@ -405,6 +440,8 @@ async function bootJuzu() {
 
   // 12. Gameplay Puzzle & Survival Instinct State
   let instinctTimer = 0;
+  let instinctSonarTimer = 0;
+  const instinctSonarCenter = new THREE.Vector3();
   let lastInstinctKey = false;
   let lastJournalKey = false;
   let lastInteractKey = false;
@@ -442,10 +479,32 @@ async function bootJuzu() {
     const qKey = input.instinct;
     if (qKey && !lastInstinctKey && !hud.isTitleOpen) {
       instinctTimer = 4.0;
-      audio.playQuenaNote(587.33, 1.5);
+      instinctSonarTimer = 1.35;
+      instinctSonarCenter.copy(controller.pos);
+      audio.playSurvivalInstinctSonar();
       audio.playCajon(0.35);
     }
     lastInstinctKey = qKey;
+
+    // Expanding Golden Chakana Sonar Wave Simulation
+    if (instinctSonarTimer > 0) {
+      instinctSonarTimer = Math.max(0, instinctSonarTimer - dt);
+      const progress = 1.0 - (instinctSonarTimer / 1.35);
+      const currentRadius = 0.6 + Math.pow(progress, 0.70) * 58.0;
+      const waveFade = Math.pow(1.0 - progress, 1.4);
+
+      sonarGroup.visible = true;
+      sonarGroup.position.set(instinctSonarCenter.x, controller.pos.y + 0.12, instinctSonarCenter.z);
+
+      sonarRingMesh.scale.set(currentRadius, 1, currentRadius);
+      sonarRingMat.opacity = 0.82 * waveFade;
+
+      const innerRadius = Math.max(0.1, currentRadius * 0.78);
+      sonarInnerRingMesh.scale.set(innerRadius, 1, innerRadius);
+      sonarInnerRingMat.opacity = 0.55 * waveFade;
+    } else {
+      sonarGroup.visible = false;
+    }
 
     if (instinctTimer > 0) {
       instinctTimer = Math.max(0, instinctTimer - dt);
@@ -757,6 +816,7 @@ async function bootJuzu() {
     routes,
     hud,
     input,
+    audio,
     weapon,
     minimap,
     expeditionMenu,
