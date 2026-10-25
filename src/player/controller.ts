@@ -37,6 +37,11 @@ export class Controller {
   landingImpact = 0;
   turnRate = 0;
   slopePitch = 0;
+  accelPitch = 0;
+  isBraking = false;
+  brakeTimer = 0;
+  stridePhase = 0;
+  isHardTurning = false;
   pose: LocomotionPose = 'idle';
   speed = 0;
   grappleAnchorPos = new THREE.Vector3();
@@ -71,7 +76,9 @@ export class Controller {
     if (Math.abs(x) <= 1.25 && z <= 1.2 && z >= -35.2 && probeY > 1.5) {
       const u = THREE.MathUtils.clamp((1.0 - z) / 36.0, 0, 1);
       const bridgeDeckY = 4.45 + 0.30 * u - Math.sin(u * Math.PI) * 1.45 + 0.07;
-      floorH = Math.max(floorH, bridgeDeckY);
+      const dz = Math.abs(z - this.pos.z);
+      const dip = dz < 2.0 ? -0.046 * Math.pow(Math.cos((dz / 2.0) * (Math.PI / 2)), 2) : 0;
+      floorH = Math.max(floorH, bridgeDeckY + dip);
     }
 
     return Math.max(floorH, solidity.floor(x, z, probeY + STEP + 0.15, floorH));
@@ -318,9 +325,12 @@ export class Controller {
             : WALK_SPEED * Math.max(0.55, inputMag);
       const targetSpeed = baseTargetSpeed * slopeSpeedFactor * turnAlign;
 
-      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 16));
+      const prevSpeed = this.speed;
+      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, Math.min(1, dt * 14));
       this.vel.x = moveDir.x * this.speed;
       this.vel.z = moveDir.z * this.speed;
+      this.isBraking = false;
+      this.brakeTimer = 0;
 
       // Check airborne Ledge Grab / Mantle against solid masonry or rock ledges (0.8m..2.15m above feet)
       if (!this.grounded && !this.swimming && this.vel.y > -6.5) {
@@ -356,10 +366,22 @@ export class Controller {
         this.pos.y = this.getGroundAt(this.pos.x, this.pos.z, this.pos.y);
       }
     } else {
-      // Smooth athletic deceleration inertia
+      // Smooth athletic deceleration inertia with athletic braking heel plant
+      const prevSpeed = this.speed;
+      if (prevSpeed > 3.0 && !this.isBraking && this.grounded) {
+        this.isBraking = true;
+        this.brakeTimer = 0.28;
+      }
+      if (this.isBraking) {
+        this.brakeTimer -= dt;
+        if (this.brakeTimer <= 0) this.isBraking = false;
+        this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 11));
+      } else {
+        this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 15));
+      }
+
       this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 12));
       this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, 0, Math.min(1, dt * 10));
-      this.speed = THREE.MathUtils.lerp(this.speed, 0, Math.min(1, dt * 15));
       this.vel.x = Math.sin(this.heading) * this.speed;
       this.vel.z = Math.cos(this.heading) * this.speed;
       if (this.speed > 0.04) {
@@ -375,6 +397,18 @@ export class Controller {
         this.pos.y = this.getGroundAt(this.pos.x, this.pos.z, this.pos.y);
       }
     }
+
+    // Continuous Athletic Stride Phase & Acceleration Spine Lean
+    if (this.grounded && this.speed > 0.06) {
+      const strideMeters = THREE.MathUtils.lerp(1.15, 1.62, THREE.MathUtils.clamp((this.speed - 2.5) / 4.0, 0, 1));
+      this.stridePhase = (this.stridePhase + (this.speed / strideMeters) * Math.PI * 2 * dt) % (Math.PI * 2);
+    }
+    const targetAccelPitch = this.isBraking
+      ? -0.08
+      : hasMove && this.grounded
+        ? THREE.MathUtils.clamp((this.speed - 2.0) * 0.026, 0.0, 0.14)
+        : 0;
+    this.accelPitch = THREE.MathUtils.lerp(this.accelPitch, targetAccelPitch, Math.min(1, dt * 9));
 
     // 4. Update Pose (Full 9-State Locomotion Machine)
     if (this.swimming) {

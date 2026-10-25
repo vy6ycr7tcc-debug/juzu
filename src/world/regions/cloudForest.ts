@@ -26,6 +26,7 @@ export class CloudForestRegion {
   private scansRequested = false;
   private mirrorAligned = false;
   public isLoaded = false;
+  public bridgePlanks: Array<{ mesh: THREE.Mesh; restY: number; z: number; restX: number }> = [];
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'Region_CloudForest';
@@ -193,7 +194,32 @@ export class CloudForestRegion {
     }
   }
 
-  public update(time: number): void {
+  public update(time: number, playerPos?: THREE.Vector3, playerSpeed?: number): void {
+    // Tactile Suspension Bridge Dynamics: footstep depression & harmonic sway
+    if (this.bridgePlanks.length > 0) {
+      const onBridge =
+        playerPos &&
+        Math.abs(playerPos.x) < 1.6 &&
+        playerPos.z <= 1.2 &&
+        playerPos.z >= -35.2;
+
+      for (const p of this.bridgePlanks) {
+        let dip = 0;
+        let sway = 0;
+        if (onBridge && playerPos) {
+          const dz = Math.abs(p.z - playerPos.z);
+          if (dz < 2.4) {
+            const bell = Math.cos((dz / 2.4) * (Math.PI / 2));
+            dip = -0.048 * bell * bell;
+          }
+          const swayAmp = 0.015 * Math.min(1, (playerSpeed || 0) / 2.5);
+          sway = Math.sin(time * 4.2 + p.z * 0.18) * swayAmp;
+        }
+        p.mesh.position.y = THREE.MathUtils.lerp(p.mesh.position.y, p.restY + dip, 0.22);
+        p.mesh.position.x = THREE.MathUtils.lerp(p.mesh.position.x, p.restX + sway, 0.22);
+      }
+    }
+
     if (this.mirrorAligned && this.steleLight) {
       this.steleLight.intensity = 3.8 + Math.sin(time * 7.5) * 0.45;
     }
@@ -294,6 +320,7 @@ export class CloudForestRegion {
       plank.castShadow = true;
       plank.receiveShadow = true;
       bridgeGroup.add(plank);
+      this.bridgePlanks.push({ mesh: plank, restY: y, z, restX: 0 });
 
       // Authentic V-shaped woven Inca rope side-netting lacings every 2nd plank (matching ref_gorge_waterfall_bridge)
       if (i % 2 === 0 && i > 0 && i < numPlanks) {

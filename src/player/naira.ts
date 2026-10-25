@@ -160,11 +160,13 @@ export class Naira {
             if (m instanceof THREE.MeshStandardMaterial) {
               const mName = (m.name || '').toLowerCase();
               if (mName.includes('body') || cName.includes('body')) {
-                m.metalness = 0.0;
-                m.roughness = 0.72; // Soft natural matte skin scattering (Tomb Raider / AC realistic skin)
+                m.metalness = 0.02;
+                m.roughness = 0.64; // Soft organic epidermal scattering
+                m.color.setHex(0xeacbb0); // Warm Quechua Andean skin tone
               } else if (mName.includes('hair') || cName.includes('hair') || cName.includes('eyelash')) {
-                m.metalness = 0.0;
-                m.roughness = 0.78;
+                m.color.setHex(0x1a120c); // Deep raven-black Andean hair with espresso undertone
+                m.metalness = 0.16; // Subtle anisotropic specular sheen along strands
+                m.roughness = 0.42; // Sleek healthy conditioned hair sheen (eliminates matte rubber look)
               } else if (mName.includes('jacket') || cName.includes('suit')) {
                 m.map = canvasTex;
                 m.bumpMap = canvasTex;
@@ -753,72 +755,93 @@ export class Naira {
       this.modelRoot.rotation.z = this.smoothTurnBank * 0.35;
     }
 
-    // 3. Blend Locomotion Animations with Phase Synchronization between Walk and Run
-    if (!this.currentAction && this.actions.idle) {
-      this.actions.idle.play();
-      this.currentAction = this.actions.idle;
-    }
+    // 3. Continuous 3-Way Parametric Blend Space (Idle <-> Walk <-> Run) with Phase Synchronization
+    const isGroundLoco =
+      controller.grounded &&
+      (controller.pose === 'idle' || controller.pose === 'walk' || controller.pose === 'run');
 
-    if (this.currentPose !== controller.pose) {
-      const nextAction =
-        this.actions[controller.pose] ||
-        (controller.pose === 'grapple_swing' ? this.actions.jump : this.actions.idle);
-      if (nextAction) {
-        if (this.currentAction && nextAction !== this.currentAction) {
-          const prevAction = this.currentAction;
-          const isPrevLoco = this.currentPose === 'walk' || this.currentPose === 'run';
-          const isNextLoco = controller.pose === 'walk' || controller.pose === 'run';
+    if (isGroundLoco && this.actions.idle && this.actions.walk && this.actions.run) {
+      const speed = controller.speed;
+      let wIdle = 0;
+      let wWalk = 0;
+      let wRun = 0;
 
+      if (speed <= 0.08) {
+        wIdle = 1.0;
+        wWalk = 0.0;
+        wRun = 0.0;
+      } else if (speed <= 2.85) {
+        const t = THREE.MathUtils.clamp((speed - 0.08) / (2.85 - 0.08), 0, 1);
+        wIdle = 1.0 - t;
+        wWalk = t;
+        wRun = 0.0;
+      } else {
+        const t = THREE.MathUtils.clamp((speed - 2.85) / (6.65 - 2.85), 0, 1);
+        wIdle = 0.0;
+        wWalk = 1.0 - t;
+        wRun = t;
+      }
+
+      this.actions.idle.enabled = true;
+      this.actions.walk.enabled = true;
+      this.actions.run.enabled = true;
+
+      this.actions.idle.setEffectiveWeight(wIdle);
+      this.actions.walk.setEffectiveWeight(wWalk);
+      this.actions.run.setEffectiveWeight(wRun);
+
+      if (!this.actions.idle.isRunning()) this.actions.idle.play();
+      if (!this.actions.walk.isRunning()) this.actions.walk.play();
+      if (!this.actions.run.isRunning()) this.actions.run.play();
+
+      // Synchronize relative stride cycle between walk and run to eliminate foot skating
+      const walkDur = this.actions.walk.getClip().duration || 1.067;
+      const runDur = this.actions.run.getClip().duration || 0.733;
+
+      const walkScale = Math.max(0.65, speed / 2.75);
+      const runScale = Math.max(0.75, speed / 6.65);
+      this.actions.walk.setEffectiveTimeScale(walkScale);
+      this.actions.run.setEffectiveTimeScale(runScale);
+
+      if (wWalk > 0.02 && wRun > 0.02) {
+        const normCycle = (this.actions.walk.time % walkDur) / walkDur;
+        this.actions.run.time = normCycle * runDur;
+      }
+
+      const targetLocoWeight = wRun > 0 ? 1.0 + wRun : wWalk;
+      this.smoothLocoWeight = THREE.MathUtils.lerp(
+        this.smoothLocoWeight,
+        targetLocoWeight,
+        Math.min(1, dt * 14)
+      );
+
+      this.currentAction = wRun > 0.5 ? this.actions.run : wWalk > 0.5 ? this.actions.walk : this.actions.idle;
+      this.currentPose = controller.pose;
+    } else {
+      // Non-ground locomotion (jump, jump_start, jump_land, grapple_swing, interact, swim)
+      if (this.actions.idle) this.actions.idle.setEffectiveWeight(0);
+      if (this.actions.walk) this.actions.walk.setEffectiveWeight(0);
+      if (this.actions.run) this.actions.run.setEffectiveWeight(0);
+
+      if (this.currentPose !== controller.pose) {
+        const nextAction =
+          this.actions[controller.pose] ||
+          (controller.pose === 'grapple_swing' ? this.actions.jump : this.actions.idle);
+        if (nextAction && this.currentAction && nextAction !== this.currentAction) {
           nextAction.reset();
           nextAction.enabled = true;
           nextAction.setEffectiveWeight(1.0);
-
-          // Phase-match normalized stride cycle when transitioning between Walk and Run
-          if (isPrevLoco && isNextLoco) {
-            const prevDur = prevAction.getClip().duration || 1;
-            const nextDur = nextAction.getClip().duration || 1;
-            nextAction.time = ((prevAction.time % prevDur) / prevDur) * nextDur;
-          }
-
-          let targetScale = 1.0;
-          if (controller.pose === 'walk') {
-            targetScale = Math.max(0.75, controller.speed / 2.65);
-          } else if (controller.pose === 'run') {
-            targetScale = Math.max(0.88, controller.speed / 6.1);
-          } else if (
-            controller.pose === 'jump_start' ||
-            controller.pose === 'jump_land' ||
-            controller.pose === 'grapple_swing'
-          ) {
-            targetScale = 1.3;
-          }
-          nextAction.setEffectiveTimeScale(targetScale);
-
-          const fadeDur =
-            controller.pose === 'jump_start' ||
-            controller.pose === 'jump_land' ||
-            controller.pose === 'grapple_swing'
-              ? 0.12
-              : isPrevLoco && isNextLoco
-                ? 0.22
-                : 0.18;
-          nextAction.crossFadeFrom(prevAction, fadeDur, false);
-          nextAction.play();
-          this.currentAction = nextAction;
-        } else if (!this.currentAction) {
-          nextAction.enabled = true;
-          nextAction.setEffectiveWeight(1.0);
+          nextAction.crossFadeFrom(this.currentAction, 0.15, false);
           nextAction.play();
           this.currentAction = nextAction;
         }
+        this.currentPose = controller.pose;
       }
-      this.currentPose = controller.pose;
-    } else if (this.currentAction) {
-      if (controller.pose === 'walk') {
-        this.currentAction.setEffectiveTimeScale(Math.max(0.75, controller.speed / 2.65));
-      } else if (controller.pose === 'run') {
-        this.currentAction.setEffectiveTimeScale(Math.max(0.88, controller.speed / 6.1));
-      }
+      this.smoothLocoWeight = THREE.MathUtils.lerp(
+        this.smoothLocoWeight,
+        0,
+        Math.min(1, dt * 10)
+      );
     }
 
     if (this.mixer) {
@@ -876,24 +899,34 @@ export class Naira {
     const loco01 = THREE.MathUtils.clamp(wLoco, 0, 1);
     const run01 = THREE.MathUtils.clamp(wLoco - 1.0, 0, 1);
 
-    // 1. Upright Pelvis Alignment & Controlled Stride Cadence Bob
+    // 1. Upright Pelvis Alignment, Lateral Weight Transfer & Stride Swivel
     if (this.hipsBone) {
       const pelvisUprightBlend = isAirborne ? 0.55 : 0.84;
       this.hipsBone.quaternion.slerp(this.bindHipsQuat, pelvisUprightBlend);
 
-      // Stabilize Hips local translation (local Z is vertical in Mixamo -90X Hips space)
+      // Athletic pelvic roll and yaw swivel in phase with advancing leg
+      if (!isAirborne) {
+        const pelvicRoll = Math.sin(controller.stridePhase) * THREE.MathUtils.lerp(0.024, 0.042, run01) * loco01;
+        const pelvicYaw = -Math.cos(controller.stridePhase) * THREE.MathUtils.lerp(0.038, 0.065, run01) * loco01;
+        this.tempQuat.set(0, pelvicRoll * 0.5, pelvicYaw * 0.5, 1.0).normalize();
+        this.hipsBone.quaternion.multiply(this.tempQuat);
+      }
+
+      // Stabilize Hips local translation & dynamic lateral weight shift
       const hp = this.hipsBone.position;
-      hp.x *= 0.25; // Dampen excessive 4.5cm lateral lurch
+      const lateralWeightShift = Math.sin(controller.stridePhase) * THREE.MathUtils.lerp(1.2, 2.2, run01) * loco01;
+      hp.x = THREE.MathUtils.lerp(hp.x, lateralWeightShift, 0.75);
       hp.y = THREE.MathUtils.lerp(hp.y, 0.84, 0.82);
       if (!isAirborne) {
         const cadenceAmp = THREE.MathUtils.lerp(0.0, THREE.MathUtils.lerp(1.4, 2.6, run01), loco01);
-        const cadenceBob = Math.sin(this.stridePhase * 2.0) * cadenceAmp;
+        const cadenceBob = Math.sin(controller.stridePhase * 2.0) * cadenceAmp;
         hp.z = THREE.MathUtils.lerp(hp.z, -95.5 + cadenceBob, 0.85);
       }
     }
 
-    // 2. Upper-Torso Spine Pitch, Turn Banking & Horizon Head Counter-Pitch
-    const spinePitchPerBone = this.smoothSpinePitch * 0.34;
+    // 2. Upper-Torso Spine Pitch, Turn Banking & Acceleration/Braking Lean
+    const totalSpinePitch = (this.smoothSpinePitch + controller.accelPitch) * 0.34;
+    const spinePitchPerBone = totalSpinePitch;
     const spineBankPerBone = -this.smoothTurnBank * 0.28;
     for (const sb of [this.spineBone, this.spine1Bone, this.spine2Bone]) {
       if (sb) {
@@ -904,7 +937,7 @@ export class Naira {
     // Keep neck and head looking forward at the horizon instead of pitched down at the ground
     if (this.neckBone) {
       const nq = this.neckBone.quaternion;
-      const counterPitch = -this.smoothSpinePitch * 0.42;
+      const counterPitch = -totalSpinePitch * 0.42;
       nq.x = THREE.MathUtils.clamp(nq.x * 0.35 + counterPitch * 0.5, -0.12, 0.08);
       nq.z *= 0.35;
       nq.normalize();

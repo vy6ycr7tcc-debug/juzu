@@ -100,13 +100,15 @@ export class FollowCamera {
 
     // In portrait, maintain comfortable distance so the avatar does not obstruct forward view
     const portraitDistMultiplier = isPortrait ? 1.05 : 1.0;
-    const targetDist = isAiming
-      ? Math.max(2.0, this.baseDist - 1.4)
-      : isSprinting
-        ? (this.baseDist + 0.75) * portraitDistMultiplier
-        : isCrouching
-          ? Math.max(2.4, this.baseDist - 0.55) * portraitDistMultiplier
-          : this.baseDist * portraitDistMultiplier;
+    const targetDist = this.baseDist < 2.2
+      ? this.baseDist
+      : isAiming
+        ? Math.max(2.0, this.baseDist - 1.4)
+        : isSprinting
+          ? (this.baseDist + 0.75) * portraitDistMultiplier
+          : isCrouching
+            ? Math.max(2.4, this.baseDist - 0.55) * portraitDistMultiplier
+            : this.baseDist * portraitDistMultiplier;
     this.dist = THREE.MathUtils.lerp(this.dist, targetDist, Math.min(1, dt * 6));
 
     // Dynamic FOV: keep natural perspective without wide-angle fisheye distortion
