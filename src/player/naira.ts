@@ -72,6 +72,8 @@ export class Naira {
   private smoothPelvisOffset = 0;
   private smoothFootContactOffset = 0;
   private smoothSpinePitch = 0;
+  private smoothSlopePitch = 0;
+  private smoothSlopeRoll = 0;
   private smoothTurnBank = 0;
   private smoothHeadYaw = 0;
   private smoothLocoWeight = 0; // 0 = idle, 1 = walk, 2 = run
@@ -706,8 +708,8 @@ export class Naira {
     // 2. Crouch / Dodge / Landing Pelvis Compression
     const sinH = Math.sin(controller.heading);
     const cosH = Math.cos(controller.heading);
-    const leftFootH = standAt(controller.pos.x + cosH * 0.16, controller.pos.z - sinH * 0.16);
-    const rightFootH = standAt(controller.pos.x - cosH * 0.16, controller.pos.z + sinH * 0.16);
+    const leftFootH = controller.getGroundAt(controller.pos.x + cosH * 0.16, controller.pos.z - sinH * 0.16, controller.pos.y);
+    const rightFootH = controller.getGroundAt(controller.pos.x - cosH * 0.16, controller.pos.z + sinH * 0.16, controller.pos.y);
     const slopeDiff = Math.min(0.28, Math.abs(leftFootH - rightFootH));
     const crouchDrop = controller.crouching ? -0.24 : controller.dodging ? -0.18 : 0;
     const landDrop = controller.pose === 'jump_land' ? -0.12 : 0;
@@ -750,9 +752,13 @@ export class Naira {
     );
 
     if (this.modelRoot) {
-      // Keep modelRoot upright (no ankle-pivot tipping); subtle banking only
-      this.modelRoot.rotation.x = 0;
-      this.modelRoot.rotation.z = this.smoothTurnBank * 0.35;
+      // Biomechanical slope accommodation: subtle pitch & roll tilt (0.30 gain) so torso aligns with terrain gradient
+      const targetSlopePitch = controller.grounded ? -controller.slopePitch * 0.30 : 0;
+      const targetSlopeRoll = controller.grounded ? -controller.slopeRoll * 0.30 : 0;
+      this.smoothSlopePitch = THREE.MathUtils.lerp(this.smoothSlopePitch, targetSlopePitch, Math.min(1, dt * 10));
+      this.smoothSlopeRoll = THREE.MathUtils.lerp(this.smoothSlopeRoll, targetSlopeRoll, Math.min(1, dt * 10));
+      this.modelRoot.rotation.x = this.smoothSlopePitch;
+      this.modelRoot.rotation.z = this.smoothTurnBank * 0.35 + this.smoothSlopeRoll;
     }
 
     // 3. Continuous 3-Way Parametric Blend Space (Idle <-> Walk <-> Run) with Phase Synchronization
@@ -1011,6 +1017,17 @@ export class Naira {
     }
 
     // 4. Knees: Straighten Stance Crouch While Preserving Swing-Phase Ground Clearance
+    // Procedural Slope Height Delta between Left & Right Feet on inclined terrain
+    let slopeHeightDelta = 0;
+    if (!isAirborne && this.leftFootBone && this.rightFootBone) {
+      this.leftFootBone.getWorldPosition(this.tempVecA);
+      this.rightFootBone.getWorldPosition(this.tempVecB);
+      const groundYL = controller.getGroundAt(this.tempVecA.x, this.tempVecA.z, controller.pos.y + 0.6);
+      const groundYR = controller.getGroundAt(this.tempVecB.x, this.tempVecB.z, controller.pos.y + 0.6);
+      slopeHeightDelta = THREE.MathUtils.clamp(groundYL - groundYR, -0.45, 0.45);
+    }
+
+    // 4. Knees: Straighten Stance Crouch While Preserving Swing-Phase Ground Clearance & Slope Elevation
     for (const [shin, thigh, isLeft] of [
       [this.leftShinBone, this.leftThighBone, true],
       [this.rightShinBone, this.rightThighBone, false],
@@ -1033,11 +1050,21 @@ export class Naira {
         const maxKneeFlex = THREE.MathUtils.lerp(0.42, 0.58, run01);
         const locoKneeQx = -THREE.MathUtils.clamp(0.045 + rawFlex * swingGain, 0.04, maxKneeFlex);
 
-        sq.x = THREE.MathUtils.lerp(-0.04, locoKneeQx, loco01);
+        // Uphill leg flexion: bend knee upward to rest uphill foot on elevated terrain slope
+        const uphillKneeFlex = isLeft
+          ? (slopeHeightDelta > 0.015 ? slopeHeightDelta * 1.8 : 0)
+          : (slopeHeightDelta < -0.015 ? -slopeHeightDelta * 1.8 : 0);
+
+        sq.x = THREE.MathUtils.lerp(-0.04, locoKneeQx, loco01) - uphillKneeFlex;
         sq.y *= 0.15 * loco01;
         sq.z *= 0.15 * loco01;
         sq.w = Math.sqrt(Math.max(0.01, 1.0 - sq.x * sq.x - sq.y * sq.y - sq.z * sq.z));
         sq.normalize();
+
+        if (thigh && Math.abs(uphillKneeFlex) > 0.01) {
+          thigh.quaternion.y += (isLeft ? uphillKneeFlex : -uphillKneeFlex) * 0.25;
+          thigh.quaternion.normalize();
+        }
       } else {
         sq.slerp(this.bindShin, 0.15);
       }
@@ -1045,8 +1072,8 @@ export class Naira {
 
     // 5. Ankles & Toes: Undo 180-deg Y Flip, Plant Level & Conform to Slope Normal
     const footLevelBlend = isAirborne ? 0.45 : THREE.MathUtils.lerp(0.88, 0.72, loco01);
-    const slopePitchFoot = !isAirborne ? -controller.slopePitch * 0.58 : 0;
-    const slopeRollFoot = !isAirborne ? -controller.slopeRoll * 0.48 : 0;
+    const slopePitchFoot = !isAirborne ? -controller.slopePitch * 0.85 : 0;
+    const slopeRollFoot = !isAirborne ? -controller.slopeRoll * 0.75 : 0;
     this.tempQuat.set(slopePitchFoot * 0.5, 0, slopeRollFoot * 0.5, 1.0).normalize();
 
     if (this.leftFootBone) {

@@ -18,6 +18,18 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 URL = "http://localhost:5173/juzu/"
 
+def wait_frames(page, count=18, timeout_ms=1200):
+    page.evaluate(f"""() => new Promise(resolve => {{
+        let f = 0;
+        const timer = setTimeout(resolve, {timeout_ms});
+        function step() {{
+            f++;
+            if (f >= {count}) {{ clearTimeout(timer); resolve(); return; }}
+            requestAnimationFrame(step);
+        }}
+        requestAnimationFrame(step);
+    }})""")
+
 def capture_phase7():
     print(f"Launching browser to verify Phase 7 AC Pivots, Foot IK & Volumetric Atmosphere at {URL}...")
     with sync_playwright() as p:
@@ -25,6 +37,9 @@ def capture_phase7():
             "--use-gl=angle",
             "--use-angle=swiftshader",
             "--enable-unsafe-swiftshader",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
         ])
         context = browser.new_context(viewport={"width": 1280, "height": 720})
         page = context.new_page()
@@ -39,14 +54,11 @@ def capture_phase7():
         page.goto(URL, wait_until="load", timeout=35000)
 
         print("Waiting for engine and character to load...")
-        try:
-            page.wait_for_function(
-                "window.__juzuReady === true && window.__juzuEngine && window.__juzuEngine.naira && window.__juzuEngine.naira.isLoaded",
-                timeout=30000
-            )
-            print("Engine and Naira character verified loaded!")
-        except Exception as e:
-            print(f"Wait warning: {e}, proceeding...")
+        for _ in range(30):
+            if page.evaluate("() => !!(window.__juzuReady && window.__juzuEngine && window.__juzuEngine.naira && window.__juzuEngine.naira.isLoaded)"):
+                print("Engine and Naira character verified loaded!")
+                break
+            time.sleep(1.0)
 
         # Dismiss title screen
         time.sleep(1.0)
@@ -58,7 +70,7 @@ def capture_phase7():
                 window.__juzuEngine.hud.isTitleOpen = false;
             }
         }""")
-        time.sleep(2.0)
+        time.sleep(1.5)
 
         # 1. Shot 1: Canopy Crepuscular Sun Shafts Vista
         print("1. Capturing Shot 1: Volumetric Sun Shafts (God Rays) streaming through canopy...")
@@ -67,6 +79,7 @@ def capture_phase7():
             if (!eng) return;
             // Frame camera looking slightly upward toward the forest canopy and gateway to catch the sun shafts
             eng.controller.pos.set(0, 4.2, 9.5);
+            eng.controller.teleport(eng.controller.pos);
             eng.followCamera.yaw = 0.05;
             eng.followCamera.pitch = 0.28;
             eng.followCamera.baseDist = 5.2;
@@ -74,92 +87,82 @@ def capture_phase7():
             eng.followCamera.shoulderOffset = 0.0;
             eng.followCamera.teleport(eng.controller.pos);
         }""")
-        page.evaluate("""() => new Promise(resolve => {
-            let f = 0;
-            function step() {
-                f++;
-                if (f >= 18) { resolve(); return; }
-                requestAnimationFrame(step);
-            }
-            requestAnimationFrame(step);
-        })""")
+        wait_frames(page, 18)
         shot1_path = OUT_DIR / "phase7_01_god_rays_canopy_vista.png"
         page.screenshot(path=str(shot1_path))
         print(f"✓ Saved Shot 1: {shot1_path}")
 
-        # 2. Shot 2: Procedural Slope Foot IK Conformation (Framing boots on slope)
-        print("2. Capturing Shot 2: Procedural Slope Foot IK on mountain incline...")
+        # 2. Shot 2: Procedural Slope Foot IK Conformation (Authentic Inca Terrace Ramp)
+        print("2. Capturing Shot 2: Procedural Slope Foot IK on authentic Inca terrace ramp...")
         page.evaluate("""() => {
             const eng = window.__juzuEngine;
             if (!eng) return;
-            // Position Naira on the sloping mountain terrace path
-            eng.controller.pos.set(-3.5, 4.6, 6.2);
-            eng.controller.heading = 0.85;
-            eng.controller.slopePitch = 0.35;
-            eng.controller.slopeRoll = 0.20;
-            eng.followCamera.yaw = 0.85 + Math.PI * 0.48; // Side-quarter view of boots
-            eng.followCamera.pitch = 0.22; // Elevate camera to frame head to boots on slope
-            eng.followCamera.baseDist = 3.6;
-            eng.followCamera.dist = 3.6;
+            // Position Naira on the authentic inclined stone terrace ramp
+            eng.controller.heading = Math.PI * 0.55; // Facing downhill across the ramp
+            eng.controller.pos.set(-4.8, 5.0, 9.5);
+            eng.controller.teleport(eng.controller.pos);
+
+            // Frame camera with clear profile of the inclined stone ramp and centered feet
+            eng.followCamera.yaw = 1.15; // Look South-East towards open clearing & camp
+            eng.followCamera.pitch = 0.22; // Elevate slightly to clearly frame full body and ground contact
+            eng.followCamera.baseDist = 3.4;
+            eng.followCamera.dist = 3.4;
             eng.followCamera.shoulderOffset = 0.0;
             eng.followCamera.teleport(eng.controller.pos);
         }""")
-        page.evaluate("""() => new Promise(resolve => {
-            let f = 0;
-            function step() {
-                f++;
-                if (f >= 18) { resolve(); return; }
-                requestAnimationFrame(step);
-            }
-            requestAnimationFrame(step);
-        })""")
+        wait_frames(page, 20)
+        slopeState = page.evaluate("""() => {
+            const c = window.__juzuEngine.controller;
+            return { pos: c.pos, heading: c.heading, slopePitch: c.slopePitch, slopeRoll: c.slopeRoll };
+        }""")
+        print(f"   Slope IK state at capture: {slopeState}")
         shot2_path = OUT_DIR / "phase7_02_slope_foot_ik_conformation.png"
         page.screenshot(path=str(shot2_path))
         print(f"✓ Saved Shot 2: {shot2_path}")
 
-        # 3. Shot 3: Active Plant-and-Turn 180° Skid Pivot
+        # 3. Shot 3: Active Plant-and-Turn 180° Skid Pivot (Unobstructed open clearing corridor)
         print("3. Capturing Shot 3: Active Plant-and-Turn 180° Skid Pivot with dust skid particles...")
         page.evaluate("""() => {
             const eng = window.__juzuEngine;
             if (!eng) return;
-            eng.controller.pos.set(0, 4.2, 8.0);
-            eng.followCamera.yaw = Math.PI * 0.42; // Side-quarter 3/4 view
-            eng.followCamera.pitch = 0.08;
-            eng.followCamera.baseDist = 3.6;
-            eng.followCamera.dist = 3.6;
+            // Start position in the open clearing corridor facing North
+            eng.controller.pos.set(0, 4.2, 9.0);
+            eng.controller.teleport(eng.controller.pos);
+            eng.controller.heading = Math.PI; // Face North
+            eng.followCamera.yaw = 0.04; // Look North along the wide open Qhapaq Ñan corridor
+            eng.followCamera.pitch = 0.10;
+            eng.followCamera.baseDist = 3.8;
+            eng.followCamera.dist = 3.8;
             eng.followCamera.shoulderOffset = 0.0;
             eng.followCamera.teleport(eng.controller.pos);
 
-            // Drive forward sprint
+            // Drive forward sprint for 20 simulation frames
+            eng.input.keys.add('w');
+            eng.input.keys.add('shift');
+            eng.input.virtualBoost = true;
             eng.input.setVirtualMove(0, 1.0);
-            eng.input.boost = true;
-        }""")
-        # Step forward 20 frames into full sprint
-        page.evaluate("""() => new Promise(resolve => {
-            let f = 0;
-            function step() {
-                f++;
-                if (f >= 20) { resolve(); return; }
-                requestAnimationFrame(step);
+            for (let i = 0; i < 20; i++) {
+                eng.controller.update(eng.input.move, eng.input.boost, eng.input.jump, eng.followCamera.yaw, 0.016, false);
+                eng.naira.update(eng.controller, 0.016, eng.followCamera.yaw);
             }
-            requestAnimationFrame(step);
-        })""")
-        # Abruptly reverse input 180 degrees to trigger skid pivot
-        page.evaluate("""() => {
-            const eng = window.__juzuEngine;
-            if (!eng) return;
+
+            // Abruptly reverse input 180 degrees to trigger plant-and-turn pivot skid
+            eng.input.keys.delete('w');
+            eng.input.keys.add('s');
             eng.input.setVirtualMove(0, -1.0);
-        }""")
-        # Step 5 frames into the pivot skid
-        page.evaluate("""() => new Promise(resolve => {
-            let f = 0;
-            function step() {
-                f++;
-                if (f >= 5) { resolve(); return; }
-                requestAnimationFrame(step);
+
+            // Step 2 frames into the pivot skid
+            for (let i = 0; i < 2; i++) {
+                eng.controller.update(eng.input.move, eng.input.boost, eng.input.jump, eng.followCamera.yaw, 0.016, false);
+                eng.naira.update(eng.controller, 0.016, eng.followCamera.yaw);
             }
-            requestAnimationFrame(step);
-        })""")
+            eng.cloudForest.update(performance.now() / 1000, eng.controller.pos, eng.controller.speed, true);
+        }""")
+        state = page.evaluate("""() => {
+            const c = window.__juzuEngine.controller;
+            return { isPivoting: c.isPivoting, pivotTimer: c.pivotTimer, speed: c.speed, heading: c.heading };
+        }""")
+        print(f"   Pivot state at capture: {state}")
         shot3_path = OUT_DIR / "phase7_03_plant_and_turn_pivot_skid.png"
         page.screenshot(path=str(shot3_path))
         print(f"✓ Saved Shot 3: {shot3_path}")
@@ -170,7 +173,8 @@ def capture_phase7():
             const eng = window.__juzuEngine;
             if (!eng) return;
             eng.input.setVirtualMove(0, 0);
-            eng.input.boost = false;
+            eng.input.virtualBoost = false;
+            eng.input.keys.delete('shift');
             eng.controller.pos.set(0, 4.2, 0.5);
             eng.controller.heading = Math.PI;
             eng.followCamera.yaw = Math.PI; // Look North across gorge
@@ -180,15 +184,7 @@ def capture_phase7():
             eng.followCamera.shoulderOffset = 0.0;
             eng.followCamera.teleport(eng.controller.pos);
         }""")
-        page.evaluate("""() => new Promise(resolve => {
-            let f = 0;
-            function step() {
-                f++;
-                if (f >= 18) { resolve(); return; }
-                requestAnimationFrame(step);
-            }
-            requestAnimationFrame(step);
-        })""")
+        wait_frames(page, 18)
         shot4_path = OUT_DIR / "phase7_04_gorge_bridge_sun_shafts.png"
         page.screenshot(path=str(shot4_path))
         print(f"✓ Saved Shot 4: {shot4_path}")

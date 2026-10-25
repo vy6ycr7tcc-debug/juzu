@@ -825,6 +825,7 @@ async function bootJuzu() {
       return { mirrorSolved, steleSolved, gnomonSolved, sluiceSolved, paititiSolved };
     },
   };
+  (window as any).THREE = THREE;
   window.__juzuOffline = offlineManager;
   offlineManager.register();
 }
