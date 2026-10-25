@@ -434,8 +434,25 @@ export class Controller {
       }
 
       this.turnRate = THREE.MathUtils.lerp(this.turnRate, 0, Math.min(1, dt * 12));
-      this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, 0, Math.min(1, dt * 10));
-      this.slopeRoll = THREE.MathUtils.lerp(this.slopeRoll, 0, Math.min(1, dt * 10));
+      // 3-Point Terrain Normal Sampling for authentic slope pitch & roll under boots (stationary)
+      if (this.grounded) {
+        const probeD = 0.48;
+        const sinH = Math.sin(this.heading);
+        const cosH = Math.cos(this.heading);
+        const aheadH = this.getGroundAt(this.pos.x + sinH * probeD, this.pos.z + cosH * probeD, this.pos.y);
+        const behindH = this.getGroundAt(this.pos.x - sinH * probeD, this.pos.z - cosH * probeD, this.pos.y);
+        const rightH = this.getGroundAt(this.pos.x + cosH * probeD, this.pos.z - sinH * probeD, this.pos.y);
+        const leftH = this.getGroundAt(this.pos.x - cosH * probeD, this.pos.z + sinH * probeD, this.pos.y);
+
+        const rawPitch = THREE.MathUtils.clamp((aheadH - behindH) / (probeD * 2), -0.75, 0.75);
+        const rawRoll = THREE.MathUtils.clamp((rightH - leftH) / (probeD * 2), -0.65, 0.65);
+
+        this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, rawPitch, Math.min(1, dt * 12));
+        this.slopeRoll = THREE.MathUtils.lerp(this.slopeRoll, rawRoll, Math.min(1, dt * 12));
+      } else {
+        this.slopePitch = THREE.MathUtils.lerp(this.slopePitch, 0, Math.min(1, dt * 10));
+        this.slopeRoll = THREE.MathUtils.lerp(this.slopeRoll, 0, Math.min(1, dt * 10));
+      }
       this.isPivoting = false;
       this.stationaryTurnPhase = 0;
       this.vel.x = Math.sin(this.heading) * this.speed;
@@ -490,11 +507,20 @@ export class Controller {
     this.vel.set(0, 0, 0);
     this.speed = 0;
     this.turnRate = 0;
-    this.slopePitch = 0;
     this.grounded = true;
     this.mantling = false;
     this.dodging = false;
     this.landingTimer = 0;
     this.interactTimer = 0;
+
+    const probeD = 0.48;
+    const sinH = Math.sin(this.heading);
+    const cosH = Math.cos(this.heading);
+    const aheadH = this.getGroundAt(this.pos.x + sinH * probeD, this.pos.z + cosH * probeD, this.pos.y);
+    const behindH = this.getGroundAt(this.pos.x - sinH * probeD, this.pos.z - cosH * probeD, this.pos.y);
+    const rightH = this.getGroundAt(this.pos.x + cosH * probeD, this.pos.z - sinH * probeD, this.pos.y);
+    const leftH = this.getGroundAt(this.pos.x - cosH * probeD, this.pos.z + sinH * probeD, this.pos.y);
+    this.slopePitch = THREE.MathUtils.clamp((aheadH - behindH) / (probeD * 2), -0.75, 0.75);
+    this.slopeRoll = THREE.MathUtils.clamp((rightH - leftH) / (probeD * 2), -0.65, 0.65);
   }
 }

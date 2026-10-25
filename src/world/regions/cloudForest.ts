@@ -27,7 +27,6 @@ export class CloudForestRegion {
   private mirrorAligned = false;
   public isLoaded = false;
   public bridgePlanks: Array<{ mesh: THREE.Mesh; restY: number; z: number; restX: number }> = [];
-  private crepuscularShafts: Array<{ group: THREE.Group; baseOpacity: number; phase: number; mats: THREE.MeshBasicMaterial[] }> = [];
   private skidParticles?: THREE.Points;
   private skidPositions = new Float32Array(90 * 3);
   private skidVelocities = new Float32Array(90 * 3);
@@ -181,7 +180,6 @@ export class CloudForestRegion {
     this.buildExpeditionBaseCamp(ashlarStoneMat, timberPlankMat);
     this.buildGorgeWaterfall(ashlarStoneMat);
     this.buildAtmosphereMotes();
-    this.buildCrepuscularSunShafts();
     this.buildSkidDebrisSystem();
   }
 
@@ -273,16 +271,6 @@ export class CloudForestRegion {
     if (this.pollenPoints) {
       this.pollenPoints.position.y = Math.sin(time * 0.45) * 0.18;
       this.pollenPoints.position.x = Math.cos(time * 0.28) * 0.14;
-    }
-
-    // Dynamic Crepuscular Sun Shafts gentle wind flutter
-    for (let i = 0; i < this.crepuscularShafts.length; i++) {
-      const s = this.crepuscularShafts[i];
-      const pulse = 0.86 + Math.sin(time * 0.95 + s.phase) * 0.14;
-      for (let m = 0; m < s.mats.length; m++) {
-        s.mats[m].opacity = s.baseOpacity * pulse;
-      }
-      s.group.rotation.z = Math.sin(time * 0.5 + s.phase) * 0.018;
     }
 
     // Dynamic Footstep Skid & Soil Debris Emission
@@ -396,7 +384,7 @@ export class CloudForestRegion {
       { z: zSouth + 1.1, y: ySouth, rotX: -0.14 },
       { z: zNorth - 1.1, y: yNorth, rotX: 0.14 },
     ]) {
-      const ramp = passable(new THREE.Mesh(createIncaBlock(3.2, 0.45, 2.2, 0.08, 1.8), abutmentMat));
+      const ramp = new THREE.Mesh(createIncaBlock(3.2, 0.45, 2.2, 0.08, 1.8), abutmentMat);
       ramp.position.set(0, end.y - 0.12, end.z);
       ramp.rotation.x = end.rotX;
       ramp.castShadow = true;
@@ -785,6 +773,27 @@ export class CloudForestRegion {
 
     // Climbable stone ledge steps near South camp (-7.5, z = 8..11) for testing Tomb Raider ledge mantling
     const stepBaseY = standAt(-7.5, 9.5);
+
+    // Authentic inclined Inca terrace ramp (andene kallanka ramp) connecting clearing floor to first terrace
+    const rampLen = 4.6;
+    const rampAngle = 0.32; // ~18.3 deg slope
+    const terraceRamp = new THREE.Mesh(createIncaBlock(rampLen, 0.42, 3.2, 0.06, 1.8), stoneMat);
+    terraceRamp.position.set(-4.8, stepBaseY + 0.45, 9.5);
+    terraceRamp.rotation.z = -rampAngle;
+    terraceRamp.castShadow = true;
+    terraceRamp.receiveShadow = true;
+    ruinGroup.add(terraceRamp);
+
+    // Stone ashlar border kerbs framing both edges of the terrace ramp
+    for (const sideZ of [-1.55, 1.55]) {
+      const kerb = new THREE.Mesh(createIncaBlock(rampLen * 1.02, 0.28, 0.32, 0.04, 1.4), stoneMat);
+      kerb.position.set(-4.8, stepBaseY + 0.58, 9.5 + sideZ);
+      kerb.rotation.z = -rampAngle;
+      kerb.castShadow = true;
+      kerb.receiveShadow = true;
+      ruinGroup.add(kerb);
+    }
+
     const ledge1 = new THREE.Mesh(createIncaBlock(2.8, 1.45, 2.4, 0.06, 1.8), stoneMat);
     ledge1.position.set(-7.5, stepBaseY + 0.72, 9.5);
     ledge1.castShadow = true;
@@ -1250,7 +1259,8 @@ export class CloudForestRegion {
           for (let i = 0; i < cliffPlacements.length; i++) {
             const p = cliffPlacements[i];
             dummy.position.set(p.x, p.y, p.z);
-            dummy.scale.set(p.sx, p.sy, p.sz);
+            const scaleAvg = (p.sx + p.sz) * 0.5;
+            dummy.scale.set(p.sx, scaleAvg, p.sz);
             dummy.rotation.set(0, p.ry, 0);
             dummy.updateMatrix();
             cliffInstMesh.setMatrixAt(i, dummy.matrix);
@@ -1296,17 +1306,17 @@ export class CloudForestRegion {
 
         if (bldGeom && bldMat) {
           const riverRocks = [
-            { x: -14.5, z: 12.0, s: 2.8, ry: 0.4 },
-            { x: -19.2, z: 10.5, s: 3.2, ry: 1.8 },
-            { x: -16.8, z: 14.2, s: 2.4, ry: 2.5 },
-            { x: -21.5, z: 13.0, s: 3.0, ry: 0.9 },
-            { x: -12.0, z: 9.8, s: 2.6, ry: 3.1 },
-            { x: -6.5, z: 11.5, s: 2.9, ry: 1.4 },
-            { x: -3.8, z: 2.4, s: 2.2, ry: 0.6 },
-            { x: 4.1, z: 2.1, s: 2.5, ry: 2.1 },
-            { x: 0.5, z: 4.8, s: 3.4, ry: 1.1 },
-            { x: -2.2, z: 6.2, s: 2.0, ry: 2.9 },
-            { x: 3.2, z: 7.0, s: 2.3, ry: 0.3 },
+            { x: -14.5, z: -12.0, s: 2.8, ry: 0.4 },
+            { x: -19.2, z: -10.5, s: 3.2, ry: 1.8 },
+            { x: -16.8, z: -14.2, s: 2.4, ry: 2.5 },
+            { x: -21.5, z: -13.0, s: 3.0, ry: 0.9 },
+            { x: -12.0, z: -9.8, s: 2.6, ry: 3.1 },
+            { x: -6.5, z: -11.5, s: 2.9, ry: 1.4 },
+            { x: -3.8, z: -8.4, s: 2.2, ry: 0.6 },
+            { x: 4.1, z: -12.1, s: 2.5, ry: 2.1 },
+            { x: 0.5, z: -14.8, s: 3.4, ry: 1.1 },
+            { x: -2.2, z: -16.2, s: 2.0, ry: 2.9 },
+            { x: 3.2, z: -17.0, s: 2.3, ry: 0.3 },
           ];
 
           const boulderInstMesh = new THREE.InstancedMesh(bldGeom, bldMat, riverRocks.length);
@@ -1317,7 +1327,7 @@ export class CloudForestRegion {
           for (let i = 0; i < riverRocks.length; i++) {
             const r = riverRocks[i];
             dummy.position.set(r.x, 0.16, r.z);
-            dummy.scale.set(r.s, r.s * 0.92, r.s);
+            dummy.scale.set(r.s, r.s, r.s);
             dummy.rotation.set(0, r.ry, 0);
             dummy.updateMatrix();
             boulderInstMesh.setMatrixAt(i, dummy.matrix);
@@ -1754,90 +1764,6 @@ export class CloudForestRegion {
     const points = new THREE.Points(geom, mat);
     this.pollenPoints = points;
     this.group.add(points);
-  }
-
-  private createShaftAlphaMap(): THREE.Texture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const imgData = ctx.createImageData(128, 256);
-      const data = imgData.data;
-      for (let y = 0; y < 256; y++) {
-        const v = y / 255; // 0 at top, 1 at bottom
-        // Vertical envelope: 0 at top (v=0), peak around v=0.45, completely 0 at bottom (v=1)
-        const vAlpha = Math.sin(v * Math.PI) * Math.min(1.0, v * 3.5) * Math.min(1.0, (1.0 - v) * 2.8);
-        for (let x = 0; x < 128; x++) {
-          const u = x / 127; // 0 at left, 1 at right
-          // Horizontal cosine bell curve: 0 at edges, 1 at center
-          const hAlpha = Math.pow(Math.sin(u * Math.PI), 2.2);
-          const alpha = vAlpha * hAlpha;
-          const idx = (y * 128 + x) * 4;
-          data[idx] = 255;
-          data[idx + 1] = 244;
-          data[idx + 2] = 224;
-          data[idx + 3] = Math.round(alpha * 255);
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.ClampToEdgeWrapping;
-    tex.wrapT = THREE.ClampToEdgeWrapping;
-    return tex;
-  }
-
-  private buildCrepuscularSunShafts(): void {
-    const alphaMap = this.createShaftAlphaMap();
-    const shaftGroup = new THREE.Group();
-    shaftGroup.name = 'VolumetricSunShafts';
-
-    // Sunlight angles down from South-East (elevation ~31°, azimuth 138°)
-    // 3-way crossed plane ribbons (0°, 60°, 120°) guarantee seamless 3D volumetric appearance from any view
-    const shaftConfigs = [
-      { x: 1.5, y: 19.5, z: 2.0, length: 20, width: 3.8, opacity: 0.085, pitch: 0.58, yaw: 2.4 },
-      { x: -5.8, y: 20.5, z: 5.0, length: 22, width: 4.2, opacity: 0.090, pitch: 0.58, yaw: 2.4 },
-      { x: -1.2, y: 19.8, z: 9.8, length: 19, width: 3.5, opacity: 0.075, pitch: 0.58, yaw: 2.4 },
-      { x: 0.4, y: 19.2, z: -4.5, length: 22, width: 4.4, opacity: 0.080, pitch: 0.58, yaw: 2.4 },
-      { x: 6.8, y: 21.0, z: 1.5, length: 21, width: 3.6, opacity: 0.070, pitch: 0.58, yaw: 2.4 },
-    ];
-
-    for (let i = 0; i < shaftConfigs.length; i++) {
-      const cfg = shaftConfigs[i];
-      const beamGroup = new THREE.Group();
-      beamGroup.position.set(cfg.x, cfg.y, cfg.z);
-      beamGroup.rotation.order = 'YXZ';
-      beamGroup.rotation.y = cfg.yaw;
-      beamGroup.rotation.x = cfg.pitch;
-
-      const planeGeom = new THREE.PlaneGeometry(cfg.width, cfg.length);
-      planeGeom.translate(0, -cfg.length * 0.5, 0);
-
-      const mats: THREE.MeshBasicMaterial[] = [];
-      for (let r = 0; r < 3; r++) {
-        const mat = new THREE.MeshBasicMaterial({
-          color: 0xffeed8,
-          alphaMap: alphaMap,
-          transparent: true,
-          opacity: cfg.opacity,
-          blending: THREE.AdditiveBlending,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        });
-        mats.push(mat);
-
-        const mesh = new THREE.Mesh(planeGeom, mat);
-        mesh.rotation.y = r * (Math.PI / 3);
-        mesh.renderOrder = 20;
-        beamGroup.add(mesh);
-      }
-
-      shaftGroup.add(beamGroup);
-      this.crepuscularShafts.push({ group: beamGroup, baseOpacity: cfg.opacity, phase: i * 1.35, mats });
-    }
-
-    this.group.add(shaftGroup);
   }
 
   private buildSkidDebrisSystem(): void {
