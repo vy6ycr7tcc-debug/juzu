@@ -99,3 +99,27 @@ line is absolute.
   (human-driven, outside this loop).
 - GLM is benched until its quota stabilizes; MiniMax is benched (no vision
   route). Re-test before promoting either.
+
+## Workstation 3D & Cross-Engine Context
+
+This workstation is provisioned with high-end 3D and cross-engine toolchains:
+- **Blender 5.2.2 LTS** (`/opt/homebrew/bin/blender`):
+  - Application Templates installed in `~/Library/Application Support/Blender/5.2/scripts/startup/bl_app_templates_user/`:
+    - `Game_Asset_glTF`: 1:1 Metric meter units, AgX/sRGB, EEVEE PBR lighting, glTF 2.0 WebGL/WebGPU export presets. Launch with `blender --app-template Game_Asset_glTF`.
+    - `Third_Person_Character_Rig`: 1.75m reference humanoid guide, 19-bone biped armature, locomotion action/NLA cycles. Launch with `blender --app-template Third_Person_Character_Rig`.
+    - `Modular_Inca_Environment`: 0.25m/0.5m/1.0m modular stone masonry snapping, PBR Andean materials. Launch with `blender --app-template Modular_Inca_Environment`.
+  - Automation Toolkit: `~/Documents/animated vids/blender_tools/` (`bridge/`, `sweep/`, `mesh/`, `rig/`, `assets/`).
+  - On-Demand Streamer: `fetch-3d-asset` (stream CC0 models, HDRIs, PBR textures on demand without git bloat).
+- **Epic Games & Unreal Engine 5.8** (`/Users/Shared/Epic Games/UE_5.8`):
+  - Standard UE 5.8 templates (`TP_ThirdPerson`, `TP_FirstPerson`, etc.) and Fab plugins (`~/Library/Application Support/Epic/FabPlugins`) available for reference mechanics and asset ingestion.
+
+## Phase 8 Mechanics Architecture
+- **Assassin's Creed Parkour Speed Vaulting** (`src/player/controller.ts`, `src/player/naira.ts`):
+  - Detection: `tryVault(inputX, inputZ)` fires during forward sprint when encountering waist-high (0.65–1.15m) obstacles.
+  - Parabolic trajectory: smooth arc over obstacle lip with preserved sprint exit momentum (4.5–5.5 m/s).
+  - Kinematics: right hand plants firmly on obstacle surface, lead outside leg kicks horizontally forward across the parapet, inside leg tucks tight (90° knee bend) under the hip.
+  - Grounding: dynamic stance-contact snap ensures instant, zero-latency foot grounding upon touchdown.
+- **Dynamic Interactive Understory Foliage Parting** (`src/world/foliage.ts`):
+  - Interactive damped harmonic spring simulation on Cyathea ferns ($\omega = 22.0, \zeta = 0.72$).
+  - Blended deflection: 65% radial outward push + 35% forward velocity wake deflection within 2.4m radius.
+

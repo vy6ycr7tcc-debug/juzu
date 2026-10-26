@@ -22,6 +22,19 @@ const JUMP_VELOCITY = 7.0;
 const GRAVITY = 18.0;
 const SWIM_FEET = WATER_Y - 1.0;
 
+// Phase 8a — AC speed vault over waist-high stone. The body already steps anything <= STEP+0.15
+// (0.65 m) and mantles 0.78..2.15 m when airborne; everything between was a dead stop at a wall.
+// Vault band therefore starts just above the auto-step range and ends at waist height.
+const VAULT_MIN_H = 0.66;
+const VAULT_MAX_H = 1.25;
+const VAULT_MIN_SPEED = 3.4; // running (run pose threshold is 3.8; allow trigger during spin-up)
+const VAULT_EXIT_MIN = 4.5; // land in stride preserving sprint momentum (spec: 4.5..5.5 m/s)
+const VAULT_EXIT_MAX = 5.5;
+const VAULT_COOLDOWN = 0.35; // stops instant re-vault when landing beside a stepped run of stone
+
+const _vaultRayOrigin = new THREE.Vector3();
+const _vaultRayDir = new THREE.Vector3();
+
 export class Controller {
   pos = new THREE.Vector3(0, 4.2, 10);
   vel = new THREE.Vector3();
@@ -30,6 +43,7 @@ export class Controller {
   swimming = false;
   crouching = false;
   mantling = false;
+  vaulting = false;
   grappling = false;
   dodging = false;
   justJumped = false;
@@ -56,6 +70,14 @@ export class Controller {
   private mantleTimer = 0;
   private mantleStart = new THREE.Vector3();
   private mantleEnd = new THREE.Vector3();
+  private vaultTimer = 0;
+  private vaultDuration = 0.5;
+  private vaultCooldown = 0;
+  private vaultStart = new THREE.Vector3();
+  private vaultEnd = new THREE.Vector3();
+  private vaultTopY = 0;
+  private vaultFrontD = 0.45;
+  private vaultExitSpeed = 4.8;
   private landingTimer = 0;
   private interactTimer = 0;
   private dodgeTimer = 0;
@@ -66,6 +88,11 @@ export class Controller {
 
   get vy(): number {
     return this.vel.y;
+  }
+
+  /** 0..1 through an active speed vault (drives the Naira hand-plant pose blend). */
+  get vaultProgress(): number {
+    return this.vaultDuration > 0 ? THREE.MathUtils.clamp(this.vaultTimer / this.vaultDuration, 0, 1) : 0;
   }
 
   constructor(initialPos: THREE.Vector3 = new THREE.Vector3(0, 4.2, 10)) {
@@ -116,6 +143,7 @@ export class Controller {
     this.grappling = true;
     this.grounded = false;
     this.mantling = false;
+    this.vaulting = false;
     this.crouching = false;
     this.dodging = false;
     this.grappleAnchorPos.copy(anchorPos);
@@ -149,6 +177,7 @@ export class Controller {
     if (this.interactTimer > 0) this.interactTimer = Math.max(0, this.interactTimer - dt);
     if (this.dodgeCooldown > 0) this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
     if (this.jumpBufferTimer > 0) this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+    if (this.vaultCooldown > 0) this.vaultCooldown = Math.max(0, this.vaultCooldown - dt);
     if (!this.grounded && this.coyoteTimer > 0) this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
     if (isJump) this.jumpBufferTimer = 0.16;
 
@@ -174,6 +203,47 @@ export class Controller {
         this.justLanded = true;
         this.landingImpact = 3.5;
         this.landingTimer = 0.22;
+      }
+      return;
+    }
+
+    // 0b. Handle active AC speed vault: hand-plant arc across waist-high stone, landing in stride
+    if (this.vaulting) {
+      this.vaultTimer += dt;
+      const t = Math.min(1, this.vaultTimer / this.vaultDuration);
+      // Near-constant horizontal velocity: duration was derived from travel/exit speed, so entry
+      // momentum carries through the vault with no velocity discontinuity at either end.
+      this.pos.x = this.vaultStart.x + (this.vaultEnd.x - this.vaultStart.x) * t;
+      this.pos.z = this.vaultStart.z + (this.vaultEnd.z - this.vaultStart.z) * t;
+      // Parabolic rise over the stone lip: apex clears obstacle closely allowing right hand
+      // to plant firmly ON the stone surface while outside leg swings forward and inside leg tucks.
+      const sy = this.vaultStart.y;
+      const ey = this.vaultEnd.y;
+      // Parabolic rise over the stone: apex height brings character hip and right hand
+      // directly down to stone surface level (vaultTopY) for authentic hand-plant contact
+      const arcAmp = Math.max(0.0, this.vaultTopY - 0.92 - (sy + ey) * 0.5);
+      this.pos.y = sy + (ey - sy) * t + Math.sin(t * Math.PI) * arcAmp;
+      const travel = Math.hypot(this.vaultEnd.x - this.vaultStart.x, this.vaultEnd.z - this.vaultStart.z);
+      this.speed = travel / this.vaultDuration;
+      this.grounded = false;
+      this.vel.y = 0;
+      this.turnRate = 0;
+      this.isPivoting = false;
+      // Vault phases ride the existing retargeted jump clips (no dedicated vault clip exists on
+      // the rig): plant/crouch -> airborne tuck -> landing fold.
+      this.pose = t < 0.3 ? 'jump_start' : t < 0.85 ? 'jump' : 'jump_land';
+      if (t >= 1) {
+        this.vaulting = false;
+        this.pos.x = this.vaultEnd.x;
+        this.pos.z = this.vaultEnd.z;
+        this.pos.y = this.getGroundAt(this.pos.x, this.pos.z, this.vaultEnd.y + 0.65);
+        this.grounded = true;
+        this.vel.y = 0;
+        this.speed = this.vaultExitSpeed; // land in stride at 4.5..5.5 m/s
+        this.justLanded = true;
+        this.landingImpact = 2.6;
+        this.landingTimer = 0.22;
+        this.vaultCooldown = VAULT_COOLDOWN;
       }
       return;
     }
@@ -401,6 +471,9 @@ export class Controller {
         }
       }
 
+      // Phase 8a: running into waist-high stone vaults instead of dead-stopping in her tracks
+      if (this.tryVault(moveDir.x, moveDir.z)) return;
+
       const nextX = this.pos.x + this.vel.x * dt;
       const nextZ = this.pos.z + this.vel.z * dt;
       const nextTerrainH = standAt(nextX, nextZ);
@@ -501,6 +574,91 @@ export class Controller {
     }
   }
 
+  /**
+   * Phase 8a speed-vault probe: called once per frame while grounded and running. Finds a
+   * waist-high solid face just ahead (0.66..1.25 m — above the 0.65 m auto-step ceiling, below
+   * the 0.78 m airborne mantle floor, the dead-stop band) and, if there is a clear landing past
+   * it, starts the vault. Zero allocations per frame (reused module ray temps, scalar loop).
+   */
+  public tryVault(dirX: number, dirZ: number): boolean {
+    if (
+      this.vaulting ||
+      this.vaultCooldown > 0 ||
+      !this.grounded ||
+      this.swimming ||
+      this.dodging ||
+      this.crouching ||
+      this.isPivoting ||
+      this.speed < VAULT_MIN_SPEED
+    ) {
+      return false;
+    }
+
+    // 1. Obstacle top just beyond arm's reach of the body capsule (contact happens at r=0.38)
+    const fx = this.pos.x + dirX * 0.62;
+    const fz = this.pos.z + dirZ * 0.62;
+    const top = solidity.floor(fx, fz, this.pos.y + 1.4, this.pos.y + 0.1);
+    if (!Number.isFinite(top)) return false;
+    const dh = top - this.pos.y;
+    if (dh < VAULT_MIN_H || dh > VAULT_MAX_H) return false;
+
+    // 2. Front face distance (chest-height ray) — the hand-plant reference for the animation layer
+    _vaultRayOrigin.set(this.pos.x, this.pos.y + 0.55, this.pos.z);
+    _vaultRayDir.set(dirX, 0, dirZ);
+    const frontHit = solidity.ray(_vaultRayOrigin, _vaultRayDir, 2.0);
+    this.vaultFrontD = Number.isFinite(frontHit) ? frontHit : 0.45;
+
+    // 3. Landing scan: first sample past the block with no waist-high solid and sane ground
+    let landX = 0;
+    let landZ = 0;
+    let landY = 0;
+    let landD = -1;
+    for (let d = this.vaultFrontD + 0.35; d <= this.vaultFrontD + 3.0; d += 0.15) {
+      const cx = this.pos.x + dirX * d;
+      const cz = this.pos.z + dirZ * d;
+      const s = solidity.floor(cx, cz, this.pos.y + 1.4, this.pos.y - 1.6);
+      if (Number.isFinite(s) && s > this.pos.y + 0.45) continue; // still on top of / inside the block
+      const ground = this.getGroundAt(cx, cz, this.pos.y + 1.4);
+      if (ground > this.pos.y + 0.6 || ground < this.pos.y - 1.8) continue; // new wall / cliff drop
+      landX = cx;
+      landZ = cz;
+      landY = ground;
+      landD = d;
+      break;
+    }
+    if (landD < 0) return false; // no clear run-out: keep the old collide behaviour
+
+    // 3.5 Airspace clearance: the arc crosses just above the obstacle top — if anything
+    //    solid occupies the body/head band over the crossing (a tower standing on the
+    //    plinth, an arch, a merlon), the vault would clip straight through it. Reject and
+    //    keep normal collision. Sampled at the body's ±0.33 m width: the courtyard plinth
+    //    at x=-3.0 squeezed past the tower's west face by 0.08 m and put her shoulder
+    //    INSIDE the tower at apex. (Found via the phase-8a verify harness.)
+    _vaultRayDir.set(dirX, 0, dirZ);
+    const airDist = this.vaultFrontD + 3.0;
+    const perpX = -dirZ;
+    const perpZ = dirX;
+    for (const off of [-0.33, 0, 0.33]) {
+      _vaultRayOrigin.set(this.pos.x + perpX * off, top + 0.35, this.pos.z + perpZ * off);
+      if (Number.isFinite(solidity.ray(_vaultRayOrigin, _vaultRayDir, airDist))) return false;
+      _vaultRayOrigin.y = top + 1.5;
+      if (Number.isFinite(solidity.ray(_vaultRayOrigin, _vaultRayDir, airDist))) return false;
+    }
+
+    // 4. Arm the vault: constant-velocity travel so entry speed carries through and the exit
+    //    speed lands inside the 4.5..5.5 m/s sprint-preservation band.
+    this.vaulting = true;
+    this.vaultTimer = 0;
+    this.vaultStart.copy(this.pos);
+    this.vaultEnd.set(landX, landY, landZ);
+    this.vaultTopY = top;
+    this.vaultExitSpeed = THREE.MathUtils.clamp(this.speed, VAULT_EXIT_MIN, VAULT_EXIT_MAX);
+    const travel = Math.hypot(landX - this.pos.x, landZ - this.pos.z);
+    this.vaultDuration = travel / this.vaultExitSpeed;
+    this.mantling = false;
+    return true;
+  }
+
   public teleport(pos: THREE.Vector3): void {
     this.pos.copy(pos);
     this.pos.y = this.getGroundAt(pos.x, pos.z, pos.y);
@@ -509,6 +667,8 @@ export class Controller {
     this.turnRate = 0;
     this.grounded = true;
     this.mantling = false;
+    this.vaulting = false;
+    this.vaultCooldown = 0;
     this.dodging = false;
     this.landingTimer = 0;
     this.interactTimer = 0;

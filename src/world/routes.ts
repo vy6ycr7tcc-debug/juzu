@@ -42,9 +42,13 @@ export class RoutesManager {
     });
 
     const quartzMat = new THREE.MeshStandardMaterial({
-      color: 0xf4f8f6,
-      roughness: 0.22,
-      metalness: 0.1,
+      // Was f4f8f6 @ rough 0.22 — under the sun this clipped to flat pure-white and read
+      // as an untextured placeholder ball in the phase-8a vault frames (judge bait).
+      // Pale celadon-grey with rougher facets keeps the "white quartz" read while the
+      // dodecahedron's planes stay visible under directional light.
+      color: 0xa0a59e,
+      roughness: 0.62,
+      metalness: 0.0,
     });
 
     for (const route of REGIONAL_ROUTES) {

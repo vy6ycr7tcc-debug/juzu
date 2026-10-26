@@ -464,6 +464,12 @@ async function bootJuzu() {
     requestAnimationFrame(animate);
     const dt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
+
+    if (window.__juzuEngine && window.__juzuEngine.paused) {
+      renderer.render(scene, camera);
+      return;
+    }
+
     totalTime += dt;
     frameCount++;
 
@@ -653,7 +659,7 @@ async function bootJuzu() {
     terrain.update(controller.pos);
     water.update(dt, totalTime);
     sky.update(controller.pos, activeToD);
-    foliage.update(totalTime);
+    foliage.update(totalTime, dt, controller.pos, controller.speed, controller.heading);
     cloudForest.update(totalTime, controller.pos, controller.speed, controller.isPivoting || controller.isBraking);
     jungleLowlands.update(totalTime);
     paititi.update(totalTime);
@@ -797,6 +803,7 @@ async function bootJuzu() {
   // Global debug hooks
   window.__juzuReady = true;
   window.__juzuEngine = {
+    paused: false,
     renderer,
     scene,
     camera,

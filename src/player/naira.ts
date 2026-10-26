@@ -81,6 +81,15 @@ export class Naira {
   private readonly tempVecA = new THREE.Vector3();
   private readonly tempVecB = new THREE.Vector3();
   private readonly tempQuat = new THREE.Quaternion();
+  // Phase 8a speed-vault hand-plant pose targets (pre-allocated: slerped per frame, never built)
+  private readonly plantUpperQ = new THREE.Quaternion();
+  private readonly plantForeQ = new THREE.Quaternion();
+  private readonly plantHandQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.45, 0.15, -0.65));
+  /** Verify-harness tune hook for the vault plant pose (null during normal play). */
+  public plantUpperOverride: { x: number; y: number; z: number } | null = null;
+  public plantForeOverride: { x: number; y: number; z: number } | null = null;
+  /** Verify-harness tune hook: skip the plant arm layer to capture the base pose. */
+  public plantDisabled = false;
 
   constructor(scene: THREE.Scene) {
     this.root.name = 'Naira_PlayerRoot';
@@ -727,8 +736,11 @@ export class Naira {
         ? THREE.MathUtils.clamp(-controller.vel.y * 0.035, -0.35, 0.35)
         : (controller.mantling
           ? 0.20
-          : controller.dodging
-            ? 0.24
+          : controller.vaulting
+            // Speed vault: pitch hard into the hand plant early, unwind toward the landing fold
+            ? THREE.MathUtils.lerp(0.95, 0.35, Math.min(1, controller.vaultProgress * 1.3))
+            : controller.dodging
+              ? 0.24
             : controller.crouching
               ? 0.22
               : controller.pose === 'run'
@@ -1010,9 +1022,24 @@ export class Naira {
         // leftLegForwardSignal = (leftLegFwd - rightLegFwd) * 0.5 = -(rawLeftSwing + rawRightSwing) * 0.5
         leftLegForwardSignal = -(rawLeftSwing + rawRightSwing) * 0.5;
       } else {
-        // Airborne jump / mantle: gentle alignment only
-        lq.slerp(this.bindLeftUpLeg, 0.18);
-        rq.slerp(this.bindRightUpLeg, 0.18);
+        // Airborne jump / mantle / vault:
+        if (controller.vaulting) {
+          // Dynamic parkour speed vault leg kinematics:
+          const vt = controller.vaultProgress;
+          const tuckW =
+            THREE.MathUtils.smoothstep(vt, 0.04, 0.22) *
+            (1 - THREE.MathUtils.smoothstep(vt, 0.65, 0.95));
+          // Leading outside leg (left) swings forward across the obstacle (swings foot +0.54m ahead of hips)
+          this.tempQuat.set(0, 0, -0.296, 0.955).normalize();
+          lq.slerp(this.tempQuat, tuckW);
+
+          // Trailing inside leg (right) tucks up tight under pelvis to clear the stone
+          this.tempQuat.set(0.185, -0.097, -0.31, 0.927).normalize();
+          rq.slerp(this.tempQuat, tuckW);
+        } else {
+          lq.slerp(this.bindLeftUpLeg, 0.18);
+          rq.slerp(this.bindRightUpLeg, 0.18);
+        }
       }
     }
 
@@ -1066,7 +1093,23 @@ export class Naira {
           thigh.quaternion.normalize();
         }
       } else {
-        sq.slerp(this.bindShin, 0.15);
+        if (controller.vaulting) {
+          const vt = controller.vaultProgress;
+          const tuckW =
+            THREE.MathUtils.smoothstep(vt, 0.04, 0.22) *
+            (1 - THREE.MathUtils.smoothstep(vt, 0.65, 0.95));
+          // Outside lead leg extends forward to clear the obstacle
+          if (isLeft) {
+            sq.x = THREE.MathUtils.lerp(sq.x, -0.15, tuckW);
+          } else {
+            // Inside trailing leg flexes tightly (~90 deg) tucked under pelvis
+            sq.x = THREE.MathUtils.lerp(sq.x, -0.95, tuckW);
+          }
+          sq.w = Math.sqrt(Math.max(0.01, 1.0 - sq.x * sq.x));
+          sq.normalize();
+        } else {
+          sq.slerp(this.bindShin, 0.15);
+        }
       }
     }
 
@@ -1117,6 +1160,41 @@ export class Naira {
         run01,
         leftLegForwardSignal
       );
+    }
+
+    // 6b. Phase 8a speed-vault hand plant: leading (right) arm sweeps down-forward to plant on the
+    // stone top throughout the vault crossing (prog 0.08..0.55), pushing off cleanly at the apex.
+    if (
+      controller.vaulting &&
+      !this.isAiming &&
+      !this.plantDisabled &&
+      this.rightUpperArmBone &&
+      this.rightForearmBone
+    ) {
+      const vt = controller.vaultProgress;
+      const plantW =
+        THREE.MathUtils.smoothstep(vt, 0.04, 0.16) *
+        (1 - THREE.MathUtils.smoothstep(vt, 0.52, 0.82));
+      if (plantW > 0.002) {
+        const ou = this.plantUpperOverride;
+        const ux = ou ? ou.x : 0.52;
+        const uy = ou ? ou.y : 0.04;
+        const uz = ou ? ou.z : -0.42;
+        const uqw = Math.sqrt(Math.max(0.05, 1.0 - ux * ux - uy * uy - uz * uz));
+        this.plantUpperQ.set(ux, uy, uz, uqw).normalize();
+        const of = this.plantForeOverride;
+        const fx = of ? of.x : 0.05;
+        const fy = of ? of.y : 0.0;
+        const fz = of ? of.z : -0.38;
+        const fqw = Math.sqrt(Math.max(0.05, 1.0 - fx * fx - fy * fy - fz * fz));
+        this.plantForeQ.set(fx, fy, fz, fqw).normalize();
+        this.rightUpperArmBone.quaternion.slerp(this.plantUpperQ, plantW);
+        this.rightForearmBone.quaternion.slerp(this.plantForeQ, plantW);
+        if (this.rightHandBone) {
+          this.plantHandQ.set(0.38, 0, -0.16, 0.91).normalize();
+          this.rightHandBone.quaternion.slerp(this.plantHandQ, plantW * 0.95);
+        }
+      }
     }
 
     // 7. Natural Relaxed Expedition Finger Curl (eliminates rigid splayed T-pose hands)
@@ -1223,15 +1301,17 @@ export class Naira {
 
     if (Number.isFinite(minSoleY)) {
       const desiredCorrection = THREE.MathUtils.clamp(controller.pos.y - minSoleY, -0.22, 0.22);
+      const blendRate = controller.justLanded ? 1.0 : Math.min(1, dt * 28);
       this.smoothFootContactOffset = THREE.MathUtils.lerp(
         this.smoothFootContactOffset,
         desiredCorrection,
-        Math.min(1, dt * 28)
+        blendRate
       );
     }
 
     this.modelRoot.position.y =
       this.groundOffset + this.smoothPelvisOffset + this.smoothFootContactOffset;
+    this.root.updateMatrixWorld(true);
   }
 
   public getRightHandWorldPosition(out: THREE.Vector3): THREE.Vector3 {

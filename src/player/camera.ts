@@ -40,6 +40,7 @@ export class FollowCamera {
   private stridePhase = 0;
   public sensitivity = 1.0;
   public invertY = false;
+  public manualOverride = false;
 
   constructor(public camera: THREE.PerspectiveCamera) {
     this.targetYaw = this._yaw;
@@ -71,6 +72,8 @@ export class FollowCamera {
     isGrounded: boolean = true,
     isAiming: boolean = false
   ): void {
+    if (this.manualOverride) return;
+
     // 1. Process look inputs with smooth interpolation to eliminate touch/mouse micro-jitter
     const sens = 0.0022 * this.sensitivity;
     this.targetYaw -= lookDelta.x * sens;
