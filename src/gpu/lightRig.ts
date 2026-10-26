@@ -58,10 +58,9 @@ export class LightRig {
     scene.add(this.camFill);
 
     // 4. Photorealistic Andean Image-Based Lighting (IBL) & Environment Map (Poly Haven CC0)
+    // Use optimized 512 HDR (466KB) so environment radiance loads in <50ms without 30s CPU stalls
     const hdrLoader = new HDRLoader();
-    const hdrPath = MOBILE
-      ? '/juzu/textures/hdr/forest_slope_512.hdr'
-      : '/juzu/textures/hdr/forest_slope_2k.hdr';
+    const hdrPath = '/juzu/textures/hdr/forest_slope_512.hdr';
     hdrLoader.load(
       hdrPath,
       (texture) => {
