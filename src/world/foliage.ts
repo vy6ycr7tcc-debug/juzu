@@ -27,6 +27,15 @@ export class Foliage {
   private readonly ROCK_COUNT = MOBILE ? 200 : 420;
   public isLoaded = false;
 
+  // Interactive Dynamic Foliage state (zero-allocation typed arrays)
+  private grassBasePos!: Float32Array;
+  private grassBaseRot!: Float32Array;
+  private grassBaseScale!: Float32Array;
+  private grassBend!: Float32Array;
+  private grassBendVel!: Float32Array;
+  private activeGrass = new Set<number>();
+  private readonly dummyObj = new THREE.Object3D();
+
   constructor(scene: THREE.Scene) {
     this.group.name = 'Andean_Foliage';
     scene.add(this.group);
@@ -165,6 +174,12 @@ export class Foliage {
 
     this.grassInstances = new THREE.InstancedMesh(grassGeom, grassMat, this.GRASS_COUNT);
     this.grassInstances.receiveShadow = true;
+
+    this.grassBasePos = new Float32Array(this.GRASS_COUNT * 3);
+    this.grassBaseRot = new Float32Array(this.GRASS_COUNT * 3);
+    this.grassBaseScale = new Float32Array(this.GRASS_COUNT * 3);
+    this.grassBend = new Float32Array(this.GRASS_COUNT * 2);
+    this.grassBendVel = new Float32Array(this.GRASS_COUNT * 2);
 
     // 3. Displaced Mossy Crag Boulders & Bark-Textured Gnarled Root Buttresses
     const rockGeom = this.buildCragBoulderGeometry();
@@ -539,8 +554,8 @@ export class Foliage {
       const x = hub.cx + (u * 2 - 1) * (hub.span * 0.88);
       const z = hub.cz + (v * 2 - 1) * (hub.span * 0.88);
 
-      // Keep the trail corridor, camera frustum and spawn clear while lining trail edges & ruins with ferns!
-      if (Math.abs(x) < 3.8 && z > -48 && z < 22) continue;
+      // Keep the central trail corridor clear while lining trail edges & ruins with ferns!
+      if (Math.abs(x) < 2.2 && z > -48 && z < 22) continue;
       if (Math.hypot(x - 0.5, z - 11.5) < 8.5) continue;
       if (Math.hypot(x - 3.2, z - 8.8) < 2.4) continue;
       if (Math.abs(z + 17) < 13.5 && Math.abs(x) < 55) continue;
@@ -553,14 +568,27 @@ export class Foliage {
       const dy = Math.hypot(standAt(x + 1, z) - y, standAt(x, z + 1) - y);
       if (dy > 1.05) continue;
 
-      dummy.position.set(x, y - 0.03, z);
-      dummy.rotation.set(
-        Math.sin(j * 0.7) * 0.08,
-        (j * 1.618) % (Math.PI * 2),
-        Math.cos(j * 0.9) * 0.08
-      );
+      const rx = Math.sin(j * 0.7) * 0.08;
+      const ry = (j * 1.618) % (Math.PI * 2);
+      const rz = Math.cos(j * 0.9) * 0.08;
       const s = 1.35 + ((j * 23) % 45) * 0.024;
-      dummy.scale.set(s, s * (0.95 + ((j * 17) % 20) * 0.01), s);
+      const sy = s * (0.95 + ((j * 17) % 20) * 0.01);
+
+      this.grassBasePos[grassIdx * 3] = x;
+      this.grassBasePos[grassIdx * 3 + 1] = y - 0.03;
+      this.grassBasePos[grassIdx * 3 + 2] = z;
+
+      this.grassBaseRot[grassIdx * 3] = rx;
+      this.grassBaseRot[grassIdx * 3 + 1] = ry;
+      this.grassBaseRot[grassIdx * 3 + 2] = rz;
+
+      this.grassBaseScale[grassIdx * 3] = s;
+      this.grassBaseScale[grassIdx * 3 + 1] = sy;
+      this.grassBaseScale[grassIdx * 3 + 2] = s;
+
+      dummy.position.set(x, y - 0.03, z);
+      dummy.rotation.set(rx, ry, rz);
+      dummy.scale.set(s, sy, s);
       dummy.updateMatrix();
 
       this.grassInstances.setMatrixAt(grassIdx++, dummy.matrix);
@@ -610,7 +638,127 @@ export class Foliage {
     this.rockInstances.instanceMatrix.needsUpdate = true;
   }
 
-  public update(_time: number): void {
-    // Keep instanced world transforms anchored to terrain
+  /** Expose active deflected grass count for automated verification */
+  public get deflectedCount(): number {
+    return this.activeGrass.size;
+  }
+
+  public update(
+    _time: number,
+    dt = 0.016,
+    playerPos?: THREE.Vector3,
+    playerSpeed = 0,
+    playerHeading = 0
+  ): void {
+    if (!this.grassInstances || this.grassInstances.count === 0) return;
+
+    const count = this.grassInstances.count;
+    const RADIUS = 2.4;
+    const RADIUS_SQ = RADIUS * RADIUS;
+
+    // 1. If player position is provided, find nearby plants and impart deflection impulse
+    if (playerPos) {
+      const px = playerPos.x;
+      const py = playerPos.y;
+      const pz = playerPos.z;
+      const vForwardX = Math.sin(playerHeading);
+      const vForwardZ = Math.cos(playerHeading);
+      const speedNorm = Math.min(1.0, Math.max(0.2, playerSpeed / 4.5));
+
+      for (let i = 0; i < count; i++) {
+        const gx = this.grassBasePos[i * 3];
+        const gy = this.grassBasePos[i * 3 + 1];
+        const gz = this.grassBasePos[i * 3 + 2];
+
+        const dx = gx - px;
+        const dz = gz - pz;
+        const distSq = dx * dx + dz * dz;
+
+        if (distSq < RADIUS_SQ && Math.abs(gy - py) < 2.0) {
+          const dist = Math.sqrt(distSq);
+          const pushWeight = 1.0 - dist / RADIUS;
+          const invD = dist > 0.05 ? 1.0 / dist : 0;
+          const rDirX = dx * invD;
+          const rDirZ = dz * invD;
+
+          // Blended deflection: 65% radial outward push + 35% forward velocity wake
+          const pushX = rDirX * 0.65 + vForwardX * 0.35;
+          const pushZ = rDirZ * 0.65 + vForwardZ * 0.35;
+
+          // Target bend angles (max ~35 deg = 0.61 rad for tall Andean cyathea ferns)
+          const targetPitch = pushZ * pushWeight * speedNorm * 0.62;
+          const targetRoll = -pushX * pushWeight * speedNorm * 0.62;
+
+          this.grassBend[i * 2] = THREE.MathUtils.lerp(this.grassBend[i * 2], targetPitch, 0.45);
+          this.grassBend[i * 2 + 1] = THREE.MathUtils.lerp(this.grassBend[i * 2 + 1], targetRoll, 0.45);
+          this.activeGrass.add(i);
+        }
+      }
+    }
+
+    // 2. Damped harmonic spring simulation for recovering plants
+    if (this.activeGrass.size > 0) {
+      const omega = 22.0; // Natural oscillation frequency (~3.5 Hz)
+      const zeta = 0.72; // Near-critical damping
+      const safeDt = Math.min(0.05, Math.max(0.005, dt));
+      let matrixDirty = false;
+
+      for (const i of this.activeGrass) {
+        let pitch = this.grassBend[i * 2];
+        let roll = this.grassBend[i * 2 + 1];
+        let vPitch = this.grassBendVel[i * 2];
+        let vRoll = this.grassBendVel[i * 2 + 1];
+
+        // Restoring spring force toward 0
+        const aPitch = -omega * omega * pitch - 2.0 * zeta * omega * vPitch;
+        const aRoll = -omega * omega * roll - 2.0 * zeta * omega * vRoll;
+
+        vPitch += aPitch * safeDt;
+        vRoll += aRoll * safeDt;
+        pitch += vPitch * safeDt;
+        roll += vRoll * safeDt;
+
+        this.grassBend[i * 2] = pitch;
+        this.grassBend[i * 2 + 1] = roll;
+        this.grassBendVel[i * 2] = vPitch;
+        this.grassBendVel[i * 2 + 1] = vRoll;
+
+        if (
+          Math.abs(pitch) < 0.004 &&
+          Math.abs(roll) < 0.004 &&
+          Math.abs(vPitch) < 0.01 &&
+          Math.abs(vRoll) < 0.01
+        ) {
+          this.grassBend[i * 2] = 0;
+          this.grassBend[i * 2 + 1] = 0;
+          this.grassBendVel[i * 2] = 0;
+          this.grassBendVel[i * 2 + 1] = 0;
+          this.activeGrass.delete(i);
+        }
+
+        // Update instance matrix
+        const gx = this.grassBasePos[i * 3];
+        const gy = this.grassBasePos[i * 3 + 1];
+        const gz = this.grassBasePos[i * 3 + 2];
+        const rx = this.grassBaseRot[i * 3] + pitch;
+        const ry = this.grassBaseRot[i * 3 + 1];
+        const rz = this.grassBaseRot[i * 3 + 2] + roll;
+        const sx = this.grassBaseScale[i * 3];
+        const sy = this.grassBaseScale[i * 3 + 1];
+        const sz = this.grassBaseScale[i * 3 + 2];
+
+        this.dummyObj.position.set(gx, gy, gz);
+        this.dummyObj.rotation.set(rx, ry, rz);
+        this.dummyObj.scale.set(sx, sy, sz);
+        this.dummyObj.updateMatrix();
+
+        this.grassInstances.setMatrixAt(i, this.dummyObj.matrix);
+        matrixDirty = true;
+      }
+
+      if (matrixDirty) {
+        this.grassInstances.instanceMatrix.needsUpdate = true;
+      }
+    }
   }
 }

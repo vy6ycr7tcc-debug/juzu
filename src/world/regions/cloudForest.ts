@@ -806,6 +806,15 @@ export class CloudForestRegion {
     ledge2.receiveShadow = true;
     ruinGroup.add(ledge2);
 
+    // Phase 8: Authentic waist-high carved Inca megalithic obstacle along the terrace approach path
+    // (0.82m thickness in X, 0.92m height in Y, 2.6m wide parapet in Z) for seamless Assassin's Creed parkour speed vaulting
+    const vaultMegalithBaseY = standAt(-2.8, 8.5);
+    const vaultMegalith = new THREE.Mesh(createIncaBlock(0.82, 0.92, 2.6, 0.06, 1.8), stoneMat);
+    vaultMegalith.position.set(-2.8, vaultMegalithBaseY + 0.46, 8.5);
+    vaultMegalith.castShadow = true;
+    vaultMegalith.receiveShadow = true;
+    ruinGroup.add(vaultMegalith);
+
     this.group.add(ruinGroup);
   }
 
